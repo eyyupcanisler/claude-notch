@@ -1,0 +1,11 @@
+.build/
+build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+*.p12
+*.pem
+*.key
+.env*
+__pycache__/
+*.pyc
