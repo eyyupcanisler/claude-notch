@@ -1447,6 +1447,10 @@ final class NotchController {
       ]),
       "focus_hint": ui.focusHint.map { .string($0) } ?? .null,
       "peek_surface": peekSurfaceID.map { .int(Int($0)) } ?? .null,
+      "shelf": .object([
+        "enabled": .bool(settings.shelfEnabled), "items": .int(modules.shelf.shelf.items.count),
+        "polling": .bool(modules.shelf.isPolling),
+      ]),
       "log": .array(debugLog.map { .string($0) })
     ])
   }

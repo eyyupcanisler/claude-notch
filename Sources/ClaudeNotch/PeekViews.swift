@@ -9,6 +9,8 @@ struct PeekBody: View {
   let peek: PeekItem
   let displayID: CGDirectDisplayID
   let actions: NotchActions
+  /// Preview of a "Rafa eklendi" image.
+  var shelfPreview: NSImage?
   @Environment(\.notchTheme) private var theme
 
   var body: some View {
@@ -23,7 +25,7 @@ struct PeekBody: View {
       case .finished:
         finished
       case .module:
-        if let note = peek.module { ModulePeekView(note: note) }
+        if let note = peek.module { ModulePeekView(note: note, image: shelfPreview) }
       }
     }
     .padding(.horizontal, NotchMetrics.peekPadding)
@@ -213,6 +215,7 @@ struct PeekBody: View {
 /// A module note under the notch: a dot-matrix value (or a battery bar), a title and a line.
 struct ModulePeekView: View {
   let note: ModuleNote
+  var image: NSImage?
   @Environment(\.notchTheme) private var theme
 
   static func tint(_ note: ModuleNote, theme: NotchTheme) -> Color {
@@ -220,13 +223,21 @@ struct ModulePeekView: View {
     case .calendar: return Color(hex: 0x8FA6FF)
     case .timer: return theme.working
     case .battery: return (note.level ?? 1) <= 0.1 ? theme.error : theme.done
+    case .shelf: return Color(hex: 0xC3A8FF)
     }
   }
 
   var body: some View {
     let tint = Self.tint(note, theme: theme)
     HStack(spacing: 12) {
-      if note.source == .battery, let level = note.level {
+      if let image {
+        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+          .frame(width: 44, height: 30)
+          .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+          .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+              .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+      } else if note.source == .battery, let level = note.level {
         BatteryGlyph(level: level, color: tint)
       } else if let digits = note.digits {
         HStack(alignment: .lastTextBaseline, spacing: 3) {

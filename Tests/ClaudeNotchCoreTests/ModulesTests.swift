@@ -158,3 +158,44 @@ final class NowPlayingTests: XCTestCase {
     XCTAssertEqual(NowPlaying.clock(65), "1:05")
   }
 }
+
+final class ShelfTests: XCTestCase {
+  private let t0 = Date(timeIntervalSince1970: 9000)
+  private func text(_ id: String, _ s: String) -> ShelfItem {
+    ShelfItem(id: id, kind: .text(s), addedAt: t0)
+  }
+  private func image(_ id: String, key: String) -> ShelfItem {
+    ShelfItem(
+      id: id, kind: .image(file: URL(fileURLWithPath: "/tmp/\(id).png"), key: key, width: 10,
+        height: 10), addedAt: t0)
+  }
+
+  func testCapacityEvictsOldestAndReturnsIt() {
+    var s = Shelf()
+    for i in 0..<Shelf.capacity { s.add(image("\(i)", key: "k\(i)")) }
+    let gone = s.add(text("new", "merhaba"))
+    XCTAssertEqual(s.items.count, Shelf.capacity)
+    XCTAssertEqual(s.items.first?.id, "new")
+    XCTAssertEqual(gone.map(\.id), ["0"])
+  }
+
+  func testDuplicateMovesToFront() {
+    var s = Shelf()
+    s.add(text("a", "bir"))
+    s.add(text("b", "iki"))
+    let gone = s.add(text("c", "bir"))
+    XCTAssertEqual(s.items.map(\.id), ["c", "b"])
+    XCTAssertEqual(gone.map(\.id), [], "text owns no file")
+    let goneImage = s.add(image("d", key: "same"))
+    XCTAssertTrue(goneImage.isEmpty)
+    XCTAssertEqual(s.add(image("e", key: "same")).map(\.id), ["d"], "old temp file can go")
+  }
+
+  func testSkipsConcealedAndKeepsText() {
+    XCTAssertTrue(
+      Shelf.shouldSkip(types: ["public.utf8-plain-text", "org.nspasteboard.ConcealedType"]))
+    XCTAssertFalse(Shelf.shouldSkip(types: ["public.png"]))
+    XCTAssertNil(Shelf.keepText("  \n "))
+    XCTAssertEqual(Shelf.keepText("\n selam \n"), "selam")
+  }
+}

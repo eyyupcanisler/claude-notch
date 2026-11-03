@@ -41,6 +41,7 @@ final class ModuleCenter {
   @ObservationIgnored private var battery: BatteryMonitor?
 
   let spotify = SpotifyModule()
+  let shelf = ShelfModule()
 
   /// Ears beside the notch while the panel is closed: Spotify is playing.
   var earsVisible: Bool { settings.spotifyEnabled && spotify.isPlaying }
@@ -66,6 +67,7 @@ final class ModuleCenter {
       _ = settings.timerMinutes
       _ = settings.batteryEnabled
       _ = settings.spotifyEnabled
+      _ = settings.shelfEnabled
     } onChange: { [weak self] in
       Task { @MainActor in
         self?.apply()
@@ -76,6 +78,10 @@ final class ModuleCenter {
 
   private func apply() {
     spotify.setEnabled(settings.spotifyEnabled)
+    shelf.setEnabled(settings.shelfEnabled)
+    if shelf.onImage == nil {
+      shelf.onImage = { [weak self] item in self?.shelfNote(item) }
+    }
     if settings.calendarEnabled { enableCalendar() } else { disableCalendar() }
     if !settings.timerEnabled { resetTimer() }
     if case .idle = timer.state { timer.duration = TimeInterval(settings.timerMinutes * 60) }
@@ -283,6 +289,16 @@ final class ModuleCenter {
           subtitle: "\(minutes) dk odak tamamlandı", digits: "00:00",
           validUntil: Date().addingTimeInterval(600)))
     }
+  }
+
+  // MARK: - Shelf
+
+  private func shelfNote(_ item: ShelfItem) {
+    guard case .image(_, _, let w, let h) = item.kind else { return }
+    onNote?(
+      ModuleNote(
+        source: .shelf, id: "shelf:\(item.id)", title: "Rafa eklendi",
+        subtitle: "Görüntü · \(w)×\(h)", validUntil: Date().addingTimeInterval(10)))
   }
 
   // MARK: - Battery

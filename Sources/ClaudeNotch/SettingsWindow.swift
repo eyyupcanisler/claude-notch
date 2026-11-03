@@ -148,6 +148,13 @@ struct SettingsView: View {
             .font(.caption).foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)
         }
+        Toggle("Raf: son 6 kopyalanan (metin, görüntü, dosya)", isOn: $settings.shelfEnabled)
+        if settings.shelfEnabled {
+          Text("Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. "
+            + "Raf geçici klasörde durur, kapatınca silinir.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         Text("Modül adaları Claude bildirimlerinin önüne geçmez; bir Claude adası açıksa "
           + "sırasını bekler.")
           .font(.caption).foregroundStyle(.secondary)

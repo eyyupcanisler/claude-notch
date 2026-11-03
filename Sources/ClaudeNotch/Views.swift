@@ -256,7 +256,12 @@ struct NotchRootView: View {
       Color.clear.frame(height: 0)
     case .peek:
       if let peek = ui.peek {
-        PeekBody(store: store, ui: ui, peek: peek, displayID: g.displayID, actions: actions)
+        PeekBody(
+          store: store, ui: ui, peek: peek, displayID: g.displayID, actions: actions,
+          shelfPreview: peek.module.flatMap { n in
+            n.source == .shelf
+              ? modules.shelf.previews[String(n.id.dropFirst("shelf:".count))] : nil
+          })
           .measuredHeight { actions.bodyHeight(g.displayID, .peek, $0) }
           .transition(.opacity.animation(Motion.contentOut))
       }

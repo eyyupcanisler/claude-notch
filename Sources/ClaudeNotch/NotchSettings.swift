@@ -131,6 +131,10 @@ final class NotchSettings {
   var spotifyEnabled: Bool {
     didSet { defaults.set(spotifyEnabled, forKey: "module.spotify") }
   }
+  /// Clipboard history + dropped files. Off by default (it reads the clipboard).
+  var shelfEnabled: Bool {
+    didSet { defaults.set(shelfEnabled, forKey: "module.shelf") }
+  }
   /// With an app in front (its menu might reach the notch), the ears tuck behind the notch.
   var tuckEars: Bool {
     didSet { defaults.set(tuckEars, forKey: "module.spotifyTuck") }
@@ -165,6 +169,7 @@ final class NotchSettings {
     batteryEnabled = defaults.object(forKey: "module.battery") as? Bool ?? true
     spotifyEnabled = defaults.bool(forKey: "module.spotify")
     tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true
+    shelfEnabled = defaults.bool(forKey: "module.shelf")
   }
 
   /// A stored decision chord that is no longer allowed (see `KeyCombo.error(for:)`) falls back

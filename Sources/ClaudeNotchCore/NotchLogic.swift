@@ -314,6 +314,7 @@ public struct ModuleNote: Sendable, Equatable {
     case calendar
     case timer
     case battery
+    case shelf
   }
 
   public var source: Source

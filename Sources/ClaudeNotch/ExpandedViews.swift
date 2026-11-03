@@ -230,6 +230,11 @@ struct ExpandedBody: View {
     .padding(.horizontal, 10)
     .padding(.top, Self.topPadding)
     .padding(.bottom, Self.bottomPadding)
+    .dropDestination(for: URL.self) { urls, _ in
+      guard settings.shelfEnabled else { return false }
+      modules.shelf.addFiles(urls)
+      return !urls.isEmpty
+    }
   }
 }
 

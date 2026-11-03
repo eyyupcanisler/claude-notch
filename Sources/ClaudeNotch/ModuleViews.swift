@@ -19,10 +19,12 @@ struct ModuleStrip: View {
   }
 
   private var showSpotify: Bool { settings.spotifyEnabled && modules.spotify.nowPlaying != nil }
+  private var showShelf: Bool { settings.shelfEnabled && !modules.shelf.shelf.items.isEmpty }
 
   var body: some View {
-    if showCalendar || showTimer || showSpotify {
+    if showCalendar || showTimer || showSpotify || showShelf {
       VStack(spacing: 8) {
+        if showShelf { ShelfRow(shelf: modules.shelf) }
         if showSpotify { SpotifyTile(spotify: modules.spotify) }
         if showCalendar || showTimer {
           HStack(spacing: 8) {
@@ -486,5 +488,134 @@ struct SeekBar: View {
     .frame(height: 14)
     .accessibilityElement()
     .accessibilityLabel("Şarkıda ilerleme")
+  }
+}
+
+// MARK: - Shelf
+
+/// The shelf in the panel: up to 6 chips, newest first. Click copies back to the clipboard
+/// (an image as PNG: ⌃V pastes it into Claude Code); drag one out into a terminal or an app;
+/// × removes it. Buttons only: a right click in the panel opens the app menu.
+struct ShelfRow: View {
+  let shelf: ShelfModule
+  @Environment(\.notchTheme) private var theme
+
+  static let chipHeight: CGFloat = 58
+
+  var body: some View {
+    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text("RAF")
+          .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
+          .foregroundStyle(theme.tertiary)
+        Text("tıkla: kopyala · sürükle: bırak")
+          .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
+        Spacer()
+        Button("Temizle") { shelf.clear() }
+          .buttonStyle(.plain)
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(theme.secondary)
+      }
+      HStack(spacing: 6) {
+        ForEach(shelf.shelf.items) { item in
+          ShelfChip(item: item, shelf: shelf)
+        }
+        Spacer(minLength: 0)
+      }
+    }
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .background(
+      shape.fill(theme.raised)
+        .overlay(CornerGlow(color: Color(hex: 0xC3A8FF), strength: 0.28, radius: 160))
+        .clipShape(shape))
+    .overlay(shape.strokeBorder(theme.hairline, lineWidth: 0.5))
+  }
+}
+
+struct ShelfChip: View {
+  let item: ShelfItem
+  let shelf: ShelfModule
+  @State private var hover = false
+  @Environment(\.notchTheme) private var theme
+
+  private static let width: CGFloat = 86
+
+  var body: some View {
+    let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+    content
+      .frame(width: Self.width, height: ShelfRow.chipHeight)
+      .background(shape.fill(Color.white.opacity(hover ? 0.1 : 0.06)))
+      .clipShape(shape)
+      .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+      .overlay {
+        if shelf.copiedID == item.id {
+          shape.fill(Color.black.opacity(0.65))
+            .overlay(
+              Label("Kopyalandı", systemImage: "checkmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.done))
+            .transition(.opacity)
+        }
+      }
+      .overlay(alignment: .topTrailing) {
+        if hover {
+          Button { shelf.remove(item.id) } label: {
+            Image(systemName: "xmark")
+              .font(.system(size: 7.5, weight: .bold))
+              .foregroundStyle(theme.ink)
+              .frame(width: 16, height: 16)
+              .background(Circle().fill(Color.black.opacity(0.7)))
+          }
+          .buttonStyle(.plain)
+          .padding(3)
+          .accessibilityLabel("Raftan kaldır")
+        }
+      }
+      .contentShape(shape)
+      .onHover { hover = $0 }
+      .onTapGesture { shelf.copy(item) }
+      .onDrag { shelf.provider(for: item) }
+      .animation(.easeOut(duration: 0.15), value: shelf.copiedID)
+      .help(help)
+  }
+
+  @ViewBuilder
+  private var content: some View {
+    switch item.kind {
+    case .text(let s):
+      Text(s)
+        .font(.system(size: 10))
+        .foregroundStyle(theme.secondary)
+        .lineLimit(4)
+        .multilineTextAlignment(.leading)
+        .padding(7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    case .image:
+      if let p = shelf.previews[item.id] {
+        Image(nsImage: p).resizable().aspectRatio(contentMode: .fill)
+          .frame(width: Self.width, height: ShelfRow.chipHeight)
+      } else {
+        Image(systemName: "photo").foregroundStyle(theme.tertiary)
+      }
+    case .file(let u):
+      VStack(spacing: 4) {
+        Image(nsImage: NSWorkspace.shared.icon(forFile: u.path))
+          .resizable().frame(width: 26, height: 26)
+        Text(u.lastPathComponent)
+          .font(.system(size: 9.5)).foregroundStyle(theme.secondary)
+          .lineLimit(1).truncationMode(.middle)
+          .padding(.horizontal, 5)
+      }
+    }
+  }
+
+  private var help: String {
+    switch item.kind {
+    case .text: return "Metni panoya kopyala"
+    case .image(_, _, let w, let h): return "Görüntüyü panoya kopyala (\(w)×\(h))"
+    case .file(let u): return u.path
+    }
   }
 }
