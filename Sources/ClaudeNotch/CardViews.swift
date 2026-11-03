@@ -444,13 +444,14 @@ struct AllowButton: View {
   private var holdButton: some View {
     let tone = primary ? theme.primaryText : theme.ink
     return HStack(spacing: 6) {
+      // Tick dial: fills left to right over the hold (the hold's linear transaction).
       ZStack {
-        Circle().stroke(tone.opacity(0.25), lineWidth: 2)
-        Circle().trim(from: 0, to: max(progress, keyProgress))
-          .stroke(theme.error, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-          .rotationEffect(.degrees(-90))
+        TickArc(progress: 1, track: true)
+          .stroke(tone.opacity(0.25), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+        TickArc(progress: max(progress, keyProgress))
+          .stroke(theme.error, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
       }
-      .frame(width: 12, height: 12)
+      .frame(width: 20, height: 11)
       Text(holdLabel)
         .font(.system(size: compact ? 11.5 : 12, weight: .semibold))
         // The ring fills in the hold's linear transaction; the label swaps at once.

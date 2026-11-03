@@ -654,3 +654,76 @@ public enum RelativeTime {
     return "\(s / 86_400) gün önce"
   }
 }
+
+/// Elapsed time for the dot-matrix gauge: "mm:ss" under an hour, then whole hours ("3" + "sa")
+/// or days ("2" + "gün"). The unit is drawn as small text beside the dots.
+public enum DotClock {
+  public struct Reading: Equatable, Sendable {
+    public let digits: String
+    public let unit: String?
+  }
+
+  public static func reading(_ seconds: TimeInterval) -> Reading {
+    let s = max(0, Int(seconds))
+    if s < 3600 {
+      return Reading(digits: String(format: "%02d:%02d", s / 60, s % 60), unit: nil)
+    }
+    if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: "sa") }
+    return Reading(digits: "\(s / 86_400)", unit: "gün")
+  }
+
+  /// Whole minutes at least ("12" + "dk"), for times that need no seconds (idle rows).
+  public static func coarse(_ seconds: TimeInterval) -> Reading {
+    let s = max(0, Int(seconds))
+    if s < 3600 { return Reading(digits: "\(max(1, s / 60))", unit: "dk") }
+    return reading(seconds)
+  }
+}
+
+/// The rhythm of a turn in a fixed amount of memory: tool calls counted into 28 time slots.
+/// Slots start 5 s wide; when the turn outgrows the strip, neighbouring slots merge pairwise
+/// and the width doubles, so a turn of any length always fits (an 18-minute turn ends up at
+/// 40 s per slot). Distinct subagents seen in the turn are counted too.
+public struct ActivityRhythm: Sendable, Equatable {
+  public static let slots = 28
+
+  public let start: Date
+  public private(set) var slotWidth: TimeInterval
+  public private(set) var counts: [Int]
+  public private(set) var total = 0
+  public private(set) var agentIDs: Set<String> = []
+
+  public init(start: Date, slotWidth: TimeInterval = 5) {
+    self.start = start
+    self.slotWidth = slotWidth
+    counts = Array(repeating: 0, count: Self.slots)
+  }
+
+  public mutating func record(at t: Date, agentID: String? = nil) {
+    fit(t)
+    counts[slot(t)] += 1
+    total += 1
+    if let agentID { agentIDs.insert(agentID) }
+  }
+
+  /// Slots as of `now` (the strip grows to the right as time passes, even without events) and
+  /// how many of them the turn has reached.
+  public func reading(at now: Date) -> (counts: [Int], used: Int) {
+    var copy = self
+    copy.fit(now)
+    return (copy.counts, copy.slot(now) + 1)
+  }
+
+  private func slot(_ t: Date) -> Int {
+    max(0, min(Self.slots - 1, Int(t.timeIntervalSince(start) / slotWidth)))
+  }
+
+  private mutating func fit(_ t: Date) {
+    while t.timeIntervalSince(start) / slotWidth >= Double(Self.slots) {
+      let half = Self.slots / 2
+      for i in 0..<half { counts[i] = counts[2 * i] + counts[2 * i + 1] }
+      for i in half..<Self.slots { counts[i] = 0 }
+      slotWidth *= 2
+    }
+  }
+}

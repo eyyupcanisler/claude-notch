@@ -296,14 +296,22 @@ public final class SessionStore {
       flushPending(e.sessionID)
       session.agents = [:]
       session.activity = nil
+      session.turnToolCount = 0
+      session.rhythm = nil
       setStatus(&session, .idle, at: t)
     case "UserPromptSubmit":
       flushPending(e.sessionID)
       session.turnStartedAt = t
+      session.turnToolCount = 0
+      session.rhythm = ActivityRhythm(start: t)
       session.activity = nil
       setStatus(&session, .working(tool: nil), at: t)
     case "PreToolUse":
       handlePreToolUse(e, at: t)
+      session.turnToolCount += 1
+      // A turn already running when the app started gets its rhythm from the first call.
+      if session.rhythm == nil { session.rhythm = ActivityRhythm(start: t) }
+      session.rhythm?.record(at: t, agentID: e.agentID)
       if let tool = e.toolName {
         session.activity = ToolSummary.target(toolName: tool, input: e.toolInput)
       }

@@ -38,7 +38,7 @@ struct NotchTheme: Sendable {
   static let bandError = Color(hex: 0xFF453A)
 
   static let dark = NotchTheme(
-    surface: Color(hex: 0x0B0B0C), raised: Color(hex: 0x17171A, opacity: 0.92),
+    surface: Color(hex: 0x000000), raised: Color(hex: 0x0E0E10),
     hairline: .white.opacity(0.07), ink: Color(hex: 0xF5F5F4),
     secondary: Color(hex: 0xF5F5F4, opacity: 0.72), tertiary: Color(hex: 0xF5F5F4, opacity: 0.56),
     faint: .white.opacity(0.06), working: Color(hex: 0xD97757), needs: Color(hex: 0xFFB020),

@@ -268,7 +268,7 @@ enum RowKind: Equatable {
     guard !rows.isEmpty else { return 0 }
     let total = zip(rows, kinds).reduce(CGFloat(0)) { sum, pair in
       switch pair.1 {
-      case .compact: return sum + 42
+      case .compact: return sum + SessionRow.compactHeight
       case .card: return sum + 236
       case .rich:
         switch pair.0.status {
@@ -381,32 +381,44 @@ struct SessionRow: View {
     Group {
       switch kind {
       case .compact:
-        VStack(alignment: .leading, spacing: 2) {
-          header
-          statusLine.padding(.leading, 20)
+        HStack(alignment: .center, spacing: 10) {
+          VStack(alignment: .leading, spacing: 3) {
+            header(trailing: false)
+            statusLine.padding(.leading, 20)
+            RhythmStrip(
+              rhythm: session.rhythm, color: tickColor, live: session.status.isWorking,
+              frozenAt: session.statusSince)
+            .padding(.leading, 20)
+          }
+          Group {
+            if hover {
+              RowActions(session: session, actions: actions).transition(.opacity)
+            } else {
+              DotElapsed(mode: elapsedMode, color: elapsedColor)
+            }
+          }
+          .animation(.easeOut(duration: 0.12), value: hover)
         }
         .padding(.horizontal, 8)
-        .frame(height: 42)
-        // Rows sit on a solid raised layer (never glass on glass).
-        .background(
-          RoundedRectangle(cornerRadius: 10, style: .continuous).fill(theme.raised))
+        .padding(.trailing, 4)
+        .frame(height: Self.compactHeight)
+        .background(card(radius: 12))
         .overlay(
-          RoundedRectangle(cornerRadius: 10, style: .continuous)
+          RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(hover || selected ? Color.white.opacity(0.05) : .clear)
             .allowsHitTesting(false))
         .overlay(
-          RoundedRectangle(cornerRadius: 10, style: .continuous)
+          RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(
               selected ? theme.secondary.opacity(0.5) : theme.hairline, lineWidth: 0.5))
       case .rich, .card:
         VStack(alignment: .leading, spacing: 8) {
-          header.frame(height: 20)
+          header(trailing: true).frame(height: 20)
           detail
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(
-          RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.raised))
+        .background(card(radius: 14))
         .overlay(
           RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(selected ? theme.secondary.opacity(0.5) : theme.hairline, lineWidth: 0.5)
@@ -419,12 +431,68 @@ struct SessionRow: View {
     .accessibilityLabel("\(title), \(statusText)")
   }
 
+  nonisolated static let compactHeight: CGFloat = 62
+
+  /// Solid card on the black body with the status colour glowing in from one corner.
+  private func card(radius: CGFloat) -> some View {
+    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+    return shape.fill(theme.raised)
+      .overlay(CornerGlow(color: glowColor))
+      .clipShape(shape)
+  }
+
+  /// Idle rows stay plain; seen results glow less.
+  private var glowColor: Color? {
+    if store.hasPending(for: session.id) { return theme.needs }
+    switch session.status {
+    case .idle, .quiet: return nil
+    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.5)
+    default: return statusColor
+    }
+  }
+
+  /// Idle rows keep their last turn's rhythm, muted.
+  private var tickColor: Color {
+    switch session.status {
+    case .idle, .quiet: return theme.tertiary
+    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.6)
+    default: return statusColor
+    }
+  }
+
+  /// Working: how long this turn has been running. Needs you: how long it has waited.
+  /// Done / error: how long the turn took (frozen). Idle: how long since anything happened.
+  private var elapsedMode: DotElapsed.Mode {
+    if store.hasPending(for: session.id) { return .live(since: session.statusSince) }
+    switch session.status {
+    case .working:
+      return .live(since: session.turnStartedAt ?? session.statusSince)
+    case .waitingInput, .question, .planApproval:
+      return .live(since: session.statusSince)
+    case .done, .error:
+      if let start = session.turnStartedAt, start <= session.statusSince {
+        return .fixed(session.statusSince.timeIntervalSince(start))
+      }
+      return .coarse(since: session.statusSince)
+    case .idle, .quiet:
+      return .coarse(since: session.statusSince)
+    }
+  }
+
+  private var elapsedColor: Color {
+    switch session.status {
+    case .idle, .quiet: return theme.tertiary
+    default: return statusColor
+    }
+  }
+
   private var statusText: String {
     store.hasPending(for: session.id) ? "İzin istiyor" : session.status.label
   }
 
-  /// Clicking the identity line jumps to the terminal.
-  private var header: some View {
+  /// Clicking the identity line jumps to the terminal. Compact rows draw their own trailing
+  /// part (the dot-matrix time spans both lines).
+  private func header(trailing: Bool) -> some View {
     HStack(spacing: 8) {
       StatusDot(session: session, pending: store.hasPending(for: session.id))
       HStack(spacing: 6) {
@@ -443,11 +511,13 @@ struct SessionRow: View {
         }
       }
       Spacer(minLength: 4)
-      if hover {
-        RowActions(session: session, actions: actions)
-          .transition(.opacity)
-      } else {
-        Elapsed(session: session)
+      if trailing {
+        if hover {
+          RowActions(session: session, actions: actions)
+            .transition(.opacity)
+        } else {
+          Elapsed(session: session)
+        }
       }
     }
     .contentShape(Rectangle())

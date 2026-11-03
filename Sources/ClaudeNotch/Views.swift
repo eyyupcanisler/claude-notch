@@ -245,10 +245,9 @@ struct NotchRootView: View {
   }
 }
 
-/// Collapsed and peek: solid black (Dynamic Island). Expanded: frosted material under a
-/// #0B0B0C tint and the grain, the band 94% black (menu text never ghosts through) blending
-/// into the material over 24 pt. The opacities change in the shape's transaction, so the
-/// material materializes with the same spring.
+/// Solid black in every mode (the "Gösterge" look: the hardware notch simply grows). The open
+/// panel adds the matte grain below the band; its opacity changes in the shape's transaction,
+/// so it arrives with the same spring.
 struct NotchBackground: View {
   let mode: NotchMode
   let theme: NotchTheme
@@ -256,45 +255,17 @@ struct NotchBackground: View {
 
   var body: some View {
     let open = mode == .expanded
-    let solid = Motion.reduceTransparency
     ZStack(alignment: .top) {
-      Color.black.opacity(open ? 0 : 1)
-      ZStack(alignment: .top) {
-        if !solid { MaterialBackdrop() }
-        theme.surface.opacity(solid ? 1 : 0.55)
-        if let grain = Grain.image {
-          grain.resizable(resizingMode: .tile).opacity(theme.grainOpacity)
-            .blendMode(.plusLighter)
-        }
-        VStack(spacing: 0) {
-          Color.black.opacity(0.94).frame(height: band)
-          LinearGradient(
-            colors: [.black.opacity(0.94), .black.opacity(0)], startPoint: .top,
-            endPoint: .bottom
-          )
-          .frame(height: NotchMetrics.bandBlend)
-          Spacer(minLength: 0)
-        }
+      Color.black
+      if let grain = Grain.image {
+        grain.resizable(resizingMode: .tile)
+          .opacity(open ? theme.grainOpacity : 0)
+          .blendMode(.plusLighter)
+          .padding(.top, band)
       }
-      .opacity(open ? 1 : 0)
     }
     .allowsHitTesting(false)
   }
-}
-
-/// Real behind-window frosted glass (dark), clipped by the island shape.
-struct MaterialBackdrop: NSViewRepresentable {
-  func makeNSView(context: Context) -> NSVisualEffectView {
-    let v = NSVisualEffectView()
-    v.material = .hudWindow
-    v.blendingMode = .behindWindow
-    v.state = .active
-    v.isEmphasized = false
-    v.appearance = NSAppearance(named: .darkAqua)
-    return v
-  }
-
-  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - Signals

@@ -27,11 +27,28 @@ struct PeekBody: View {
     .padding(.horizontal, NotchMetrics.peekPadding)
     .padding(.top, peek.kind == .finished ? 9 : 8)
     .padding(.bottom, peek.kind == .finished ? 11 : 12)
+    .background(CornerGlow(color: glowColor, strength: 0.34, radius: 220))
     .background(
       Color.clear
         .contentShape(Rectangle())
         .onTapGesture { actions.expand(displayID) }
     )
+  }
+
+  private var glowColor: Color {
+    switch peek.kind {
+    case .permission, .attention: return theme.needs
+    case .finished:
+      return peek.errorIDs.count == peek.sessionIDs.count ? theme.error : theme.done
+    }
+  }
+
+  /// How long the finished turn took (single session only).
+  private var turnDuration: TimeInterval? {
+    guard peek.sessionIDs.count == 1, let s = store.sessions[peek.sessionIDs[0]],
+      let start = s.turnStartedAt, start <= s.statusSince
+    else { return nil }
+    return s.statusSince.timeIntervalSince(start)
   }
 
   private func project(_ id: String?) -> String {
@@ -171,6 +188,18 @@ struct PeekBody: View {
           .lineLimit(1)
       }
       Spacer(minLength: 0)
+      if let d = turnDuration {
+        let r = DotClock.reading(d)
+        HStack(alignment: .lastTextBaseline, spacing: 3) {
+          DotMatrixText(text: r.digits, color: allErrors ? theme.error : theme.done, pitch: 2)
+          if let unit = r.unit {
+            Text(unit).font(.system(size: 10, weight: .semibold))
+              .foregroundStyle((allErrors ? theme.error : theme.done).opacity(0.8))
+          }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Süre \(r.digits) \(r.unit ?? "")")
+      }
     }
     .frame(height: 18)
     .notchEnter(0)

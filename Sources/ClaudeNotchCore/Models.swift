@@ -117,13 +117,18 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var turnStartedAt: Date?
   /// Target of the latest tool call ("Views.swift", "npm test"), cleared at turn boundaries.
   public var activity: String?
+  /// Tool calls in the current / last turn (subagents included).
+  public var turnToolCount: Int
+  /// When those calls happened (the row's rhythm strip); nil before the first turn.
+  public var rhythm: ActivityRhythm?
 
   public init(
     id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,
     pid: Int32? = nil, branch: String? = nil, status: SessionStatus, isDiscovered: Bool = false,
     tabTitle: String? = nil, unseen: Bool = false,
     agents: [String: AgentActivity] = [:], startedAt: Date, lastUpdate: Date,
-    statusSince: Date? = nil, turnStartedAt: Date? = nil, activity: String? = nil
+    statusSince: Date? = nil, turnStartedAt: Date? = nil, activity: String? = nil,
+    turnToolCount: Int = 0, rhythm: ActivityRhythm? = nil
   ) {
     self.id = id
     self.project = project
@@ -142,6 +147,8 @@ public struct Session: Sendable, Identifiable, Equatable {
     self.statusSince = statusSince ?? startedAt
     self.turnStartedAt = turnStartedAt
     self.activity = activity
+    self.turnToolCount = turnToolCount
+    self.rhythm = rhythm
   }
 
   /// "s012" for "/dev/ttys012".
