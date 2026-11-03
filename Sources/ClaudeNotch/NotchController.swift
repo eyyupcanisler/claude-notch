@@ -53,7 +53,9 @@ final class NotchController {
   /// Debug: keeps forced modes (no peek expiry, no hover collapse).
   private var debugFreeze = false
   /// Debug: pretend the active screen is this display.
-  private var forcedActiveID: CGDirectDisplayID?
+  /// Demo recordings stay on the notch screen (the recorded one), wherever the pointer is.
+  private var forcedActiveID: CGDirectDisplayID? = NotchSettings.isDemo
+    ? NSScreen.screens.first(where: { $0.hasNotch })?.displayID : nil
   /// Debug: Automation status shown instead of the real one (screenshots never ask macOS).
   private var consentOverride: Int32?
   /// Last consent action taken or planned ("request", "open_settings", ...) and whether it was
@@ -61,6 +63,7 @@ final class NotchController {
   private var lastConsent: (action: ConsentAction, dryRun: Bool)?
   /// `/debug/*` and the debug log only with CLAUDE_NOTCH_DEBUG=1.
   static let debugEnabled = ProcessInfo.processInfo.environment["CLAUDE_NOTCH_DEBUG"] == "1"
+    || NotchSettings.isDemo
 
   /// A session finished / asked (sessionID, kind).
   var onAttention: (@MainActor (String, String) -> Void)?

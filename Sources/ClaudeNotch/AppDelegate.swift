@@ -30,14 +30,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     installSignalHandlers()
     // A reinstalled bundle loses its login item: register again if the user wanted it.
-    if UserDefaults.standard.bool(forKey: "loginWanted"), SMAppService.mainApp.status != .enabled {
+    if !NotchSettings.isDemo, UserDefaults.standard.bool(forKey: "loginWanted"),
+      SMAppService.mainApp.status != .enabled
+    {
       try? SMAppService.mainApp.register()
     }
 
+    let env = ProcessInfo.processInfo.environment
     let router = RequestRouter(
-      store: store, debugEnabled: ProcessInfo.processInfo.environment["CLAUDE_NOTCH_DEBUG"] == "1")
+      store: store, debugEnabled: env["CLAUDE_NOTCH_DEBUG"] == "1" || NotchSettings.isDemo)
     self.router = router
-    let server = SocketServer(path: SocketServer.defaultSocketPath()) { request, responder in
+    // Demo runs on their own socket: real Claude Code hooks never reach them.
+    let path = NotchSettings.isDemo
+      ? (SocketServer.defaultSocketPath() as NSString).deletingLastPathComponent + "/demo.sock"
+      : SocketServer.defaultSocketPath()
+    let server = SocketServer(path: path) { request, responder in
       Task { @MainActor in router.handle(request, responder) }
     }
     do {

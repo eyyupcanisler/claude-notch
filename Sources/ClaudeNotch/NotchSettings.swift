@@ -193,7 +193,15 @@ final class NotchSettings {
     didSet { defaults.set(pomoRounds, forKey: "module.pomoRounds") }
   }
 
-  init(defaults: UserDefaults = .standard) {
+  /// `CLAUDE_NOTCH_DEMO=1`: a recording run (README demo). Its own clean settings, its own
+  /// socket, no process discovery: nothing of the user's real sessions or modules shows.
+  nonisolated static let isDemo = ProcessInfo.processInfo.environment["CLAUDE_NOTCH_DEMO"] == "1"
+
+  static var defaultStore: UserDefaults {
+    isDemo ? UserDefaults(suiteName: "com.eyyupcan.claudenotch.demo") ?? .standard : .standard
+  }
+
+  init(defaults: UserDefaults = NotchSettings.defaultStore) {
     self.defaults = defaults
     displayMode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "")
       ?? .automatic

@@ -35,7 +35,7 @@ final class SessionMonitor {
     updateLoop()
     Task { await refreshAutomationStatus() }
     discovery = Task { [weak self] in
-      while !Task.isCancelled {
+      while !Task.isCancelled && !NotchSettings.isDemo {
         await self?.discover()
         try? await Task.sleep(for: .seconds(SessionStore.discoveryInterval))
       }

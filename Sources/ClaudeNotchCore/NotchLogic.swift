@@ -279,6 +279,9 @@ extension ToolSummary {
       return name.isEmpty ? nil : TextShortener.middle(name, limit: 48)
     case "WebFetch":
       return URL(string: full)?.host ?? TextShortener.middle(full, limit: 48)
+    case "AskUserQuestion":
+      let q = AskedQuestion.parse(input)?.first?.question
+      return q.map { "Soru: " + TextShortener.oneLine($0, limit: 54) } ?? "Soru soruyor"
     default:
       return TextShortener.oneLine(full, limit: 60)
     }

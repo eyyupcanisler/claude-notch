@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds build/ClaudeNotch.app (release).
+# Builds build.noindex/ClaudeNotch.app (release; ".noindex" keeps this copy out of Spotlight and
+# the Apps list, so only the installed one in ~/Applications shows).
 # Signing: with the identity $CLAUDE_NOTCH_SIGN_ID (default "ClaudeNotch Dev") from
 # ClaudeNotch's own signing keychain (scripts/make-signing-identity.sh), else one of that name
 # in another keychain if codesign may use it without a dialog, else ad-hoc. A stable identity
@@ -9,7 +10,7 @@ set -eu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-APP="$ROOT/build/ClaudeNotch.app"
+APP="$ROOT/build.noindex/ClaudeNotch.app"
 VERSION="3.0.0"
 SIGN_ID="${CLAUDE_NOTCH_SIGN_ID:-ClaudeNotch Dev}"
 AE_USAGE="ClaudeNotch, bir oturuma tıkladığınızda o oturumun terminal sekmesini (Ghostty,"

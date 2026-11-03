@@ -5,8 +5,8 @@ import Observation
 import Security
 
 /// Google Calendar over its API, with the user's own "Desktop app" OAuth client. Sign-in runs
-/// in the browser (PKCE, loopback redirect to 127.0.0.1); the client and the tokens live in the
-/// macOS Keychain, never in a file or the repository. Read-only scope. Events of the next 12 h
+/// in the browser (PKCE, loopback redirect to 127.0.0.1); the client and the tokens live in a
+/// 0600 file in Application Support, never in the repository. Read-only scope. Events of the next 12 h
 /// are fetched every 5 min while the module is on (and after wake).
 @MainActor
 @Observable
@@ -40,10 +40,10 @@ final class GoogleCalendarModule {
 
   init() {
     let dec = JSONDecoder()
-    client = Keychain.load("client").flatMap {
+    client = CredentialStore.load("client").flatMap {
       try? dec.decode(GoogleCalendar.Client.self, from: $0)
     }
-    tokens = Keychain.load("tokens").flatMap {
+    tokens = CredentialStore.load("tokens").flatMap {
       try? dec.decode(GoogleCalendar.Tokens.self, from: $0)
     }
     account = UserDefaults.standard.string(forKey: "google.account")
@@ -94,15 +94,15 @@ final class GoogleCalendarModule {
       return
     }
     client = c
-    if let d = try? JSONEncoder().encode(c) { Keychain.save("client", d) }
+    if let d = try? JSONEncoder().encode(c) { CredentialStore.save("client", d) }
     tokens = nil
-    Keychain.delete("tokens")
+    CredentialStore.delete("tokens")
     status = .signedOut
   }
 
   func disconnect() {
     tokens = nil
-    Keychain.delete("tokens")
+    CredentialStore.delete("tokens")
     account = nil
     UserDefaults.standard.removeObject(forKey: "google.account")
     status = client == nil ? .noClient : .signedOut
@@ -113,7 +113,7 @@ final class GoogleCalendarModule {
   func removeClient() {
     disconnect()
     client = nil
-    Keychain.delete("client")
+    CredentialStore.delete("client")
     status = .noClient
   }
 
@@ -236,7 +236,7 @@ final class GoogleCalendarModule {
 
   private func store(_ t: GoogleCalendar.Tokens) {
     tokens = t
-    if let d = try? JSONEncoder().encode(t) { Keychain.save("tokens", d) }
+    if let d = try? JSONEncoder().encode(t) { CredentialStore.save("tokens", d) }
   }
 
   // MARK: Fetch
@@ -253,7 +253,7 @@ final class GoogleCalendarModule {
     guard let fresh = GoogleCalendar.Tokens.parse(data, at: Date(), keeping: refresh) else {
       // invalid_grant: revoked, or a 7-day "Testing" client token expired.
       tokens = nil
-      Keychain.delete("tokens")
+      CredentialStore.delete("tokens")
       status = .failed("Google oturumu sona erdi; yeniden bağlan.")
       return nil
     }
@@ -325,20 +325,57 @@ final class GoogleCalendarModule {
   }
 }
 
-/// Generic-password items of ClaudeNotch in the login keychain.
-enum Keychain {
+/// Google client and tokens, in a file only the user can read
+/// (`~/Library/Application Support/ClaudeNotch/google.json`, 0600). The keychain asked for the
+/// login password after every rebuild (a self-signed app counts as a new one each time), so the
+/// file replaced it; an older keychain copy is moved over once and deleted.
+enum CredentialStore {
   static let service = "com.eyyupcan.claudenotch.google"
+  static let file = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/ClaudeNotch/google.json")
+
+  private static func readAll() -> [String: Data] {
+    guard let d = try? Data(contentsOf: file),
+      let m = try? JSONDecoder().decode([String: Data].self, from: d)
+    else { return [:] }
+    return m
+  }
+
+  private static func writeAll(_ m: [String: Data]) {
+    let dir = file.deletingLastPathComponent()
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    guard let d = try? JSONEncoder().encode(m) else { return }
+    // Created 0600 before any secret is written into it.
+    if !FileManager.default.fileExists(atPath: file.path) {
+      FileManager.default.createFile(
+        atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600])
+    }
+    try? d.write(to: file, options: [.atomic])
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+  }
 
   static func save(_ account: String, _ data: Data) {
-    delete(account)
-    let q: [CFString: Any] = [
-      kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
-      kSecValueData: data, kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock,
-    ]
-    SecItemAdd(q as CFDictionary, nil)
+    var m = readAll()
+    m[account] = data
+    writeAll(m)
   }
 
   static func load(_ account: String) -> Data? {
+    if let d = readAll()[account] { return d }
+    // One-time move from the keychain (may ask for the password a last time).
+    guard let old = legacyLoad(account) else { return nil }
+    save(account, old)
+    legacyDelete(account)
+    return old
+  }
+
+  static func delete(_ account: String) {
+    var m = readAll()
+    m[account] = nil
+    writeAll(m)
+  }
+
+  private static func legacyLoad(_ account: String) -> Data? {
     let q: [CFString: Any] = [
       kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
       kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne,
@@ -347,7 +384,7 @@ enum Keychain {
     return SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess ? out as? Data : nil
   }
 
-  static func delete(_ account: String) {
+  private static func legacyDelete(_ account: String) {
     let q: [CFString: Any] = [
       kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
     ]

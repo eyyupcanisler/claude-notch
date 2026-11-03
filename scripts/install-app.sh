@@ -4,7 +4,7 @@
 # shows its Settings.
 set -eu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/build/ClaudeNotch.app"
+SRC="$ROOT/build.noindex/ClaudeNotch.app"
 DEST_DIR="$HOME/Applications"
 DEST="$DEST_DIR/ClaudeNotch.app"
 

@@ -486,7 +486,7 @@ struct GoogleCalendarSettings: View {
     switch google.status {
     case .noClient:
       return "Google Cloud’da bir “Masaüstü uygulaması” OAuth istemcisi oluştur ve indirdiğin "
-        + "JSON dosyasını seç (adımlar README’de). Dosya Anahtar Zinciri’nde saklanır."
+        + "JSON dosyasını seç (adımlar README’de). Yalnız senin okuyabildiğin bir dosyada saklanır."
     case .signedOut: return "İstemci hazır. Bağlan’a basınca tarayıcıda Google girişi açılır."
     case .signingIn: return "Giriş tarayıcıda; bitince bu ekran kendiliğinden güncellenir."
     case .connected:

@@ -41,3 +41,12 @@ final class QuestionTests: XCTestCase {
     XCTAssertTrue(q.isComplete(["Hangi çatı?": ["Vue"], "Neler?": ["Test", "Lint"]]))
   }
 }
+
+final class QuestionActivityTests: XCTestCase {
+  func testActivityShowsTheQuestionNotJSON() {
+    let json = #"{"questions":[{"question":"Hangi düzen?","header":"D","options":[{"label":"A"}]}]}"#
+    let input = JSONValue.parse(Data(json.utf8))
+    XCTAssertEqual(
+      ToolSummary.target(toolName: "AskUserQuestion", input: input), "Soru: Hangi düzen?")
+  }
+}
