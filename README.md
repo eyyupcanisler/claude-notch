@@ -42,8 +42,27 @@ terminal, and keep a few handy tools one glance away.
 
 ## Install
 
-Requirements: a Mac on **macOS 14 or later** (a notch is nice, not required), Xcode or the
-Command Line Tools (`xcode-select --install`), `jq`, and [Claude Code](https://claude.com/claude-code).
+You need a Mac on **macOS 14 or later** (a notch is nice, not required) and
+[Claude Code](https://claude.com/claude-code). On macOS 14 also `brew install jq` (macOS 15+
+ships it).
+
+### Option 1: download the app
+
+1. Download `ClaudeNotch-<version>.zip` from the
+   [latest release](https://github.com/eyyupcanisler/claude-notch/releases/latest), unzip it and
+   move **ClaudeNotch.app** to **Applications**.
+2. Open it. macOS blocks the first launch because the app is not signed with an Apple Developer
+   ID: go to **System Settings → Privacy & Security** and click **Open Anyway**.
+   (Or in Terminal: `xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app`.)
+3. Open **ClaudeNotch** again from Spotlight to get its Settings, then
+   **Genel → Claude Code bağlantısı → Kancaları kur** (install hooks). It adds the hooks to
+   `~/.claude/settings.json` after backing it up and leaves the rest of the file alone.
+
+That's it: your next Claude Code message shows up in the notch.
+
+### Option 2: build from source
+
+Needs Xcode or the Command Line Tools (`xcode-select --install`) and `jq`.
 
 ```sh
 git clone https://github.com/eyyupcanisler/claude-notch.git
@@ -54,8 +73,8 @@ scripts/install-app.sh             # copies it to ~/Applications and starts it
 scripts/install-hooks.sh           # adds the hooks to ~/.claude/settings.json (backs it up first)
 ```
 
-Then open **ClaudeNotch** from Spotlight: it has no Dock icon, launching it again opens its
-Settings. Turn on *Oturum açılışında başlat* (start at login) in the General tab.
+Either way: ClaudeNotch has no Dock icon, launching it again opens its Settings. Turn on
+*Oturum açılışında başlat* (start at login) in the General tab.
 
 Optional:
 
@@ -108,6 +127,7 @@ artwork). The clipboard shelf never keeps items marked concealed by password man
 ```sh
 swift build && swift test   # the Core library has the logic and the tests
 scripts/demo/record.sh      # re-records docs/demo.gif with made-up sessions (needs ffmpeg)
+scripts/make-release.sh 1.0.1  # builds the zip and publishes a GitHub release
 ```
 
 `CLAUDE_NOTCH_DEBUG=1` enables `/debug/*` routes on the socket for UI tests; see the Turkish

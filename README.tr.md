@@ -44,6 +44,21 @@ ClaudeNotch Google'a kendi OAuth istemcinle bağlanır (yalnız okuma). Bir kez:
 (`~/Library/Application Support/ClaudeNotch/google.json`, `0600`); JSON dosyasını depoya koyma. Toplantının Meet / Zoom
 bağlantısı varsa ada ve takvim kartı başlangıçtan 15 dk önce **Katıl** düğmesi gösterir.
 
+## İndirerek kurma (en kolayı)
+
+1. [Son sürümden](https://github.com/eyyupcanisler/claude-notch/releases/latest)
+   `ClaudeNotch-<sürüm>.zip` dosyasını indir, aç ve **ClaudeNotch.app**'i **Uygulamalar**
+   klasörüne taşı.
+2. Aç. Uygulama Apple Developer ID ile imzalı olmadığı için macOS ilk açılışı engeller:
+   **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç**. (Ya da Terminal'de:
+   `xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app`.)
+3. Spotlight'tan **ClaudeNotch**'ı tekrar açınca Ayarlar gelir:
+   **Genel → Claude Code bağlantısı → Kancaları kur**. Kancalar `~/.claude/settings.json`
+   dosyasına yedek alınarak eklenir, diğer ayarlarına dokunulmaz.
+
+Gereksinim: macOS 14+ (macOS 14'te `brew install jq`; macOS 15 ve sonrasında hazır gelir) ve
+Claude Code.
+
 ## Derleme
 
 ```sh
@@ -73,16 +88,22 @@ Gereksinimler: macOS 14+, Swift 6 araç zinciri, `jq` ve `curl`.
 
 ## Hook kurulumu
 
+En kolayı uygulamanın içinden: **Ayarlar → Genel → Claude Code bağlantısı → Kancaları kur**.
+Uygulama içindeki köprü betiğini `~/Library/Application Support/ClaudeNotch/` altına kopyalar ve
+kancaları ona bağlar (uygulama taşınsa ya da güncellense de yol değişmez). Kaynak koddan:
+
 ```sh
 scripts/install-hooks.sh                       # ~/.claude/settings.json içine ekler
 scripts/install-hooks.sh --print               # yazmadan hook JSON'unu gösterir
 scripts/install-hooks.sh --settings ./test.json  # başka bir ayar dosyasını hedefler
 scripts/install-hooks.sh --uninstall           # ClaudeNotch hook'larını kaldırır
+scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı köprü betiği
 ```
 
 - Yazmadan önce `settings.json.bak.<zaman damgası>.<rastgele>` yedeği alınır, diğer tüm anahtarlar korunur.
 - Betik tekrar çalıştırılabilir (idempotent): önceki ClaudeNotch kayıtları silinip yeniden eklenir.
-- Kaydedilen hook'lar: `PermissionRequest` (bloklayan, 600 sn) ve async olay hook'ları
+- Kaydedilen hook'lar: `PermissionRequest` (bloklayan, 600 sn), `PreToolUse` +
+  `AskUserQuestion` eşleşmesi (soruyu çentikte bekletir, 600 sn) ve async olay hook'ları
   `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Stop`,
   `StopFailure`, `Notification`, `SessionEnd`.
 - Hook betiğinin yolu mutlaktır; proje klasörünü taşırsanız kurulumu yeniden çalıştırın.
@@ -156,7 +177,7 @@ scripts/install-hooks.sh --uninstall           # ClaudeNotch hook'larını kald�
   çentikli / Tümü.
 - Sağ tık: gerekiyorsa **Ghostty iznini ver**, **Ayarlar** (ekran, satır yoğunluğu,
   kısayollar, izin isteğinin görünür kalma süresi, olay başına sesler, oturum açılışında
-  başlat), **Hook kurulumunu göster**, **Çık**.
+  başlat, kanca kurulumu), **Claude Code kancaları…**, **ClaudeNotch’tan çık**.
 
 ## İzin akışı ve kısayollar
 

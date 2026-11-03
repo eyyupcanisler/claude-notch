@@ -61,6 +61,7 @@ struct SettingsView: View {
   /// Bumped after a change so the "kaydedilemedi" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
+  @State private var hooks = HookInstaller()
   @State private var city = ""
   @State private var loginError: String?
   /// The one recorder listening (starting another stops it).
@@ -77,6 +78,35 @@ struct SettingsView: View {
           Picker("Satırlar", selection: $settings.density) {
             ForEach(Density.allCases, id: \.self) { Text($0.title).tag($0) }
           }
+        }
+        Section("Claude Code bağlantısı") {
+          HStack {
+            switch hooks.state {
+            case .installed:
+              Label("Kancalar kurulu", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            case .notInstalled:
+              Label("Kancalar kurulu değil", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            case .other:
+              Label("Kancalar başka bir kopyayı çağırıyor", systemImage: "info.circle")
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if hooks.busy {
+              ProgressView().controlSize(.small)
+            } else if hooks.state == .installed {
+              Button("Kaldır") { hooks.uninstall() }
+            } else {
+              Button(hooks.state == .notInstalled ? "Kancaları kur" : "Bu uygulamaya bağla") {
+                hooks.install()
+              }
+            }
+          }
+          Text(hooks.message ?? hookHelp)
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
         }
         Section("Başlangıç") {
           Toggle("Oturum açılışında başlat", isOn: Binding(
@@ -288,6 +318,18 @@ struct SettingsView: View {
       .tabItem { Label("Kısayollar", systemImage: "keyboard") }
     }
     .frame(width: 480, height: 620)
+  }
+
+  private var hookHelp: String {
+    switch hooks.state {
+    case .installed:
+      return "Claude Code olayları ve izin istekleri bu uygulamaya geliyor."
+    case .notInstalled:
+      return "Claude Code’un durumu ve izin istekleri çentiğe gelsin diye ~/.claude/settings.json "
+        + "dosyasına kancalar eklenir (önce yedek alınır, diğer ayarlarına dokunulmaz)."
+    case .other(let path):
+      return "Şu an \(path) kullanılıyor (kaynak koddan kurulum). Çalışıyorsa böyle kalabilir."
+    }
   }
 
   private var weatherHelp: String {

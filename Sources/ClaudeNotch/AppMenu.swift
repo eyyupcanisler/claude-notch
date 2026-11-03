@@ -32,7 +32,7 @@ final class AppMenuController: NSObject {
     menu.addItem(settings)
 
     let hooks = NSMenuItem(
-      title: "Hook kurulumunu göster", action: #selector(showHookInstall), keyEquivalent: "")
+      title: "Claude Code kancaları…", action: #selector(showHookInstall), keyEquivalent: "")
     hooks.target = self
     menu.addItem(hooks)
 
@@ -59,37 +59,12 @@ final class AppMenuController: NSObject {
     openSettings()
   }
 
+  /// The hooks are set up in Settings → Genel → Claude Code bağlantısı.
   @objc private func showHookInstall() {
-    let script = Self.installScriptPath()
-    let command = "\"\(script)\""
-    let alert = NSAlert()
-    alert.messageText = "Hook kurulumu"
-    alert.informativeText = """
-      Claude Code hook'larını kurmak için Terminal'de çalıştırın:
-
-      \(command)
-
-      Kaldırmak için sonuna --uninstall ekleyin. Yalnızca hook'lar yazdırılsın isterseniz --print.
-      """
-    alert.addButton(withTitle: "Komutu kopyala")
-    alert.addButton(withTitle: "Kapat")
-    NSApp.activate()
-    if alert.runModal() == .alertFirstButtonReturn {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(command, forType: .string)
-    }
+    openSettings()
   }
 
   @objc private func quit() {
     NSApp.terminate(nil)
-  }
-
-  static func installScriptPath() -> String {
-    if let root = Bundle.main.object(forInfoDictionaryKey: "ClaudeNotchProjectRoot") as? String,
-      !root.isEmpty {
-      return root + "/scripts/install-hooks.sh"
-    }
-    let guess = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
-    return guess.appendingPathComponent("scripts/install-hooks.sh").path
   }
 }

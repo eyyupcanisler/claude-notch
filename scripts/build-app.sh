@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 APP="$ROOT/build.noindex/ClaudeNotch.app"
-VERSION="3.0.0"
+VERSION="${CLAUDE_NOTCH_VERSION:-1.0.0}"
 SIGN_ID="${CLAUDE_NOTCH_SIGN_ID:-ClaudeNotch Dev}"
 AE_USAGE="ClaudeNotch, bir oturuma tıkladığınızda o oturumun terminal sekmesini (Ghostty,"
 AE_USAGE+=" Terminal, iTerm2) öne getirmek ve odaktaki sekmeyi okumak için terminalinizi"
@@ -29,6 +29,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ClaudeNotch"
 # App icon (redraw with scripts/make-icon.swift, then iconutil; see that file).
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# The hook bridge and its installer travel inside the app (Settings → Genel installs them).
+cp "$ROOT/hooks/claude-notch-hook.sh" "$ROOT/scripts/install-hooks.sh" "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -51,7 +53,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSAppleEventsUsageDescription</key><string>$AE_USAGE</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>$CAL_USAGE</string>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 eyyupcan. Tüm hakları saklıdır.</string>
-  <key>ClaudeNotchProjectRoot</key><string>$ROOT</string>
 </dict>
 </plist>
 PLIST

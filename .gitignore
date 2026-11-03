@@ -11,3 +11,4 @@ __pycache__/
 *.pyc
 Resources/AppIcon.iconset/
 build.noindex/
+dist/

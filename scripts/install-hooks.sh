@@ -1,6 +1,8 @@
 #!/bin/bash
 # Installs/removes ClaudeNotch hooks in a Claude Code settings.json.
-# Usage: install-hooks.sh [--uninstall] [--print] [--settings <path>]
+# Usage: install-hooks.sh [--uninstall] [--print] [--settings <path>] [--hook <path>]
+# --hook: the bridge script the hooks call (default: hooks/ next to this script's folder; the
+# app passes its own copy in Application Support).
 set -u
 set -o pipefail
 
@@ -20,8 +22,13 @@ while [ $# -gt 0 ]; do
       if [ $# -eq 0 ]; then echo "--settings bir yol bekliyor" >&2; exit 2; fi
       SETTINGS="$1"
       ;;
+    --hook)
+      shift
+      if [ $# -eq 0 ]; then echo "--hook bir yol bekliyor" >&2; exit 2; fi
+      HOOK="$1"
+      ;;
     -h | --help)
-      echo "Kullanım: install-hooks.sh [--uninstall] [--print] [--settings <yol>]"
+      echo "Kullanım: install-hooks.sh [--uninstall] [--print] [--settings <yol>] [--hook <yol>]"
       exit 0
       ;;
     *) echo "Bilinmeyen argüman: $1" >&2; exit 2 ;;
