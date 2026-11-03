@@ -16,7 +16,10 @@ ZIP="$DIST/ClaudeNotch-$VERSION.zip"
 CLAUDE_NOTCH_VERSION="$VERSION" scripts/build-app.sh
 mkdir -p "$DIST"
 rm -f "$ZIP"
-ditto -c -k --keepParent "$ROOT/build.noindex/ClaudeNotch.app" "$ZIP"
+# --sequesterRsrc: extended attributes go to __MACOSX, never inside the bundle (a plain unzip
+# would otherwise drop "._" files into it and break the signature).
+ditto -c -k --sequesterRsrc --keepParent "$ROOT/build.noindex/ClaudeNotch.app" "$ZIP"
+codesign --verify --deep --strict "$ROOT/build.noindex/ClaudeNotch.app"
 SUM="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 echo "$ZIP  $SUM"
 

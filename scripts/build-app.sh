@@ -27,6 +27,8 @@ BIN="$(swift build -c release --show-bin-path)/ClaudeNotch"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ClaudeNotch"
+# Debug and local symbols out: smaller, and no build-machine paths inside the shipped binary.
+strip -S -x "$APP/Contents/MacOS/ClaudeNotch"
 # App icon (redraw with scripts/make-icon.swift, then iconutil; see that file).
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # The hook bridge and its installer travel inside the app (Settings → Genel installs them).
