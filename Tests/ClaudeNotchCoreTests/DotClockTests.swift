@@ -9,6 +9,13 @@ final class DotClockTests: XCTestCase {
     XCTAssertEqual(DotClock.reading(3599), .init(digits: "59:59", unit: nil))
   }
 
+  func testCountdown() {
+    XCTAssertEqual(DotClock.countdown(0), "00:00")
+    XCTAssertEqual(DotClock.countdown(299.2), "05:00")
+    XCTAssertEqual(DotClock.countdown(3599), "59:59")
+    XCTAssertEqual(DotClock.countdown(5400), "1:30:00")
+  }
+
   func testCoarse() {
     XCTAssertEqual(DotClock.coarse(20), .init(digits: "1", unit: "dk"))
     XCTAssertEqual(DotClock.coarse(754), .init(digits: "12", unit: "dk"))

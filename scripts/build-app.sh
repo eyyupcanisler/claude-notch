@@ -14,7 +14,11 @@ VERSION="3.0.0"
 SIGN_ID="${CLAUDE_NOTCH_SIGN_ID:-ClaudeNotch Dev}"
 AE_USAGE="ClaudeNotch, bir oturuma tıkladığınızda o oturumun terminal sekmesini (Ghostty,"
 AE_USAGE+=" Terminal, iTerm2) öne getirmek ve odaktaki sekmeyi okumak için terminalinizi"
-AE_USAGE+=" kontrol eder."
+AE_USAGE+=" kontrol eder. Spotify modülü açıksa çalan şarkının kapağını almak ve oynat / duraklat /"
+AE_USAGE+=" sonraki / önceki komutlarını vermek için Spotify'ı kontrol eder."
+CAL_USAGE="ClaudeNotch, Takvim modülü açıkken yaklaşan toplantıyı çentikte göstermek ve 10 dakika"
+CAL_USAGE+=" önce hatırlatmak için önümüzdeki 12 saatin etkinliklerini okur; hiçbir şeyi değiştirmez"
+CAL_USAGE+=" ya da dışarı göndermez."
 
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/ClaudeNotch"
@@ -41,6 +45,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>$AE_USAGE</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>$CAL_USAGE</string>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 eyyupcan. Tüm hakları saklıdır.</string>
   <key>ClaudeNotchProjectRoot</key><string>$ROOT</string>
 </dict>

@@ -9,6 +9,8 @@ import SwiftUI
 struct ExpandedToolbar: View {
   let store: SessionStore
   let ui: NotchUIState
+  let settings: NotchSettings
+  let modules: ModuleCenter
   let actions: NotchActions
   let notchWidth: CGFloat
   let sideWidth: CGFloat
@@ -22,6 +24,9 @@ struct ExpandedToolbar: View {
           action: actions.togglePin)
         BandIconButton(
           icon: "gearshape", label: "Ayarlar", active: false, action: actions.openSettings)
+        if settings.timerEnabled, case .idle = modules.timer.state, modules.timerDraft == nil {
+          TimerStartMenu(modules: modules)
+        }
         if ui.ghosttyConsent.missing {
           BandIconButton(
             icon: "lock.shield", label: consentLabel, active: false, tint: NotchTheme.bandNeeds,
@@ -120,10 +125,13 @@ struct ExpandedBody: View {
   let store: SessionStore
   let ui: NotchUIState
   let settings: NotchSettings
+  let modules: ModuleCenter
   let actions: NotchActions
   /// Height of the black band above (notch height).
   let bandHeight: CGFloat
   @State private var topHeight: CGFloat = 0
+  /// Height of the module tiles under the rows (0 when none show).
+  @State private var stripHeight: CGFloat = 0
   /// Measured natural height of the rows (nil until the first layout; an estimate is used
   /// meanwhile: a zero-height ScrollView would never lay out its content to report a size).
   @State private var measuredRows: CGFloat?
@@ -147,7 +155,9 @@ struct ExpandedBody: View {
   /// Room left for the scrolling rows so the whole panel stays within `NotchMetrics.maxHeight`.
   private var rowsBudget: CGFloat {
     let body = NotchMetrics.maxHeight - bandHeight
-    return max(44, body - topHeight - Self.spacing - Self.topPadding - Self.bottomPadding)
+    let strip = stripHeight > 0 ? stripHeight + Self.spacing : 0
+    return max(
+      44, body - topHeight - strip - Self.spacing - Self.topPadding - Self.bottomPadding)
   }
 
   var body: some View {
@@ -214,6 +224,8 @@ struct ExpandedBody: View {
           }
         }
       }
+      ModuleStrip(modules: modules, settings: settings)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stripHeight = $0 }
     }
     .padding(.horizontal, 10)
     .padding(.top, Self.topPadding)

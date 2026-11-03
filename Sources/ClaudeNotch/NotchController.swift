@@ -11,6 +11,8 @@ final class NotchController {
   let store: SessionStore
   let ui = NotchUIState()
   let settings = NotchSettings()
+  /// Calendar, timer and battery (see `ModuleCenter`).
+  private(set) lazy var modules = ModuleCenter(settings: settings)
   private(set) var surfaces: [CGDirectDisplayID: NotchSurface] = [:]
   private var primaryID: CGDirectDisplayID?
   private var activeID: CGDirectDisplayID?
@@ -76,13 +78,15 @@ final class NotchController {
     }
     planner.permissionHold = settings.peekDuration.seconds
     registerShortcuts()
+    modules.onNote = { [weak self] note in self?.moduleNote(note) }
     settingsWindow = SettingsWindowController(
       settings: settings,
       shortcuts: ShortcutBridge(
         set: { [weak self] role, combo in self?.setShortcut(role, combo) },
         reset: { [weak self] in self?.resetShortcuts() },
         pause: { [weak self] paused in self?.pauseShortcuts(paused) },
-        registered: { [weak self] role in self?.hotKeys?.isRegistered(role) ?? false }))
+        registered: { [weak self] role in self?.hotKeys?.isRegistered(role) ?? false }),
+      modules: modules)
 
     rebuildSurfaces()
     store.onEffect = { [weak self] effect in self?.handle(effect) }
@@ -128,7 +132,9 @@ final class NotchController {
   private var hasSessions: Bool { !store.sessions.isEmpty }
 
   private func makeRoot(_ state: SurfaceState) -> NotchRootView {
-    NotchRootView(store: store, ui: ui, settings: settings, surface: state, actions: makeActions())
+    NotchRootView(
+      store: store, ui: ui, settings: settings, modules: modules, surface: state,
+      actions: makeActions())
   }
 
   /// Creates / updates / closes surfaces for the current screens and display mode.
@@ -214,15 +220,16 @@ final class NotchController {
   /// Applies the mode of every surface.
   func refresh() {
     let now = Date()
-    if !debugFreeze { planner.expire(at: now) }
-    store.removalArmDelay = SessionStore.removalArmDelay(
-      doubleClickInterval: NSEvent.doubleClickInterval)
-    if expandedID != nil { planner.clear() }
     if let peek = planner.current, peek.kind == .permission,
       peek.cardID.flatMap({ store.card(id: $0) }) == nil
     {
       planner.clear()
     }
+    // After the stale-card check, so a module note waiting behind that card shows now.
+    if !debugFreeze { planner.expire(at: now) }
+    store.removalArmDelay = SessionStore.removalArmDelay(
+      doubleClickInterval: NSEvent.doubleClickInterval)
+    if expandedID != nil { planner.clearAll() }
     if ui.peek != planner.current { ui.peek = planner.current }
     validateSelection()
     if let hold = keyHold, shownRequest(at: now)?.cardID != hold.cardID {
@@ -242,7 +249,12 @@ final class NotchController {
       }
       let visible = s.state.geometry.hasNotch || live || mode != .collapsed
       if mode == .peek, let peek = ui.peek {
-        let w = peek.kind == .finished ? NotchMetrics.finishedWidth : NotchMetrics.permissionWidth
+        let w: CGFloat
+        switch peek.kind {
+        case .finished: w = NotchMetrics.finishedWidth
+        case .module: w = NotchMetrics.moduleWidth
+        default: w = NotchMetrics.permissionWidth
+        }
         if s.state.mode != .peek {
           // The island leaves the notch already at its width (no sideways morph on arrival).
           s.state.peekWidth = w
@@ -342,7 +354,7 @@ final class NotchController {
     }
     if opening {
       expandedID = id
-      planner.clear()
+      planner.clearAll()
       freezeOrder()
       onExpand?()
     }
@@ -461,8 +473,12 @@ final class NotchController {
     let p = NSEvent.mouseLocation
     let now = Date()
     let live = hasSessions
+    let pill = modules.timerPillVisible
+    let ears = modules.earsVisible
     for s in surfaces.values {
-      let rects = s.hitRects(hasSessions: live)
+      let rects = s.hitRects(
+        hasSessions: live, pill: pill, ears: ears && s.state.geometry.hasNotch,
+        fullEars: modules.earsFull)
       if let start = s.pointerAtAppear, hypot(p.x - start.x, p.y - start.y) > 2 {
         s.pointerAtAppear = nil
       }
@@ -479,10 +495,10 @@ final class NotchController {
       switch s.state.mode {
       case .collapsed:
         // Hover target: the notch plus the status line under it.
-        let depth = live ? NotchMetrics.lineZoneDepth(g) : g.notchHeight
+        let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
         let fired = s.intent.update(
           point: p, at: now, minX: notchMinX, maxX: notchMaxX, top: top, bottom: top - depth)
-        if fired, s.isLive(hasSessions: live) {
+        if fired, s.isLive(hasSessions: live, pill: pill) {
           s.intent.reset()
           expand(s.displayID, reason: .hover)
           return
@@ -1073,6 +1089,13 @@ final class NotchController {
 
   // MARK: - Effects
 
+  /// A module note: shown unless the panel is open (its tiles show the same), never over a
+  /// Claude peek (the planner queues it).
+  private func moduleNote(_ note: ModuleNote) {
+    guard expandedID == nil else { return }
+    if planner.receive(module: note, at: Date()) { refresh() }
+  }
+
   private func handle(_ effect: StoreEffect) {
     guard case .attention(let sessionID, let kind) = effect else {
       // Sounds and expansion are driven by the attention kind (no auto-expand).
@@ -1523,6 +1546,18 @@ final class NotchController {
       }
       rebuildSurfaces()
     }
+    if let m = json["module_note"], let title = m["title"]?.stringValue,
+      let source = ModuleNote.Source(rawValue: m["source"]?.stringValue ?? "calendar")
+    {
+      var level: Double?
+      if case .double(let v)? = m["level"] { level = v }
+      moduleNote(
+        ModuleNote(
+          source: source, id: "debug:\(Date().timeIntervalSince1970)", title: title,
+          subtitle: m["subtitle"]?.stringValue, digits: m["digits"]?.stringValue,
+          unit: m["unit"]?.stringValue, level: level, validUntil: Date().addingTimeInterval(60)))
+    }
+    if json["timer_toggle"] != nil { modules.toggleTimer() }
     if let id = json["select_card"]?.stringValue { selectCard(id) }
     if let id = json["open_card"]?.stringValue { ui.openedCards.insert(id) }
     if let id = json["more_card"]?.stringValue { setMore(id) }

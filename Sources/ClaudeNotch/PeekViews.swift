@@ -22,11 +22,13 @@ struct PeekBody: View {
         attention
       case .finished:
         finished
+      case .module:
+        if let note = peek.module { ModulePeekView(note: note) }
       }
     }
     .padding(.horizontal, NotchMetrics.peekPadding)
-    .padding(.top, peek.kind == .finished ? 9 : 8)
-    .padding(.bottom, peek.kind == .finished ? 11 : 12)
+    .padding(.top, peek.kind == .finished || peek.kind == .module ? 9 : 8)
+    .padding(.bottom, peek.kind == .finished || peek.kind == .module ? 11 : 12)
     .background(CornerGlow(color: glowColor, strength: 0.34, radius: 220))
     .background(
       Color.clear
@@ -40,6 +42,8 @@ struct PeekBody: View {
     case .permission, .attention: return theme.needs
     case .finished:
       return peek.errorIDs.count == peek.sessionIDs.count ? theme.error : theme.done
+    case .module:
+      return peek.module.map { ModulePeekView.tint($0, theme: theme) } ?? theme.idle
     }
   }
 
@@ -203,5 +207,74 @@ struct PeekBody: View {
     }
     .frame(height: 18)
     .notchEnter(0)
+  }
+}
+
+/// A module note under the notch: a dot-matrix value (or a battery bar), a title and a line.
+struct ModulePeekView: View {
+  let note: ModuleNote
+  @Environment(\.notchTheme) private var theme
+
+  static func tint(_ note: ModuleNote, theme: NotchTheme) -> Color {
+    switch note.source {
+    case .calendar: return Color(hex: 0x8FA6FF)
+    case .timer: return theme.working
+    case .battery: return (note.level ?? 1) <= 0.1 ? theme.error : theme.done
+    }
+  }
+
+  var body: some View {
+    let tint = Self.tint(note, theme: theme)
+    HStack(spacing: 12) {
+      if note.source == .battery, let level = note.level {
+        BatteryGlyph(level: level, color: tint)
+      } else if let digits = note.digits {
+        HStack(alignment: .lastTextBaseline, spacing: 3) {
+          DotMatrixText(text: digits, color: tint, pitch: 2.6)
+          if let unit = note.unit {
+            Text(unit).font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(tint.opacity(0.85))
+          }
+        }
+      }
+      VStack(alignment: .leading, spacing: 2) {
+        Text(note.title)
+          .font(.system(size: 12.5, weight: .semibold))
+          .foregroundStyle(theme.ink)
+          .lineLimit(1)
+        if let sub = note.subtitle {
+          Text(sub)
+            .font(.system(size: 11.5))
+            .foregroundStyle(theme.tertiary)
+            .lineLimit(1)
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(minHeight: 30)
+    .notchEnter(0)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+/// Battery outline with its fill level.
+struct BatteryGlyph: View {
+  let level: Double
+  let color: Color
+
+  var body: some View {
+    HStack(spacing: 1.5) {
+      ZStack(alignment: .leading) {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+          .strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5)
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+          .fill(color)
+          .frame(width: max(3, 30 * min(1, max(0, level))))
+          .padding(3)
+      }
+      .frame(width: 38, height: 18)
+      RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.35)).frame(width: 2, height: 6)
+    }
+    .accessibilityHidden(true)
   }
 }

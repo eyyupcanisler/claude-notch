@@ -20,10 +20,12 @@ final class SettingsWindowController {
   private var window: NSWindow?
   private let settings: NotchSettings
   private let shortcuts: ShortcutBridge
+  private let modules: ModuleCenter
 
-  init(settings: NotchSettings, shortcuts: ShortcutBridge) {
+  init(settings: NotchSettings, shortcuts: ShortcutBridge, modules: ModuleCenter) {
     self.settings = settings
     self.shortcuts = shortcuts
+    self.modules = modules
   }
 
   func close() {
@@ -35,7 +37,7 @@ final class SettingsWindowController {
 
   func show() {
     if window == nil {
-      let view = SettingsView(settings: settings, shortcuts: shortcuts)
+      let view = SettingsView(settings: settings, shortcuts: shortcuts, modules: modules)
       let hosting = NSHostingController(rootView: view)
       let w = NSWindow(contentViewController: hosting)
       w.title = "ClaudeNotch Ayarları"
@@ -55,6 +57,7 @@ final class SettingsWindowController {
 struct SettingsView: View {
   @Bindable var settings: NotchSettings
   let shortcuts: ShortcutBridge
+  let modules: ModuleCenter
   /// Bumped after a change so the "kaydedilemedi" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
@@ -112,6 +115,43 @@ struct SettingsView: View {
           Toggle(e.title, isOn: Binding(
             get: { settings.soundEnabled(e) }, set: { settings.setSound(e, $0) }))
         }
+      }
+      Section("Modüller") {
+        Toggle("Takvim: toplantıdan 10 dk önce hatırlat", isOn: $settings.calendarEnabled)
+        if settings.calendarEnabled {
+          switch modules.calendarAccess {
+          case .asking:
+            Text("macOS takvim izni istiyor…").font(.caption).foregroundStyle(.secondary)
+          case .denied:
+            HStack {
+              Text("Takvim izni verilmedi.").font(.caption).foregroundStyle(.orange)
+              Spacer()
+              Button("Sistem Ayarları’nı aç") { modules.openCalendar() }
+            }
+          default:
+            EmptyView()
+          }
+        }
+        Toggle("Zamanlayıcı (panelin üst bandındaki ⏲ ile kurulur)", isOn: $settings.timerEnabled)
+        Toggle("Şarj: kablo takılınca ve pil %10’a inince", isOn: $settings.batteryEnabled)
+        Toggle("Spotify: çalarken çentiğin yanında kapak", isOn: $settings.spotifyEnabled)
+        if settings.spotifyEnabled {
+          Toggle("Uygulamadayken kulakları çentiğe gizle", isOn: $settings.tuckEars)
+          Text("Masaüstünde, tam ekranda ve şarkı değişince 3 sn kapak tam görünür; diğer "
+            + "zamanlarda kapak çentiğin arkasına kayar, yalnız ucu görünür.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        if settings.spotifyEnabled && modules.spotify.denied {
+          Text("Spotify’ı kontrol izni verilmedi: Sistem Ayarları > Gizlilik ve Güvenlik > "
+            + "Otomasyon > ClaudeNotch > Spotify.")
+            .font(.caption).foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Text("Modül adaları Claude bildirimlerinin önüne geçmez; bir Claude adası açıksa "
+          + "sırasını bekler.")
+          .font(.caption).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
       Section("Başlangıç") {
         Toggle("Oturum açılışında başlat", isOn: Binding(

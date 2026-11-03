@@ -37,7 +37,7 @@ final class AppMenuController: NSObject {
     menu.addItem(hooks)
 
     menu.addItem(.separator())
-    let quit = NSMenuItem(title: "Çık", action: #selector(quit), keyEquivalent: "")
+    let quit = NSMenuItem(title: "ClaudeNotch’tan çık", action: #selector(quit), keyEquivalent: "")
     quit.target = self
     menu.addItem(quit)
     return menu

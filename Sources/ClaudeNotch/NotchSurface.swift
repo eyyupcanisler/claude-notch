@@ -42,25 +42,36 @@ final class NotchSurface {
   }
 
   /// Draws or reacts to anything at all (a hidden synthetic pill does not).
-  func isLive(hasSessions: Bool) -> Bool {
+  func isLive(hasSessions: Bool, pill: Bool = false, ears: Bool = false) -> Bool {
     let g = state.geometry
     guard state.visible else { return false }
-    return g.hasNotch || state.mode != .collapsed || hasSessions
+    return g.hasNotch || state.mode != .collapsed || hasSessions || pill || ears
   }
 
   /// Screen rectangles that take the pointer (Cocoa, y-up): the notch-wide band part plus the
   /// island under it, or the notch plus the status line while collapsed. Never the menu-bar
   /// band beside the notch, unless the panel is expanded (it then owns that band).
-  func hitRects(hasSessions: Bool) -> [NSRect] {
-    guard isLive(hasSessions: hasSessions) else { return [] }
+  func hitRects(
+    hasSessions: Bool, pill: Bool = false, ears: Bool = false, fullEars: Bool = true
+  ) -> [NSRect] {
+    guard isLive(hasSessions: hasSessions, pill: pill, ears: ears) else { return [] }
     let g = state.geometry
     let top = g.screenFrame.maxY
     let cx = g.screenFrame.midX
     let i = island
     switch state.mode {
     case .collapsed:
-      let depth = hasSessions ? NotchMetrics.lineZoneDepth(g) : g.notchHeight
-      return [NSRect(x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)]
+      let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
+      let notch = NSRect(
+        x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+      guard ears else { return [notch] }
+      // The ears take clicks too (they cover the menu bar there anyway).
+      let w = NotchMetrics.earWidth(full: fullEars)
+      let h = g.bandHeight
+      return [
+        notch, NSRect(x: cx - g.notchWidth / 2 - w, y: top - h, width: w, height: h),
+        NSRect(x: cx + g.notchWidth / 2, y: top - h, width: w, height: h),
+      ]
     case .peek:
       let band = NSRect(
         x: cx - i.topWidth / 2, y: top - g.bandHeight, width: i.topWidth, height: g.bandHeight)

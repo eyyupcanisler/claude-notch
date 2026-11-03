@@ -148,8 +148,18 @@ enum NotchMetrics {
   static let lineSegmentGap: CGFloat = 3
   /// Hover / click slack under the line.
   static let lineHitSlack: CGFloat = 5
+  /// Spotify ears beside the notch (collapsed, while playing): width of each.
+  static let earWidth: CGFloat = 34
+  /// Tucked ears (another app in front): only this much of the cover peeks out of the notch.
+  static let thinEarWidth: CGFloat = 7
+
+  static func earWidth(full: Bool) -> CGFloat { full ? earWidth : thinEarWidth }
+
+  /// Running timer (collapsed only): the notch grows down by this much, the time inside.
+  static let pillHeight: CGFloat = 22
   /// Done / error peek: one line.
   static let finishedWidth: CGFloat = 300
+  static let moduleWidth: CGFloat = 340
   /// Permission / question peek: two lines and compact buttons.
   static let permissionMinWidth: CGFloat = 380
   static let peekPadding: CGFloat = 14
@@ -188,6 +198,29 @@ enum NotchMetrics {
   /// Bottom of the hover / click zone under the notch, measured from the top of the screen.
   static func lineZoneDepth(_ g: NotchGeometry) -> CGFloat {
     g.notchHeight + lineGap + lineHeight + lineHitSlack
+  }
+
+  /// The extension starts this far up inside the notch, so its straight sides cover the
+  /// notch's rounded bottom corners (no step where the two meet).
+  static let pillOverlap: CGFloat = 12
+
+  /// Top of the timer extension view (hidden part included).
+  static func pillTop(_ g: NotchGeometry) -> CGFloat { g.notchHeight - pillOverlap }
+
+  /// Top of the status line: under the notch, or under the timer extension.
+  static func lineTop(_ g: NotchGeometry, pill: Bool) -> CGFloat {
+    g.notchHeight + (pill ? pillHeight - 2 : 0) + lineGap
+  }
+
+  /// Hover / click zone while the timer extension shows (notch, extension and line).
+  static func pillZoneDepth(_ g: NotchGeometry) -> CGFloat {
+    lineTop(g, pill: true) + lineHeight + lineHitSlack
+  }
+
+  /// Depth of the collapsed hover / click zone.
+  static func collapsedDepth(_ g: NotchGeometry, sessions: Bool, pill: Bool) -> CGFloat {
+    if pill { return pillZoneDepth(g) }
+    return sessions ? lineZoneDepth(g) : g.notchHeight
   }
 
   @MainActor

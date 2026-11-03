@@ -294,13 +294,52 @@ public enum PeekKind: String, Sendable {
   case attention
   /// Done / error, coalesced (2.5 s).
   case finished
+  /// A module note (meeting soon, timer done, charging): the lowest priority, never over a
+  /// Claude peek, and any Claude peek replaces it at once.
+  case module
 
   var priority: Int {
     switch self {
     case .permission: return 3
     case .attention: return 2
     case .finished: return 1
+    case .module: return 0
     }
+  }
+}
+
+/// What a module peek shows: a dot-matrix value with a unit, a title and a subtitle.
+public struct ModuleNote: Sendable, Equatable {
+  public enum Source: String, Sendable {
+    case calendar
+    case timer
+    case battery
+  }
+
+  public var source: Source
+  /// Same id = same note (a repeated reminder is not queued twice).
+  public var id: String
+  public var title: String
+  public var subtitle: String?
+  public var digits: String?
+  public var unit: String?
+  /// 0…1 for a level bar (battery).
+  public var level: Double?
+  /// A note that waited behind a Claude peek is dropped after this (a meeting that started).
+  public var validUntil: Date
+
+  public init(
+    source: Source, id: String, title: String, subtitle: String? = nil, digits: String? = nil,
+    unit: String? = nil, level: Double? = nil, validUntil: Date
+  ) {
+    self.source = source
+    self.id = id
+    self.title = title
+    self.subtitle = subtitle
+    self.digits = digits
+    self.unit = unit
+    self.level = level
+    self.validUntil = validUntil
   }
 }
 
@@ -313,6 +352,8 @@ public struct PeekItem: Sendable, Equatable {
   public var cardID: String?
   public var startedAt: Date
   public var until: Date
+  /// Payload of a module peek.
+  public var module: ModuleNote? = nil
 }
 
 /// Decides what the peek shows. Pure state machine driven by the store's attention effects.
@@ -322,8 +363,11 @@ public struct PeekPlanner: Sendable {
   public static let attentionDuration: TimeInterval = 4
   /// Default of a bare `PeekPlanner()`; the app passes the user's setting.
   public static let permissionDuration: TimeInterval = 6
+  public static let moduleDuration: TimeInterval = 4
 
   public private(set) var current: PeekItem?
+  /// A module note that arrived while a Claude peek was up: shown once that one is gone.
+  public private(set) var pendingModule: ModuleNote?
   /// How long an unanswered permission peek stays; nil keeps it until the card is answered.
   public var permissionHold: TimeInterval?
 
@@ -345,7 +389,27 @@ public struct PeekPlanner: Sendable {
     case .permission: return permissionHold
     case .attention: return Self.attentionDuration
     case .finished: return Self.finishedDuration
+    case .module: return Self.moduleDuration
     }
+  }
+
+  /// Feeds a module note. Shown at once unless a Claude peek is up; then it waits (one slot,
+  /// the newest wins) and shows when that peek is gone. Returns true when the peek changed.
+  @discardableResult
+  public mutating func receive(module note: ModuleNote, at t: Date) -> Bool {
+    if let cur = current, cur.until > t, cur.kind != .module {
+      pendingModule = note
+      return false
+    }
+    if current?.module?.id == note.id { return false }
+    present(note, at: t)
+    return true
+  }
+
+  private mutating func present(_ note: ModuleNote, at t: Date) {
+    current = PeekItem(
+      kind: .module, sessionIDs: [], errorIDs: [], cardID: nil, startedAt: t,
+      until: t.addingTimeInterval(Self.moduleDuration), module: note)
   }
 
   /// Feeds one attention effect. Returns true when the visible peek changed.
@@ -389,16 +453,34 @@ public struct PeekPlanner: Sendable {
     current = cur
   }
 
-  /// Drops the peek once its time is over. Returns true when it was removed.
+  /// Drops the peek once its time is over, then shows a waiting module note (if still
+  /// valid). Returns true when the peek changed.
   @discardableResult
   public mutating func expire(at t: Date) -> Bool {
-    guard let cur = current, cur.until <= t else { return false }
-    current = nil
-    return true
+    var changed = false
+    if let cur = current, cur.until <= t {
+      current = nil
+      changed = true
+    }
+    if current == nil, let note = pendingModule {
+      pendingModule = nil
+      if note.validUntil > t {
+        present(note, at: t)
+        changed = true
+      }
+    }
+    return changed
   }
 
+  /// Hides the peek. A waiting module note stays (it shows on the next `expire`).
   public mutating func clear() {
     current = nil
+  }
+
+  /// Panel opened: the user sees everything there, nothing waits.
+  public mutating func clearAll() {
+    current = nil
+    pendingModule = nil
   }
 
   /// "api bitti", "api hata verdi", "3 oturum bitti", "3 oturum bitti · 1 hata".
@@ -670,6 +752,13 @@ public enum DotClock {
     }
     if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: "sa") }
     return Reading(digits: "\(s / 86_400)", unit: "gün")
+  }
+
+  /// A countdown: "mm:ss", or "h:mm:ss" from an hour up (timers up to 180 min).
+  public static func countdown(_ seconds: TimeInterval) -> String {
+    let s = max(0, Int(seconds.rounded(.up)))
+    if s < 3600 { return String(format: "%02d:%02d", s / 60, s % 60) }
+    return String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60)
   }
 
   /// Whole minutes at least ("12" + "dk"), for times that need no seconds (idle rows).

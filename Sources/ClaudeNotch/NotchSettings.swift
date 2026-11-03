@@ -114,6 +114,28 @@ final class NotchSettings {
   var shortcutHintSeen: Bool {
     didSet { defaults.set(shortcutHintSeen, forKey: "shortcutHintSeen") }
   }
+  /// Modules. Calendar starts off: turning it on is what asks for calendar access.
+  var calendarEnabled: Bool {
+    didSet { defaults.set(calendarEnabled, forKey: "module.calendar") }
+  }
+  var timerEnabled: Bool {
+    didSet { defaults.set(timerEnabled, forKey: "module.timer") }
+  }
+  var timerMinutes: Int {
+    didSet { defaults.set(timerMinutes, forKey: "module.timerMinutes") }
+  }
+  var batteryEnabled: Bool {
+    didSet { defaults.set(batteryEnabled, forKey: "module.battery") }
+  }
+  /// Spotify starts off: turning it on is what asks for Automation access to Spotify.
+  var spotifyEnabled: Bool {
+    didSet { defaults.set(spotifyEnabled, forKey: "module.spotify") }
+  }
+  /// With an app in front (its menu might reach the notch), the ears tuck behind the notch.
+  var tuckEars: Bool {
+    didSet { defaults.set(tuckEars, forKey: "module.spotifyTuck") }
+  }
+  static let timerChoices = [5, 15, 25, 50]
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -136,6 +158,13 @@ final class NotchSettings {
     }
     shortcuts = keys
     shortcutHintSeen = defaults.bool(forKey: "shortcutHintSeen")
+    calendarEnabled = defaults.bool(forKey: "module.calendar")
+    timerEnabled = defaults.object(forKey: "module.timer") as? Bool ?? true
+    let minutes = defaults.integer(forKey: "module.timerMinutes")
+    timerMinutes = (1...180).contains(minutes) ? minutes : 25
+    batteryEnabled = defaults.object(forKey: "module.battery") as? Bool ?? true
+    spotifyEnabled = defaults.bool(forKey: "module.spotify")
+    tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true
   }
 
   /// A stored decision chord that is no longer allowed (see `KeyCombo.error(for:)`) falls back

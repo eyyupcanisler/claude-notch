@@ -162,6 +162,7 @@ struct NotchRootView: View {
   let store: SessionStore
   let ui: NotchUIState
   let settings: NotchSettings
+  let modules: ModuleCenter
   let surface: SurfaceState
   let actions: NotchActions
 
@@ -178,6 +179,8 @@ struct NotchRootView: View {
     // shape stays inside the camera housing).
     let drawn = surface.visible && (g.hasNotch || mode != .collapsed || !segments.isEmpty)
     let windowW = NotchMetrics.windowWidth(screen: g.screenFrame.width)
+    let pillShown = mode == .collapsed && surface.visible && modules.timerPillVisible
+      && (g.hasNotch || !segments.isEmpty)
     ZStack(alignment: .top) {
       NotchBackground(mode: mode, theme: theme, band: g.toolbarHeight)
         .clipShape(shape)
@@ -193,14 +196,34 @@ struct NotchRootView: View {
       .clipShape(shape)
       StatusLineView(segments: segments)
         .frame(width: NotchMetrics.lineWidth(notch: g.notchWidth), height: NotchMetrics.lineHeight)
-        .padding(.top, g.notchHeight + NotchMetrics.lineGap)
+        .padding(.top, NotchMetrics.lineTop(g, pill: pillShown))
         .opacity(mode == .collapsed && surface.visible && !segments.isEmpty ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+      if mode == .collapsed && surface.visible && g.hasNotch && modules.earsVisible {
+        SpotifyEars(
+          spotify: modules.spotify, full: modules.earsFull, notchWidth: g.notchWidth,
+          height: g.bandHeight)
+          .onTapGesture { actions.expand(g.displayID) }
+          .transition(.opacity)
+      }
+      if pillShown {
+        TimerPill(modules: modules)
+          .frame(
+            width: g.notchWidth,
+            height: NotchMetrics.pillHeight - 2 + NotchMetrics.pillOverlap)
+          .padding(.top, NotchMetrics.pillTop(g))
+          .transition(.opacity)
+          .allowsHitTesting(false)
+      }
       if mode == .collapsed {
-        // The notch and the line open the panel on click (clicking never makes it key).
+        // The notch and the line (and the timer pill) open the panel on click (clicking never
+        // makes it key).
         Color.clear
-          .frame(width: g.notchWidth, height: NotchMetrics.lineZoneDepth(g))
+          .frame(
+            width: g.notchWidth,
+            height: modules.timerPillVisible
+              ? NotchMetrics.pillZoneDepth(g) : NotchMetrics.lineZoneDepth(g))
           .contentShape(Rectangle())
           .onTapGesture { actions.expand(g.displayID) }
           .accessibilityAddTraits(.isButton)
@@ -217,7 +240,8 @@ struct NotchRootView: View {
   private func bandRow(_ island: IslandGeometry) -> some View {
     if mode == .expanded {
       ExpandedToolbar(
-        store: store, ui: ui, actions: actions, notchWidth: g.notchWidth,
+        store: store, ui: ui, settings: settings, modules: modules, actions: actions,
+        notchWidth: g.notchWidth,
         sideWidth: max(0, (island.topWidth - g.notchWidth) / 2))
         .transition(.opacity.animation(Motion.contentOut))
     } else {
@@ -238,7 +262,8 @@ struct NotchRootView: View {
       }
     case .expanded:
       ExpandedBody(
-        store: store, ui: ui, settings: settings, actions: actions, bandHeight: g.toolbarHeight)
+        store: store, ui: ui, settings: settings, modules: modules, actions: actions,
+        bandHeight: g.toolbarHeight)
         .measuredHeight { actions.bodyHeight(g.displayID, .expanded, $0) }
         .transition(.opacity.animation(Motion.contentOut))
     }
