@@ -641,3 +641,16 @@ public struct DecisionKeyGate: Sendable {
     latchedKey = nil
   }
 }
+
+/// One short Turkish time format for session rows: "şimdi", "45 sn önce", "5 dk önce",
+/// "2 sa önce", "3 gün önce". Only the largest unit is shown so rows stay scannable.
+public enum RelativeTime {
+  public static func short(_ seconds: TimeInterval) -> String {
+    let s = max(0, Int(seconds))
+    if s < 10 { return "şimdi" }
+    if s < 60 { return "\(s) sn önce" }
+    if s < 3600 { return "\(s / 60) dk önce" }
+    if s < 86_400 { return "\(s / 3600) sa önce" }
+    return "\(s / 86_400) gün önce"
+  }
+}

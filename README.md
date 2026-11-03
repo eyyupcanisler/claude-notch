@@ -101,7 +101,7 @@ scripts/install-hooks.sh --uninstall           # ClaudeNotch hook'larını kald�
   `~/.local/share/claude/versions/<sürüm>`, `claude` olarak başlatılır; npm kurulumunda
   `node …/@anthropic-ai/claude-code/cli.js`), bir terminali (tty) olan ve üst süreci (aradaki
   kabuklar atlanarak) başka bir claude olmayan her süreç. Bir hook oturumunun sahip olmadığı her
-  tty için **"keşfedildi"** satırı açılır: proje = çalışma dizininin son parçası, durum
+  tty için bir satır açılır (arayüzde yalnızca **Boşta** görünür): proje = çalışma dizininin son parçası, durum
   **Boşta** (sahte etkinlik yok), terminal TERM_PROGRAM'dan. Aynı tty / pid'den ilk hook olayı
   gelince satır o hook oturumuna dönüşür (session_id hook'unki olur, çizgideki yeri değişmez,
   çift satır olmaz). Keşfedilen satırlar sürecin gerçek başlama zamanına göre sıralanır. Süreç

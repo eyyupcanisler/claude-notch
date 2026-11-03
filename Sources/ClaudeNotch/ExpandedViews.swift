@@ -268,7 +268,7 @@ enum RowKind: Equatable {
     guard !rows.isEmpty else { return 0 }
     let total = zip(rows, kinds).reduce(CGFloat(0)) { sum, pair in
       switch pair.1 {
-      case .compact: return sum + 30
+      case .compact: return sum + 42
       case .card: return sum + 236
       case .rich:
         switch pair.0.status {
@@ -381,20 +381,23 @@ struct SessionRow: View {
     Group {
       switch kind {
       case .compact:
-        header
-          .padding(.horizontal, 8)
-          .frame(height: 30)
-          // Rows sit on a solid raised layer (never glass on glass).
-          .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(theme.raised))
-          .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-              .fill(hover || selected ? Color.white.opacity(0.05) : .clear)
-              .allowsHitTesting(false))
-          .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-              .strokeBorder(
-                selected ? theme.secondary.opacity(0.5) : theme.hairline, lineWidth: 0.5))
+        VStack(alignment: .leading, spacing: 2) {
+          header
+          statusLine.padding(.leading, 20)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 42)
+        // Rows sit on a solid raised layer (never glass on glass).
+        .background(
+          RoundedRectangle(cornerRadius: 10, style: .continuous).fill(theme.raised))
+        .overlay(
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(hover || selected ? Color.white.opacity(0.05) : .clear)
+            .allowsHitTesting(false))
+        .overlay(
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(
+              selected ? theme.secondary.opacity(0.5) : theme.hairline, lineWidth: 0.5))
       case .rich, .card:
         VStack(alignment: .leading, spacing: 8) {
           header.frame(height: 20)
@@ -438,13 +441,6 @@ struct SessionRow: View {
             .truncationMode(.middle)
             .layoutPriority(1)
         }
-        if kind == .compact, let text = compactDetail {
-          Text(text)
-            .font(.system(size: 11.5))
-            .foregroundStyle(theme.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-        }
       }
       Spacer(minLength: 4)
       if hover {
@@ -459,14 +455,45 @@ struct SessionRow: View {
     .animation(.easeOut(duration: 0.12), value: hover)
   }
 
+  /// Second line of a compact row: an explicit, colored status label plus what it refers to.
+  private var statusLine: some View {
+    HStack(spacing: 0) {
+      Text(statusText)
+        .font(.system(size: 11.5, weight: .semibold))
+        .foregroundStyle(statusColor)
+      if let text = compactDetail {
+        Text("  ·  " + text)
+          .font(.system(size: 11.5))
+          .foregroundStyle(theme.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  private var statusColor: Color {
+    if store.hasPending(for: session.id) { return theme.needs }
+    switch session.status {
+    case .working: return theme.working
+    case .done: return theme.done
+    case .error: return theme.error
+    case .waitingInput, .question, .planApproval: return theme.needs
+    case .idle, .quiet: return theme.tertiary
+    }
+  }
+
   private var compactDetail: String? {
+    if let card = store.firstCard(for: session.id) {
+      return TextShortener.oneLine(card.fullText, limit: 80)
+    }
     switch session.status {
     case .working(let tool):
       return session.activity ?? tool ?? "Düşünüyor…"
     case .quiet:
-      return "Uzun süredir olay yok"
+      return "10 dakikadır olay yok"
     case .idle:
-      return session.isDiscovered ? "keşfedildi" : nil
+      return nil
     default:
       return session.status.detail.map { TextShortener.oneLine($0, limit: 80) }
     }
@@ -532,7 +559,7 @@ struct RichDetail: View {
         Text("10 dakikadır olay gelmedi").font(.system(size: 11.5))
           .foregroundStyle(theme.tertiary)
       case .idle:
-        Text(session.isDiscovered ? "Boşta · keşfedildi (hook olayı bekleniyor)" : "Boşta")
+        Text("Boşta")
           .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
       }
     }
@@ -707,25 +734,11 @@ struct Elapsed: View {
     }
   }
 
+  /// Time since the current status began (for work: since the turn started), one format.
   private func text(now: Date) -> String {
-    if session.status.isWorking {
-      return Self.duration(now.timeIntervalSince(session.turnStartedAt ?? session.statusSince))
-    }
-    let s = now.timeIntervalSince(session.statusSince)
-    return s < 10 ? "şimdi" : Self.duration(s) + " önce"
-  }
-
-  static func duration(_ seconds: TimeInterval) -> String {
-    let s = max(0, Int(seconds))
-    if s < 60 { return "\(s) sn" }
-    if s < 3600 {
-      let m = s / 60
-      let r = s % 60
-      return m < 10 && r > 0 ? "\(m) dk \(r) sn" : "\(m) dk"
-    }
-    let h = s / 3600
-    let m = (s % 3600) / 60
-    return m > 0 ? "\(h) sa \(m) dk" : "\(h) sa"
+    let since = session.status.isWorking
+      ? (session.turnStartedAt ?? session.statusSince) : session.statusSince
+    return RelativeTime.short(now.timeIntervalSince(since))
   }
 }
 
