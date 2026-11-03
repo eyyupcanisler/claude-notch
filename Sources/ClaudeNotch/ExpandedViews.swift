@@ -38,7 +38,17 @@ struct ExpandedToolbar: View {
       .frame(width: sideWidth)
       .notchEnter(0)
       Color.clear.frame(width: notchWidth)
-      BandChips(store: store, actions: actions)
+      HStack(spacing: 8) {
+        if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()),
+          u.fiveHour != nil || u.sevenDay != nil
+        {
+          BandUsage(usage: u)
+        }
+        if settings.weatherEnabled, let w = modules.weather.now {
+          BandWeather(weather: w)
+        }
+        BandChips(store: store, actions: actions)
+      }
         .padding(.trailing, 12)
         .frame(width: sideWidth, alignment: .trailing)
         .notchEnter(0)
@@ -769,7 +779,6 @@ struct RowIconButton: View {
 struct StatusDot: View {
   let session: Session
   let pending: Bool
-  @State private var shimmer = false
   @Environment(\.notchTheme) private var theme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -782,15 +791,10 @@ struct StatusDot: View {
       } else {
         switch session.status {
         case .working:
-          Circle().fill(theme.working)
+          // Core Animation runs the pulse in the render server: a SwiftUI repeatForever here
+          // redrew the panel every frame (~2% CPU while open, measured).
+          PulseDot(color: NSColor(theme.working), pulsing: !reduceMotion)
             .frame(width: 7, height: 7)
-            .opacity(shimmer ? 1 : 0.45)
-            .onAppear {
-              guard !reduceMotion else { return }
-              withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                shimmer = true
-              }
-            }
         case .done:
           Circle().fill(theme.done.opacity(session.unseen ? 1 : 0.45)).frame(width: 7, height: 7)
         case .error:
@@ -846,6 +850,40 @@ struct ToolIcon: View {
     case "Read": return "doc.text"
     case "WebFetch", "WebSearch": return "globe"
     default: return tool.hasPrefix("mcp__") ? "puzzlepiece.extension" : "wrench.and.screwdriver"
+    }
+  }
+}
+
+/// A dot whose opacity breathes 0.45 ↔ 1 on a CALayer animation (no SwiftUI frames).
+struct PulseDot: NSViewRepresentable {
+  let color: NSColor
+  let pulsing: Bool
+
+  func makeNSView(context: Context) -> NSView {
+    let v = NSView()
+    v.wantsLayer = true
+    let dot = CALayer()
+    dot.name = "dot"
+    v.layer?.addSublayer(dot)
+    return v
+  }
+
+  func updateNSView(_ v: NSView, context: Context) {
+    guard let dot = v.layer?.sublayers?.first(where: { $0.name == "dot" }) else { return }
+    dot.frame = CGRect(x: 0, y: 0, width: 7, height: 7)
+    dot.cornerRadius = 3.5
+    dot.backgroundColor = color.cgColor
+    if pulsing, dot.animation(forKey: "pulse") == nil {
+      let a = CABasicAnimation(keyPath: "opacity")
+      a.fromValue = 0.45
+      a.toValue = 1
+      a.duration = 0.9
+      a.autoreverses = true
+      a.repeatCount = .infinity
+      a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+      dot.add(a, forKey: "pulse")
+    } else if !pulsing {
+      dot.removeAnimation(forKey: "pulse")
     }
   }
 }

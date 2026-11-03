@@ -88,8 +88,10 @@ enum Grain {
 
 /// Motion tokens shared by every surface (Apple fluid springs: damping ratio + response).
 enum Motion {
-  /// Expand / collapse of the panel: critically damped, no overshoot.
-  static let expand = Animation.spring(response: 0.38, dampingFraction: 1)
+  /// Expand / collapse of the panel: quick, settling with the faintest overshoot.
+  static let expand = Animation.spring(response: 0.3, dampingFraction: 0.9)
+  /// The collapsed notch swelling under the pointer (instant acknowledgement).
+  static let prime = Animation.spring(response: 0.18, dampingFraction: 0.72)
   /// The island dropping out of the notch: a little life, it arrives on its own.
   static let peek = Animation.spring(response: 0.34, dampingFraction: 0.86)
   /// The island going back into the notch: same response, no undershoot past the notch.
@@ -101,7 +103,7 @@ enum Motion {
   /// Content leaving before the shape retracts.
   static let contentOut = Animation.easeOut(duration: 0.12)
   /// Content waits until the shape is ~60% there (spring step response).
-  static let contentDelay: Double = 0.11
+  static let contentDelay: Double = 0.06
   static let stagger: Double = 0.03
 
   @MainActor

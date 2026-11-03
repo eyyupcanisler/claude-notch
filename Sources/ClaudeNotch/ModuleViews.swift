@@ -50,6 +50,8 @@ struct TimerStartMenu: View {
       }
       Divider()
       Button("Özel süre…") { modules.beginTimerDraft() }
+      Divider()
+      Button("Pomodoro (25 dk odak · 5 dk mola)") { modules.startPomodoro() }
     } label: {
       Image(systemName: "timer")
         .font(.system(size: 11.5, weight: .medium))
@@ -161,7 +163,11 @@ struct TimerTile: View {
       } else {
         tile(at: Date())
           .onTapGesture {
-            if case .finished = timer.state { modules.resetTimer() } else { modules.toggleTimer() }
+            if case .finished = timer.state {
+              if modules.pomodoro != nil { modules.startNextPhase() } else { modules.resetTimer() }
+            } else {
+              modules.toggleTimer()
+            }
           }
       }
     }
@@ -225,13 +231,27 @@ struct TimerTile: View {
 
   private func tile(at now: Date) -> some View {
     let remaining = timer.remaining(at: now)
-    let tint = theme.working
+    let pomo = modules.pomodoro
+    let onBreak = pomo?.phase.isBreak == true
+    let tint = onBreak ? theme.done : theme.working
+    let name: String = {
+      guard let p = pomo else { return "ZAMANLAYICI" }
+      switch p.phase {
+      case .focus: return "POMODORO · ODAK \(p.round)/\(p.roundsBeforeLong)"
+      case .shortBreak: return "POMODORO · MOLA"
+      case .longBreak: return "POMODORO · UZUN MOLA"
+      }
+    }()
     let (label, line): (String, String) = {
       switch timer.state {
-      case .idle: return ("ZAMANLAYICI", "")
-      case .running: return ("ZAMANLAYICI", "Duraklatmak için tıkla")
-      case .paused: return ("ZAMANLAYICI · DURDU", "Sürdürmek için tıkla")
-      case .finished: return ("ZAMANLAYICI · BİTTİ", "Kapatmak için tıkla")
+      case .idle: return (name, "")
+      case .running: return (name, "Duraklatmak için tıkla")
+      case .paused: return (name + " · DURDU", "Sürdürmek için tıkla")
+      case .finished:
+        if let p = pomo {
+          return (name, "Odak \(p.round)/\(p.roundsBeforeLong)’i başlatmak için tıkla")
+        }
+        return (name + " · BİTTİ", "Kapatmak için tıkla")
       }
     }()
     return ModuleTile(label: label, tint: timer.isRunning ? tint : tint.opacity(0.5)) {
@@ -246,6 +266,7 @@ struct TimerTile: View {
               .stroke(
                 Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 1.3, lineCap: .round)))
           .frame(width: 26, height: 13)
+        if let p = pomo { RoundDots(done: p.completed, total: p.roundsBeforeLong, tint: tint) }
       }
     } sub: {
       Text(line).font(.system(size: 10.5)).foregroundStyle(theme.tertiary).lineLimit(1)
@@ -273,7 +294,8 @@ struct TimerPill: View {
 
   private func pill(at now: Date) -> some View {
     let running = modules.timer.isRunning
-    let tint = running ? theme.working : theme.working.opacity(0.55)
+    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : theme.working
+    let tint = running ? base : base.opacity(0.55)
     return HStack(spacing: 5) {
       Image(systemName: running ? "timer" : "pause.fill")
         .font(.system(size: 9, weight: .bold))
@@ -617,5 +639,96 @@ struct ShelfChip: View {
     case .image(_, _, let w, let h): return "Görüntüyü panoya kopyala (\(w)×\(h))"
     case .file(let u): return u.path
     }
+  }
+}
+
+// MARK: - Weather
+
+/// "☁︎ 14°" in the open panel's band.
+struct BandWeather: View {
+  let weather: WeatherNow
+
+  var body: some View {
+    let d = WeatherNow.describe(code: weather.code, isDay: weather.isDay)
+    HStack(spacing: 5) {
+      Image(systemName: d.symbol)
+        .symbolRenderingMode(.multicolor)
+        .font(.system(size: 11.5))
+      DotMatrixText(text: weather.degrees, color: NotchTheme.bandInk, pitch: 1.75)
+    }
+    .help(d.text)
+    .accessibilityElement()
+    .accessibilityLabel("Hava: \(d.text), \(weather.degrees)")
+  }
+}
+
+// MARK: - Claude plan usage
+
+/// Plan usage in the open panel's band: a small ring and the percentage of the fuller window
+/// (weekly, or the 5-hour one when Claude Code still reports it). Details in the tooltip.
+struct BandUsage: View {
+  let usage: PlanUsage
+  @Environment(\.notchTheme) private var theme
+
+  private var main: (label: String, window: PlanUsage.Window)? {
+    let all = [("5 sa", usage.fiveHour), ("Hafta", usage.sevenDay)].compactMap { l, w in
+      w.map { (l, $0) }
+    }
+    return all.max { $0.1.percent < $1.1.percent }
+  }
+
+  var body: some View {
+    if let (label, w) = main {
+      let tint = w.percent >= 95 ? theme.error : w.percent >= 80 ? theme.needs : theme.working
+      HStack(spacing: 5) {
+        ZStack {
+          Circle().stroke(Color.white.opacity(0.16), lineWidth: 2)
+          Circle().trim(from: 0, to: w.percent / 100)
+            .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 11, height: 11)
+        DotMatrixText(text: "\(Int(w.percent.rounded()))%", color: NotchTheme.bandInk, pitch: 1.75)
+      }
+      .help(help)
+      .accessibilityElement()
+      .accessibilityLabel("Claude planı, \(label): yüzde \(Int(w.percent.rounded()))")
+    }
+  }
+
+  private var help: String {
+    var parts: [String] = []
+    if let w = usage.fiveHour {
+      parts.append("5 saatlik: %\(Int(w.percent.rounded())) · \(ModuleCenter.clock(w.resetsAt))’de")
+    }
+    if let w = usage.sevenDay {
+      parts.append("Haftalık: %\(Int(w.percent.rounded())) · \(Self.day(w.resetsAt))’de sıfırlanır")
+    }
+    return "Claude planı\n" + parts.joined(separator: "\n")
+  }
+
+  /// "Pzt 07:53".
+  static func day(_ d: Date) -> String {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "tr_TR")
+    f.dateFormat = "EEE HH:mm"
+    return f.string(from: d)
+  }
+}
+
+/// Pomodoro set progress: one dot per focus block, filled when done.
+struct RoundDots: View {
+  let done: Int
+  let total: Int
+  let tint: Color
+
+  var body: some View {
+    HStack(spacing: 3) {
+      ForEach(0..<total, id: \.self) { i in
+        Circle().fill(i < done ? tint : Color.white.opacity(0.16)).frame(width: 5, height: 5)
+      }
+    }
+    .accessibilityElement()
+    .accessibilityLabel("\(done)/\(total) odak tamamlandı")
   }
 }

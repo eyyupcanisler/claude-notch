@@ -199,3 +199,84 @@ final class ShelfTests: XCTestCase {
     XCTAssertEqual(Shelf.keepText("\n selam \n"), "selam")
   }
 }
+
+final class WeatherTests: XCTestCase {
+  private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
+  func testParsesForecastAndRainSoon() {
+    let json = """
+      {"current":{"temperature_2m":13.6,"weather_code":2,"is_day":1},
+       "hourly":{"time":[1800000000,1800003600,1800007200,1800010800],
+                 "precipitation_probability":[10,30,70,null]}}
+      """
+    let w = WeatherNow.openMeteo(Data(json.utf8), at: t0)
+    XCTAssertEqual(w?.degrees, "14°")
+    XCTAssertEqual(w?.rainChances.count, 3)
+    XCTAssertEqual(w?.rainSoon(now: t0)?.1, 70)
+    XCTAssertNil(w?.rainSoon(now: t0, window: 3600))
+    XCTAssertEqual(WeatherNow.describe(code: 63, isDay: true).text, "Yağmurlu")
+  }
+
+  func testNoRainAlertWhileAlreadyWet() {
+    let w = WeatherNow(
+      temperature: -2.4, code: 61, isDay: false,
+      rainChances: [(t0.addingTimeInterval(1800), 90)], readAt: t0)
+    XCTAssertNil(w.rainSoon(now: t0))
+    XCTAssertEqual(w.degrees, "-2°")
+  }
+
+  func testGeocoding() {
+    let json = #"{"results":[{"name":"İstanbul","latitude":41.01,"longitude":28.95}]}"#
+    XCTAssertEqual(WeatherPlace.geocoding(Data(json.utf8))?.name, "İstanbul")
+    XCTAssertNil(WeatherPlace.geocoding(Data("{}".utf8)))
+  }
+}
+
+final class PlanUsageTests: XCTestCase {
+  private let t0 = Date(timeIntervalSince1970: 1_738_400_000)
+
+  func testParsesRateLimits() {
+    let json = """
+      {"model":{"id":"x"},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},
+       "seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}
+      """
+    let u = PlanUsage.statusLine(Data(json.utf8), at: t0)
+    XCTAssertEqual(u?.fiveHour?.percent, 23.5)
+    XCTAssertEqual(u?.sevenDay?.resetsAt, Date(timeIntervalSince1970: 1_738_857_600))
+    XCTAssertNil(PlanUsage.statusLine(Data(#"{"model":{}}"#.utf8), at: t0))
+    let later = u?.live(at: Date(timeIntervalSince1970: 1_738_500_000))
+    XCTAssertNil(later?.fiveHour, "a passed reset drops the window")
+    XCTAssertNotNil(later?.sevenDay)
+  }
+
+  func testWarningMarksOncePerWindow() {
+    let r = Date(timeIntervalSince1970: 1_738_425_600)
+    var u = PlanUsage(fiveHour: .init(percent: 82, resetsAt: r), sevenDay: nil, readAt: t0)
+    let first = u.newMark(shown: [])
+    XCTAssertEqual(first?.mark, 80)
+    XCTAssertNil(u.newMark(shown: [first!.key]))
+    u.fiveHour?.percent = 96
+    XCTAssertEqual(u.newMark(shown: [first!.key])?.mark, 95)
+    u.fiveHour?.percent = 50
+    XCTAssertNil(u.newMark(shown: []))
+  }
+}
+
+final class PomodoroTests: XCTestCase {
+  func testCycle() {
+    var p = Pomodoro()
+    XCTAssertEqual(p.round, 1)
+    var phases: [Pomodoro.Phase] = []
+    for _ in 0..<8 { phases.append(p.advance()) }
+    XCTAssertEqual(
+      phases,
+      [.shortBreak, .focus, .shortBreak, .focus, .shortBreak, .focus, .longBreak, .focus])
+    XCTAssertEqual(p.round, 1, "a new set starts after the long break")
+    p.advance()
+    p.advance()
+    XCTAssertEqual(p.round, 2)
+    XCTAssertEqual(p.minutes(.longBreak), 15)
+    p.reset()
+    XCTAssertEqual(p.phase, .focus)
+  }
+}

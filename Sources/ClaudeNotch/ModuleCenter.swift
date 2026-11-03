@@ -35,6 +35,8 @@ final class ModuleCenter {
   private(set) var timer: FocusTimer
   /// Minutes being chosen in the tile ("Özel süre…"), nil when not choosing.
   private(set) var timerDraft: Int?
+  /// Set while the timer runs a Pomodoro cycle (focus / breaks), nil for a plain timer.
+  private(set) var pomodoro: Pomodoro?
   @ObservationIgnored private var timerTask: Task<Void, Never>?
 
   // MARK: Battery state
@@ -42,6 +44,8 @@ final class ModuleCenter {
 
   let spotify = SpotifyModule()
   let shelf = ShelfModule()
+  let weather = WeatherModule()
+  let usage = UsageModule()
 
   /// Ears beside the notch while the panel is closed: Spotify is playing.
   var earsVisible: Bool { settings.spotifyEnabled && spotify.isPlaying }
@@ -68,6 +72,8 @@ final class ModuleCenter {
       _ = settings.batteryEnabled
       _ = settings.spotifyEnabled
       _ = settings.shelfEnabled
+      _ = settings.weatherEnabled
+      _ = settings.usageEnabled
     } onChange: { [weak self] in
       Task { @MainActor in
         self?.apply()
@@ -79,6 +85,14 @@ final class ModuleCenter {
   private func apply() {
     spotify.setEnabled(settings.spotifyEnabled)
     shelf.setEnabled(settings.shelfEnabled)
+    weather.setEnabled(settings.weatherEnabled)
+    usage.setEnabled(settings.usageEnabled)
+    if usage.onNote == nil {
+      usage.onNote = { [weak self] note in self?.onNote?(note) }
+    }
+    if weather.onNote == nil {
+      weather.onNote = { [weak self] note in self?.onNote?(note) }
+    }
     if shelf.onImage == nil {
       shelf.onImage = { [weak self] item in self?.shelfNote(item) }
     }
@@ -250,10 +264,29 @@ final class ModuleCenter {
     startTimer(minutes: d)
   }
 
+  /// Starts a Pomodoro cycle at its first focus block (25 / 5, long 15 after 4).
+  func startPomodoro() {
+    var p = Pomodoro()
+    p.reset()
+    pomodoro = p
+    run(minutes: p.minutes(.focus))
+  }
+
+  /// Pomodoro waiting between phases (a break ended): starts the next focus block.
+  func startNextPhase() {
+    guard let p = pomodoro else { return }
+    run(minutes: p.minutes(p.phase))
+  }
+
   /// Starts a fresh timer of `minutes` (the band's timer menu); the tile appears with it.
   func startTimer(minutes: Int) {
-    timerDraft = nil
+    pomodoro = nil
     settings.timerMinutes = minutes
+    run(minutes: minutes)
+  }
+
+  private func run(minutes: Int) {
+    timerDraft = nil
     timerTask?.cancel()
     timer.reset()
     timer.duration = TimeInterval(minutes * 60)
@@ -269,6 +302,7 @@ final class ModuleCenter {
 
   func resetTimer() {
     timerDraft = nil
+    pomodoro = nil
     timerTask?.cancel()
     timerTask = nil
     timer.reset()
@@ -283,11 +317,33 @@ final class ModuleCenter {
       try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
       guard !Task.isCancelled, let self, self.timer.settle(at: Date()) else { return }
       NSSound(named: NSSound.Name("Glass"))?.play()
-      self.onNote?(
-        ModuleNote(
-          source: .timer, id: "timer:\(Int(end.timeIntervalSince1970))", title: "Zamanlayıcı bitti",
-          subtitle: "\(minutes) dk odak tamamlandı", digits: "00:00",
-          validUntil: Date().addingTimeInterval(600)))
+      let id = "timer:\(Int(end.timeIntervalSince1970))"
+      guard var p = self.pomodoro else {
+        self.onNote?(
+          ModuleNote(
+            source: .timer, id: id, title: "Zamanlayıcı bitti",
+            subtitle: "\(minutes) dk tamamlandı", digits: "00:00",
+            validUntil: Date().addingTimeInterval(600)))
+        return
+      }
+      let next = p.advance()
+      self.pomodoro = p
+      if next.isBreak {
+        // A break starts by itself; the next focus waits for the user.
+        self.onNote?(
+          ModuleNote(
+            source: .timer, id: id, title: "Odak bitti · mola",
+            subtitle: "\(p.minutes(next)) dk \(next == .longBreak ? "uzun " : "")mola başladı",
+            digits: String(format: "%02d:00", p.minutes(next)),
+            validUntil: Date().addingTimeInterval(600)))
+        self.run(minutes: p.minutes(next))
+      } else {
+        self.onNote?(
+          ModuleNote(
+            source: .timer, id: id, title: "Mola bitti",
+            subtitle: "Odak \(p.round)/\(p.roundsBeforeLong) hazır: başlatmak için çentiği aç",
+            digits: "00:00", validUntil: Date().addingTimeInterval(600)))
+      }
     }
   }
 

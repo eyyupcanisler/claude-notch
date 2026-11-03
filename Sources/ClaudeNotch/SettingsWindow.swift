@@ -61,6 +61,7 @@ struct SettingsView: View {
   /// Bumped after a change so the "kaydedilemedi" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
+  @State private var city = ""
   @State private var loginError: String?
   /// The one recorder listening (starting another stops it).
   @State private var recordingRole: HotKeyRole?
@@ -118,6 +119,10 @@ struct SettingsView: View {
       }
       Section("Modüller") {
         Toggle("Takvim: toplantıdan 10 dk önce hatırlat", isOn: $settings.calendarEnabled)
+        Text("Google Takvim de çalışır: Sistem Ayarları > İnternet Hesapları > Google’da "
+          + "Takvimler’i aç; macOS eşitler, ClaudeNotch oradan okur.")
+          .font(.caption).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
         if settings.calendarEnabled {
           switch modules.calendarAccess {
           case .asking:
@@ -148,6 +153,26 @@ struct SettingsView: View {
             .font(.caption).foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)
         }
+        Toggle("Hava durumu: panel bandında, yağmur yaklaşınca ada", isOn: $settings.weatherEnabled)
+        if settings.weatherEnabled {
+          HStack {
+            TextField(
+              "Şehir", text: $city, prompt: Text(modules.weather.place?.name ?? "ör. İstanbul"))
+              .onSubmit { modules.weather.search(city) }
+            Button("Bul") { modules.weather.search(city) }
+              .disabled(city.trimmingCharacters(in: .whitespaces).isEmpty)
+          }
+          Text(weatherHelp).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Toggle("Claude planı: limit yüzdesi panel bandında", isOn: $settings.usageEnabled)
+        if settings.usageEnabled && !modules.usage.hasData {
+          Text("Claude Code bu yüzdeleri yalnız durum satırına verir. Bir kez çalıştır: "
+            + "scripts/install-statusline.sh (durum satırı betiğine tek satır ekler, yedek alır).")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+        }
         Toggle("Raf: son 6 kopyalanan (metin, görüntü, dosya)", isOn: $settings.shelfEnabled)
         if settings.shelfEnabled {
           Text("Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. "
@@ -170,6 +195,17 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .frame(width: 440)
+  }
+
+  private var weatherHelp: String {
+    switch modules.weather.searchNote {
+    case .some(""): return "Aranıyor…"
+    case .some(let s): return s
+    case .none:
+      return modules.weather.place == nil
+        ? "Konum izni istenmez: şehrini yaz. Veri Open-Meteo’dan, 30 dk’da bir."
+        : "Veri Open-Meteo’dan, 30 dk’da bir."
+    }
   }
 
   private var shortcutHelp: String {

@@ -131,6 +131,14 @@ final class NotchSettings {
   var spotifyEnabled: Bool {
     didSet { defaults.set(spotifyEnabled, forKey: "module.spotify") }
   }
+  /// Claude plan usage tile (needs the status line bridge). On: nothing shows without data.
+  var usageEnabled: Bool {
+    didSet { defaults.set(usageEnabled, forKey: "module.usage") }
+  }
+  /// Weather for a typed city (Open-Meteo). Off by default (network).
+  var weatherEnabled: Bool {
+    didSet { defaults.set(weatherEnabled, forKey: "module.weather") }
+  }
   /// Clipboard history + dropped files. Off by default (it reads the clipboard).
   var shelfEnabled: Bool {
     didSet { defaults.set(shelfEnabled, forKey: "module.shelf") }
@@ -170,6 +178,8 @@ final class NotchSettings {
     spotifyEnabled = defaults.bool(forKey: "module.spotify")
     tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true
     shelfEnabled = defaults.bool(forKey: "module.shelf")
+    weatherEnabled = defaults.bool(forKey: "module.weather")
+    usageEnabled = defaults.object(forKey: "module.usage") as? Bool ?? true
   }
 
   /// A stored decision chord that is no longer allowed (see `KeyCombo.error(for:)`) falls back

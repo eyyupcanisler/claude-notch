@@ -120,6 +120,9 @@ final class SurfaceState {
   var peekWidth: CGFloat = NotchMetrics.finishedWidth
   /// The pill is shown at all (a synthetic pill with nothing to show is hidden).
   var visible = true
+  /// The pointer is on the collapsed notch (dwell running): the shape swells a little at once,
+  /// so the notch answers before it opens.
+  var primed = false
 
   init(geometry: NotchGeometry, isPrimary: Bool) {
     self.geometry = geometry

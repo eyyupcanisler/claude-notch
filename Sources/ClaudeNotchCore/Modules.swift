@@ -322,3 +322,232 @@ public struct Shelf: Sendable, Equatable {
     return t.count > textLimit ? String(t.prefix(textLimit)) : t
   }
 }
+
+// MARK: - Weather (Open-Meteo, no key)
+
+public struct WeatherNow: Sendable, Equatable {
+  public var temperature: Double
+  public var code: Int
+  public var isDay: Bool
+  /// Next hours: (time, precipitation probability %).
+  public var rainChances: [(Date, Int)]
+  public var readAt: Date
+
+  public static func == (a: WeatherNow, b: WeatherNow) -> Bool {
+    a.temperature == b.temperature && a.code == b.code && a.isDay == b.isDay
+      && a.readAt == b.readAt && a.rainChances.map(\.1) == b.rainChances.map(\.1)
+  }
+
+  public init(
+    temperature: Double, code: Int, isDay: Bool, rainChances: [(Date, Int)], readAt: Date
+  ) {
+    self.temperature = temperature
+    self.code = code
+    self.isDay = isDay
+    self.rainChances = rainChances
+    self.readAt = readAt
+  }
+
+  /// "14°", "-3°" (rounded).
+  public var degrees: String { "\(Int(temperature.rounded()))°" }
+
+  /// It is raining / snowing / storming now (WMO codes 51…99).
+  public var isWet: Bool { code >= 51 }
+
+  /// The first hour within `window` whose chance reaches `threshold`, while it is dry now.
+  public func rainSoon(now: Date, window: TimeInterval = 2 * 3600, threshold: Int = 60)
+    -> (Date, Int)?
+  {
+    guard !isWet else { return nil }
+    return rainChances.first { $0.0 > now && $0.0.timeIntervalSince(now) <= window && $0.1 >= threshold }
+  }
+
+  /// Parses `/v1/forecast?current=temperature_2m,weather_code,is_day&hourly=precipitation_probability`
+  /// with `timezone=UTC` and `timeformat=unixtime`.
+  public static func openMeteo(_ data: Data, at t: Date) -> WeatherNow? {
+    struct Reply: Decodable {
+      struct Current: Decodable {
+        let temperature_2m: Double
+        let weather_code: Int
+        let is_day: Int
+      }
+      struct Hourly: Decodable {
+        let time: [Double]
+        let precipitation_probability: [Int?]
+      }
+      let current: Current
+      let hourly: Hourly?
+    }
+    guard let r = try? JSONDecoder().decode(Reply.self, from: data) else { return nil }
+    let hours = zip(r.hourly?.time ?? [], r.hourly?.precipitation_probability ?? []).compactMap {
+      time, p in p.map { (Date(timeIntervalSince1970: time), $0) }
+    }
+    return WeatherNow(
+      temperature: r.current.temperature_2m, code: r.current.weather_code,
+      isDay: r.current.is_day == 1, rainChances: hours, readAt: t)
+  }
+
+  /// Turkish label and an SF Symbol for a WMO weather code.
+  public static func describe(code: Int, isDay: Bool) -> (text: String, symbol: String) {
+    switch code {
+    case 0: return ("Açık", isDay ? "sun.max.fill" : "moon.stars.fill")
+    case 1, 2: return ("Parçalı bulutlu", isDay ? "cloud.sun.fill" : "cloud.moon.fill")
+    case 3: return ("Bulutlu", "cloud.fill")
+    case 45, 48: return ("Sisli", "cloud.fog.fill")
+    case 51...57: return ("Çiseliyor", "cloud.drizzle.fill")
+    case 61...67, 80...82: return ("Yağmurlu", "cloud.rain.fill")
+    case 71...77, 85, 86: return ("Karlı", "cloud.snow.fill")
+    case 95...99: return ("Fırtınalı", "cloud.bolt.rain.fill")
+    default: return ("", "cloud.fill")
+    }
+  }
+}
+
+/// A place from Open-Meteo's geocoding search.
+public struct WeatherPlace: Sendable, Equatable, Codable {
+  public var name: String
+  public var latitude: Double
+  public var longitude: Double
+
+  public init(name: String, latitude: Double, longitude: Double) {
+    self.name = name
+    self.latitude = latitude
+    self.longitude = longitude
+  }
+
+  /// First result of `geocoding-api.open-meteo.com/v1/search?name=…&count=1`.
+  public static func geocoding(_ data: Data) -> WeatherPlace? {
+    struct Reply: Decodable {
+      struct R: Decodable {
+        let name: String
+        let latitude: Double
+        let longitude: Double
+      }
+      let results: [R]?
+    }
+    guard let r = try? JSONDecoder().decode(Reply.self, from: data), let f = r.results?.first
+    else { return nil }
+    return WeatherPlace(name: f.name, latitude: f.latitude, longitude: f.longitude)
+  }
+}
+
+// MARK: - Claude plan usage (from the statusLine payload)
+
+/// Plan limits as Claude Code reports them to the status line (`rate_limits`): the 5-hour and
+/// the 7-day window, each a percentage and a reset time. Only Pro / Max / Ultra subscribers get
+/// them, and a window disappears once its reset time has passed.
+public struct PlanUsage: Sendable, Equatable {
+  public struct Window: Sendable, Equatable {
+    public var percent: Double
+    public var resetsAt: Date
+
+    public init(percent: Double, resetsAt: Date) {
+      self.percent = percent
+      self.resetsAt = resetsAt
+    }
+  }
+
+  public var fiveHour: Window?
+  public var sevenDay: Window?
+  public var readAt: Date
+
+  public init(fiveHour: Window?, sevenDay: Window?, readAt: Date) {
+    self.fiveHour = fiveHour
+    self.sevenDay = sevenDay
+    self.readAt = readAt
+  }
+
+  /// Parses the statusLine stdin JSON; nil when it has no usable window.
+  public static func statusLine(_ data: Data, at t: Date) -> PlanUsage? {
+    guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let limits = root["rate_limits"] as? [String: Any]
+    else { return nil }
+    func window(_ key: String) -> Window? {
+      guard let w = limits[key] as? [String: Any],
+        let p = (w["used_percentage"] as? NSNumber)?.doubleValue,
+        let r = (w["resets_at"] as? NSNumber)?.doubleValue
+      else { return nil }
+      return Window(percent: min(100, max(0, p)), resetsAt: Date(timeIntervalSince1970: r))
+    }
+    let u = PlanUsage(fiveHour: window("five_hour"), sevenDay: window("seven_day"), readAt: t)
+    return u.fiveHour == nil && u.sevenDay == nil ? nil : u
+  }
+
+  /// Windows still running at `now` (a passed reset means the number is stale).
+  public func live(at now: Date) -> PlanUsage {
+    PlanUsage(
+      fiveHour: fiveHour.flatMap { $0.resetsAt > now ? $0 : nil },
+      sevenDay: sevenDay.flatMap { $0.resetsAt > now ? $0 : nil }, readAt: readAt)
+  }
+
+  /// The warning mark the 5-hour window just reached (80, then 95), or nil. `shown` holds
+  /// "<reset>:<mark>" keys already warned for.
+  public func newMark(shown: Set<String>) -> (mark: Int, key: String)? {
+    guard let w = fiveHour else { return nil }
+    for mark in [95, 80] where w.percent >= Double(mark) {
+      let key = "\(Int(w.resetsAt.timeIntervalSince1970)):\(mark)"
+      return shown.contains(key) ? nil : (mark, key)
+    }
+    return nil
+  }
+}
+
+// MARK: - Pomodoro
+
+/// Classic Pomodoro cycle: focus, short break, … and a long break after every 4th focus.
+public struct Pomodoro: Sendable, Equatable {
+  public enum Phase: Sendable, Equatable {
+    case focus
+    case shortBreak
+    case longBreak
+
+    public var isBreak: Bool { self != .focus }
+  }
+
+  public var focusMinutes: Int
+  public var shortMinutes: Int
+  public var longMinutes: Int
+  public var roundsBeforeLong: Int
+  public private(set) var phase: Phase = .focus
+  /// Focus blocks finished in the current set (0…roundsBeforeLong-1 while focusing).
+  public private(set) var completed = 0
+
+  public init(focus: Int = 25, short: Int = 5, long: Int = 15, rounds: Int = 4) {
+    focusMinutes = focus
+    shortMinutes = short
+    longMinutes = long
+    roundsBeforeLong = max(1, rounds)
+  }
+
+  public func minutes(_ p: Phase) -> Int {
+    switch p {
+    case .focus: return focusMinutes
+    case .shortBreak: return shortMinutes
+    case .longBreak: return longMinutes
+    }
+  }
+
+  /// The focus block being worked on or next up, 1-based ("2/4").
+  public var round: Int { min(completed, roundsBeforeLong - 1) + 1 }
+
+  /// The current phase is over: moves to the next one and returns it.
+  @discardableResult
+  public mutating func advance() -> Phase {
+    switch phase {
+    case .focus:
+      completed += 1
+      phase = completed >= roundsBeforeLong ? .longBreak : .shortBreak
+    case .shortBreak:
+      phase = .focus
+    case .longBreak:
+      completed = 0
+      phase = .focus
+    }
+    return phase
+  }
+
+  public mutating func reset() {
+    phase = .focus
+    completed = 0
+  }
+}

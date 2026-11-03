@@ -315,6 +315,8 @@ public struct ModuleNote: Sendable, Equatable {
     case timer
     case battery
     case shelf
+    case weather
+    case usage
   }
 
   public var source: Source
@@ -500,7 +502,9 @@ public struct PeekPlanner: Sendable {
 /// Expands only after the pointer dwells in the top strip over the notch and ignores fast
 /// horizontal sweeps along the menu bar (vertical approaches are never rejected).
 public struct HoverIntent: Sendable {
-  public static let dwell: TimeInterval = 0.3
+  /// Short: the notch already answers the pointer at once (it swells), so the dwell only has
+  /// to filter a pointer passing by, not stand in for feedback.
+  public static let dwell: TimeInterval = 0.15
   /// Horizontal speed (pt/s) above which the pointer is sweeping past, not aiming.
   public static let maxSpeed: CGFloat = 600
   /// Height of the trigger strip under the top edge of the screen.

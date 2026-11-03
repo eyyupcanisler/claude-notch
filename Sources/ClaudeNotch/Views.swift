@@ -184,6 +184,11 @@ struct NotchRootView: View {
     ZStack(alignment: .top) {
       NotchBackground(mode: mode, theme: theme, band: g.toolbarHeight)
         .clipShape(shape)
+        // Pointer on the collapsed notch: it swells a few points at once (feedback before the
+        // dwell opens the panel).
+        .scaleEffect(
+          mode == .collapsed && surface.primed ? CGSize(width: 1.05, height: 1.18) : CGSize(
+            width: 1, height: 1), anchor: .top)
         .opacity(drawn ? 1 : 0)
       VStack(spacing: 0) {
         bandRow(island)

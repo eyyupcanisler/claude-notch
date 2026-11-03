@@ -336,6 +336,7 @@ final class NotchController {
   }
 
   func expand(_ id: CGDirectDisplayID, reason: ExpandReason) {
+    for s in surfaces.values where s.state.primed { s.state.primed = false }
     guard surfaces[id] != nil else { return }
     collapseTask?.cancel()
     collapseTask = nil
@@ -498,6 +499,10 @@ final class NotchController {
         let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
         let fired = s.intent.update(
           point: p, at: now, minX: notchMinX, maxX: notchMaxX, top: top, bottom: top - depth)
+        let primed = s.intent.dwellStart != nil && s.isLive(hasSessions: live, pill: pill)
+        if s.state.primed != primed {
+          withAnimation(Motion.reduce ? nil : Motion.prime) { s.state.primed = primed }
+        }
         if fired, s.isLive(hasSessions: live, pill: pill) {
           s.intent.reset()
           expand(s.displayID, reason: .hover)
