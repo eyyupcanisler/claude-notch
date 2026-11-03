@@ -108,6 +108,11 @@ final class NotchSettings {
   private(set) var sounds: [SoundEvent: Bool]
   /// Chosen macOS sound per event (missing: the event's default).
   private(set) var soundNames: [SoundEvent: String]
+  /// Silent mode (band 🔕): only permission requests and questions drop and sound. macOS
+  /// shares the Focus state only with apps Apple granted it to, so this is the user's switch.
+  var silentMode: Bool {
+    didSet { defaults.set(silentMode, forKey: "silentMode") }
+  }
   /// No sounds between `quietStart` and `quietEnd` (hours, wraps past midnight).
   var quietHours: Bool {
     didSet { defaults.set(quietHours, forKey: "quietHours") }
@@ -199,6 +204,7 @@ final class NotchSettings {
     }
     soundNames = names
     quietHours = defaults.bool(forKey: "quietHours")
+    silentMode = defaults.bool(forKey: "silentMode")
     quietStart = defaults.object(forKey: "quietStart") as? Int ?? 23
     quietEnd = defaults.object(forKey: "quietEnd") as? Int ?? 8
     peekDuration = PeekDuration(rawValue: defaults.string(forKey: "peekDuration") ?? "")

@@ -230,6 +230,7 @@ final class NotchController {
   func refresh() {
     let now = Date()
     syncQuestionPeek()
+    defer { syncOptionKeys() }
     if let peek = planner.current, peek.kind == .permission,
       peek.cardID.flatMap({ store.card(id: $0) }) == nil
     {
@@ -487,9 +488,10 @@ final class NotchController {
     let pill = modules.timerPillVisible
     let ears = modules.earsVisible
     for s in surfaces.values {
+      let g0 = s.state.geometry
       let rects = s.hitRects(
-        hasSessions: live, pill: pill, ears: ears && s.state.geometry.hasNotch,
-        fullEars: modules.earsFull)
+        hasSessions: live, pill: pill, ears: ears && (g0.hasNotch || live),
+        fullEars: modules.earsFull || !g0.hasNotch)
       if let start = s.pointerAtAppear, hypot(p.x - start.x, p.y - start.y) > 2 {
         s.pointerAtAppear = nil
       }
@@ -616,12 +618,31 @@ final class NotchController {
       guard latches[role, default: GlobalKeyLatch()].released() else { return }
     }
     log("hotkey \(role) \(pressed ? "down" : "up")")
+    // A question on screen and no permission request: Y sends / goes on, N hands it to the
+    // terminal, 1…4 pick. A permission request on screen always keeps Y / N.
+    if let q = shownQuestion(), shownRequest(at: Date()) == nil {
+      switch role {
+      case .allow:
+        if pressed { questionNext(q.id) }
+        return
+      case .deny:
+        if pressed, questionArmed(q.id) { releaseQuestion(q.id) }
+        return
+      default:
+        if let i = role.optionIndex {
+          if pressed { pickOption(q.id, i) }
+          return
+        }
+      }
+    }
+    if role.optionIndex != nil { return }
     switch role {
     case .panel: if pressed { hotKeyPressed() }
     case .allow: globalShortcut(.allow, pressed ? .down : .up)
     case .deny: globalShortcut(.deny, pressed ? .down : .up)
     case .timer: if pressed { timerHotKey() }
     case .shelf: if pressed { shelfHotKey() }
+    case .option1, .option2, .option3, .option4: break
     }
   }
 
@@ -807,8 +828,10 @@ final class NotchController {
   }
 
   private func registerShortcuts() {
-    for role in HotKeyRole.allCases { hotKeys?.register(role, settings.shortcut(role)) }
+    for role in HotKeyRole.configurable { hotKeys?.register(role, settings.shortcut(role)) }
     for role in HotKeyRole.allCases { latches[role]?.reset() }
+    optionKeysOn = false
+    syncOptionKeys()
     updateKeyHints()
   }
 
@@ -827,7 +850,7 @@ final class NotchController {
   /// Settings recorder: validates and registers `combo` for `role`. Returns a Turkish error
   /// (the previous shortcut stays) or nil.
   private func setShortcut(_ role: HotKeyRole, _ combo: KeyCombo) -> String? {
-    if let other = HotKeyRole.allCases.first(where: {
+    if let other = HotKeyRole.configurable.first(where: {
       $0 != role && settings.shortcut($0) == combo
     }) {
       return "Bu kısayol zaten “\(other.title)” için kullanılıyor."
@@ -1145,6 +1168,9 @@ final class NotchController {
     }
   }
 
+  /// Silent mode is on (band 🔕).
+  private var focusQuiet: Bool { settings.silentMode }
+
   // MARK: - Shelf to session
 
   /// The dragged shelf item goes on the clipboard and the session's tab comes forward, so
@@ -1165,9 +1191,74 @@ final class NotchController {
   /// drops in even when its "question" peek already went back.
   private var shownQuestions: Set<String> = []
 
+  /// ⌃⌥1…4 are registered only while a question is on screen.
+  private var optionKeysOn = false
+
+  /// The held question the user sees right now: the peek's, else (panel open) the oldest.
+  private func shownQuestion() -> PendingQuestion? {
+    if expandedID != nil { return store.questions.first }
+    guard let peek = ui.peek, peek.kind == .attention, let sid = peek.sessionIDs.first else {
+      return nil
+    }
+    return store.question(for: sid)
+  }
+
+  private func syncOptionKeys() {
+    let want = shownQuestion() != nil
+    guard want != optionKeysOn else { return }
+    optionKeysOn = want
+    for role in HotKeyRole.allCases where role.optionIndex != nil {
+      if want { hotKeys?.register(role, KeyCombo.defaultCombo(role)) } else {
+        hotKeys?.unregister(role)
+      }
+    }
+  }
+
+  private func questionArmed(_ id: String) -> Bool {
+    Date() >= (ui.questionArmedAt[id] ?? .distantFuture)
+  }
+
+  private func pickOption(_ id: String, _ option: Int) {
+    guard questionArmed(id), let q = store.questions.first(where: { $0.id == id }) else { return }
+    let index = min(ui.questionIndex[id] ?? 0, q.questions.count - 1)
+    let asked = q.questions[index]
+    guard option < asked.options.count else { return }
+    let label = asked.options[option].label
+    var picks = ui.questionPicks[id] ?? [:]
+    var list = picks[asked.question] ?? []
+    if asked.multiSelect {
+      if list.contains(label) { list.removeAll { $0 == label } } else { list.append(label) }
+    } else {
+      list = [label]
+    }
+    picks[asked.question] = list
+    ui.questionPicks[id] = picks
+  }
+
+  /// Next question, or send when on the last one with every question answered.
+  private func questionNext(_ id: String) {
+    guard questionArmed(id), let q = store.questions.first(where: { $0.id == id }) else { return }
+    let index = min(ui.questionIndex[id] ?? 0, q.questions.count - 1)
+    let picks = ui.questionPicks[id] ?? [:]
+    guard !(picks[q.questions[index].question] ?? []).isEmpty else { return }
+    if index < q.questions.count - 1 {
+      ui.questionIndex[id] = index + 1
+    } else {
+      answerQuestion(id, picks)
+    }
+  }
+
   private func syncQuestionPeek() {
     let ids = Set(store.questions.map(\.id))
     shownQuestions.formIntersection(ids)
+    for q in store.questions where ui.questionArmedAt[q.id] == nil {
+      ui.questionArmedAt[q.id] = Date().addingTimeInterval(QuestionAnswerView.armDelay)
+    }
+    for key in Array(ui.questionArmedAt.keys) where !ids.contains(key) {
+      ui.questionArmedAt[key] = nil
+      ui.questionPicks[key] = nil
+      ui.questionIndex[key] = nil
+    }
     guard expandedID == nil else { return }
     for q in store.questions where !shownQuestions.contains(q.id) {
       shownQuestions.insert(q.id)
@@ -1202,7 +1293,7 @@ final class NotchController {
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
   /// Claude peek (the planner queues it).
   private func moduleNote(_ note: ModuleNote) {
-    guard expandedID == nil else { return }
+    guard expandedID == nil, !focusQuiet else { return }
     if planner.receive(module: note, at: Date()) { refresh() }
   }
 
@@ -1223,6 +1314,8 @@ final class NotchController {
       return
     }
     onAttention?(sessionID, kind)
+    // A Focus is on: only what needs an answer (permission, question) interrupts.
+    if focusQuiet && kind != "permission" && kind != "question" { return }
     if let e = SoundEvent(attention: kind), settings.soundEnabled(e) {
       settings.play(settings.soundName(e))
     }
@@ -1343,6 +1436,12 @@ final class NotchController {
       ghosttyConsent: { [weak self] in self?.ghosttyConsent(dryRun: false) },
       answerQuestion: { [weak self] id, answers in self?.answerQuestion(id, answers) },
       releaseQuestion: { [weak self] id in self?.releaseQuestion(id) },
+      pickOption: { [weak self] id, i in self?.pickOption(id, i) },
+      questionNext: { [weak self] id in self?.questionNext(id) },
+      questionBack: { [weak self] id in
+        guard let self, let i = self.ui.questionIndex[id], i > 0 else { return }
+        self.ui.questionIndex[id] = i - 1
+      },
       dropShelf: { [weak self] sid in self?.dropShelf(on: sid) ?? false }
     )
   }
@@ -1597,7 +1696,7 @@ final class NotchController {
       // {"global": "allow" | "deny" | "panel", "phase": "down" | "up" | "press"}: the same
       // path as the Carbon hot key events.
       if let g = json["global"]?.stringValue {
-        let role: HotKeyRole? = ["allow": .allow, "deny": .deny, "panel": .panel][g]
+        let role: HotKeyRole? = HotKeyRole.allCases.first { "\($0)" == g }
         let phase = json["phase"]?.stringValue ?? "press"
         if let role {
           if phase != "up" { hotKeyEvent(role, pressed: true) }

@@ -57,6 +57,11 @@ final class NotchUIState {
   var pagerArmedAt = Date.distantPast
   /// Keyboard decisions are accepted from then on (the panel must have been visible a moment).
   var keysArmedAt = Date.distantPast
+  /// Held questions: the question each one is on, the labels picked so far, and when its
+  /// buttons and keys arm (shared by the peek, the panel row and ⌃⌥1…4 / ⌃⌥Y / ⌃⌥N).
+  var questionIndex: [String: Int] = [:]
+  var questionPicks: [String: [String: [String]]] = [:]
+  var questionArmedAt: [String: Date] = [:]
   /// Hold-to-allow progress (0...1) of the card held with the global allow shortcut.
   var holdProgress: [String: Double] = [:]
   /// Card whose hold runs with the global allow shortcut (label "Tutun…", set without motion).

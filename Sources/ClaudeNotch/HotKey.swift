@@ -9,6 +9,26 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
   case deny = 3
   case timer = 4
   case shelf = 5
+  /// ⌃⌥1…⌃⌥4: pick an option of the question on screen. Registered only while one is shown
+  /// (never in Settings), so the chords stay free for other apps the rest of the time.
+  case option1 = 11
+  case option2 = 12
+  case option3 = 13
+  case option4 = 14
+
+  /// The roles the user sets in Settings and that are always registered.
+  static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .timer, .shelf]
+
+  /// 0-based option index of an `optionN` role.
+  var optionIndex: Int? {
+    switch self {
+    case .option1: return 0
+    case .option2: return 1
+    case .option3: return 2
+    case .option4: return 3
+    default: return nil
+    }
+  }
 
   var title: String {
     switch self {
@@ -17,6 +37,7 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
     case .deny: return "Reddet"
     case .timer: return "Pomodoro başlat / duraklat"
     case .shelf: return "Raftaki son öğeyi kopyala"
+    case .option1, .option2, .option3, .option4: return "Soru seçeneği \((optionIndex ?? 0) + 1)"
     }
   }
 
@@ -46,6 +67,10 @@ struct KeyCombo: Equatable, Hashable, Sendable {
       return KeyCombo(keyCode: KeyLayout.keyCode(for: "p") ?? UInt32(kVK_ANSI_P), modifiers: mods)
     case .shelf:
       return KeyCombo(keyCode: KeyLayout.keyCode(for: "v") ?? UInt32(kVK_ANSI_V), modifiers: mods)
+    case .option1: return KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: mods)
+    case .option2: return KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: mods)
+    case .option3: return KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: mods)
+    case .option4: return KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: mods)
     }
   }
 

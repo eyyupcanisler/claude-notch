@@ -154,7 +154,7 @@ struct PeekBody: View {
           Spacer(minLength: 0)
         }
         .notchEnter(0)
-        QuestionAnswerView(question: held, actions: actions).notchEnter(1)
+        QuestionAnswerView(question: held, ui: ui, actions: actions).notchEnter(1)
       }
     } else {
       attentionText

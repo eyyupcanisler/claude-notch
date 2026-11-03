@@ -24,9 +24,13 @@ Claude Code ──hook──> hooks/claude-notch-hook.sh ──curl──> Unix 
 ```sh
 scripts/make-signing-identity.sh  # bir kez: kendi anahtar zincirine "ClaudeNotch Dev"
 scripts/build-app.sh              # build/ClaudeNotch.app üretir (release)
-open build/ClaudeNotch.app
+scripts/install-app.sh            # ~/Applications'a kopyalar ve başlatır
 swift test                        # birim testleri
 ```
+
+- Uygulamanın Dock simgesi ve penceresi yoktur; arayüzü çentiktir. Çalışırken Spotlight'tan
+  (ya da Finder/Launchpad'den) yeniden açmak **Ayarlar**'ı getirir. Ayarlar'a ayrıca panel
+  bandındaki dişliden ve çentiğe sağ tıklayarak da ulaşılır.
 
 - `make-signing-identity.sh` kimliği oturum açma anahtar zincirine değil, ayrı bir anahtar
   zincirine koyar: `~/Library/Keychains/claude-notch-signing.keychain-db` (rastgele parolası
@@ -200,6 +204,9 @@ geçerli klavye düzenine göre bulunur.
 - `auto` izin modunda `PermissionRequest` nadiren tetiklenir; bu yüzden onay kartları çoğunlukla
   `default` / `acceptEdits` oturumlarında görünür. "Bitti" ve "girdi bekliyor" bildirimleri her
   modda çalışır. Terminalde yanıtlamak her zaman mümkündür.
+- **Sessiz mod** (panel bandındaki 🔔): yalnız izin istekleri ve sorular adaya düşer ve ses
+  çıkarır. macOS Odak durumunu yalnızca Apple'ın yetki verdiği uygulamalara paylaştığı için
+  Odak modu otomatik izlenmez; bu düğme onun yerine geçer.
 - `AskUserQuestion` çentikten yanıtlanabilir: `PreToolUse` kancası (eşleşen araç
   `AskUserQuestion`) soruyu bekletir, çentikte seçenekler düğme olarak çıkar; seçip **Gönder**
   dendiğinde yanıt `updatedInput.answers` ile Claude Code'a döner (çoklu seçimde etiketler

@@ -2,24 +2,30 @@ import ClaudeNotchCore
 import SwiftUI
 
 /// Answers a held `AskUserQuestion` in the notch: one question at a time, its options as
-/// buttons (tap selects; a multi-select question toggles), then "Gönder". Buttons arm 0.8 s
-/// after the question appears, so a click aimed at something else never answers it.
-/// "Terminalde" hands it back to the terminal. Free text ("Other") stays in the terminal.
+/// buttons (tap selects; a multi-select question toggles), then "Gönder". Keys do the same:
+/// ⌃⌥1…4 pick, ⌃⌥Y goes on / sends, ⌃⌥N hands it to the terminal. Buttons and keys arm 0.8 s
+/// after the question appears, so a click or key meant for something else never answers it.
+/// The state lives in `NotchUIState` (the peek, the panel row and the keys share it).
 struct QuestionAnswerView: View {
   let question: PendingQuestion
+  let ui: NotchUIState
   let actions: NotchActions
-  @State private var index = 0
-  @State private var picks: [String: [String]] = [:]
-  @State private var armed = false
+  /// Re-renders once the arm time passes.
+  @State private var tick = 0
   @Environment(\.notchTheme) private var theme
 
   static let armDelay: Double = 0.8
 
-  private var current: AskedQuestion {
-    question.questions[min(index, question.questions.count - 1)]
-  }
+  private var index: Int { min(ui.questionIndex[question.id] ?? 0, question.questions.count - 1) }
+  private var current: AskedQuestion { question.questions[index] }
   private var isLast: Bool { index >= question.questions.count - 1 }
-  private var picked: [String] { picks[current.question] ?? [] }
+  private var picked: [String] { ui.questionPicks[question.id]?[current.question] ?? [] }
+  private var armed: Bool {
+    _ = tick
+    return Date() >= (ui.questionArmedAt[question.id] ?? .distantFuture)
+  }
+  private var allowKey: String? { ui.allowKey }
+  private var denyKey: String? { ui.denyKey }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -48,45 +54,55 @@ struct QuestionAnswerView: View {
         alignment: .leading, spacing: 6
       ) {
         ForEach(Array(current.options.enumerated()), id: \.offset) { i, option in
-          optionButton(option, number: i + 1)
+          optionButton(option, index: i)
         }
       }
       HStack(spacing: 6) {
-        SmallButton(title: "Terminalde yanıtla", style: .secondary) {
-          actions.releaseQuestion(question.id)
+        Button { actions.releaseQuestion(question.id) } label: {
+          keyed("Terminalde yanıtla", key: denyKey, primary: false)
         }
+        .buttonStyle(.plain)
         Spacer(minLength: 0)
         if index > 0 {
-          SmallButton(title: "Geri", style: .secondary) { index -= 1 }
+          SmallButton(title: "Geri", style: .secondary) { actions.questionBack(question.id) }
         }
-        SmallButton(title: isLast ? "Gönder" : "Sonraki", style: .primary) { next() }
-          .disabled(picked.isEmpty || !armed)
-          .opacity(picked.isEmpty || !armed ? 0.4 : 1)
+        Button { actions.questionNext(question.id) } label: {
+          keyed(isLast ? "Gönder" : "Sonraki", key: allowKey, primary: true)
+        }
+        .buttonStyle(.plain)
+        .disabled(picked.isEmpty || !armed)
+        .opacity(picked.isEmpty || !armed ? 0.4 : 1)
       }
     }
     .task(id: question.id) {
-      armed = false
-      index = 0
-      picks = [:]
-      try? await Task.sleep(for: .seconds(Self.armDelay))
-      armed = true
+      let wait = (ui.questionArmedAt[question.id] ?? Date()).timeIntervalSinceNow
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait + 0.02)) }
+      tick += 1
     }
   }
 
-  private func optionButton(_ option: AskedQuestion.Option, number: Int) -> some View {
+  /// A button face with its global key ("Gönder ⌃⌥Y").
+  private func keyed(_ title: String, key: String?, primary: Bool) -> some View {
+    HStack(spacing: 5) {
+      Text(title).font(.system(size: 11.5, weight: .semibold))
+      if let key { Keycap(text: key, onPrimary: primary) }
+    }
+    .foregroundStyle(primary ? theme.primaryText : theme.ink)
+    .padding(.horizontal, 10)
+    .frame(height: 24)
+    .background(
+      RoundedRectangle(cornerRadius: 7, style: .continuous)
+        .fill(primary ? theme.primaryFill : theme.faint))
+    .contentShape(Rectangle())
+  }
+
+  private func optionButton(_ option: AskedQuestion.Option, index i: Int) -> some View {
     let on = picked.contains(option.label)
     return Button {
-      guard armed else { return }
-      var list = picked
-      if current.multiSelect {
-        if on { list.removeAll { $0 == option.label } } else { list.append(option.label) }
-      } else {
-        list = [option.label]
-      }
-      picks[current.question] = list
+      actions.pickOption(question.id, i)
     } label: {
       HStack(spacing: 6) {
-        Text("\(number)")
+        Text("\(i + 1)")
           .font(.system(size: 10, weight: .bold)).monospacedDigit()
           .foregroundStyle(on ? Color.black : theme.tertiary)
           .frame(width: 16, height: 16)
@@ -97,6 +113,10 @@ struct QuestionAnswerView: View {
           .lineLimit(2)
           .multilineTextAlignment(.leading)
         Spacer(minLength: 0)
+        if i < 4, armed {
+          Text("⌃⌥\(i + 1)")
+            .font(.system(size: 9.5, weight: .medium)).foregroundStyle(theme.tertiary)
+        }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 6)
@@ -114,14 +134,5 @@ struct QuestionAnswerView: View {
     .help(option.description.isEmpty ? option.label : option.description)
     .accessibilityLabel(option.label)
     .accessibilityAddTraits(on ? .isSelected : [])
-  }
-
-  private func next() {
-    guard armed, !picked.isEmpty else { return }
-    if isLast {
-      actions.answerQuestion(question.id, picks)
-    } else {
-      index += 1
-    }
   }
 }

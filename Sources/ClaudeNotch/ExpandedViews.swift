@@ -24,6 +24,13 @@ struct ExpandedToolbar: View {
           action: actions.togglePin)
         BandIconButton(
           icon: "gearshape", label: "Ayarlar", active: false, action: actions.openSettings)
+        BandIconButton(
+          icon: settings.silentMode ? "bell.slash.fill" : "bell",
+          label: settings.silentMode
+            ? "Sessiz mod açık: yalnız izin istekleri ve sorular" : "Sessiz modu aç",
+          active: settings.silentMode,
+          tint: settings.silentMode ? NotchTheme.bandNeeds : nil
+        ) { settings.silentMode.toggle() }
         if settings.timerEnabled, case .idle = modules.timer.state, modules.timerDraft == nil {
           TimerStartMenu(modules: modules, settings: settings)
         }
@@ -636,7 +643,7 @@ struct SessionRow: View {
         PermissionCardView(card: card, store: store, ui: ui, actions: actions)
       }
     default:
-      RichDetail(session: session, store: store, actions: actions)
+      RichDetail(session: session, store: store, ui: ui, actions: actions)
     }
   }
 }
@@ -645,6 +652,7 @@ struct SessionRow: View {
 struct RichDetail: View {
   let session: Session
   let store: SessionStore
+  let ui: NotchUIState
   let actions: NotchActions
   @Environment(\.notchTheme) private var theme
 
@@ -663,7 +671,7 @@ struct RichDetail: View {
       switch session.status {
       case .question(let text, let options):
         if let held = store.question(for: session.id) {
-          QuestionAnswerView(question: held, actions: actions)
+          QuestionAnswerView(question: held, ui: ui, actions: actions)
         } else {
           QuestionDetail(text: text, options: options) { actions.focus(session.id) }
         }

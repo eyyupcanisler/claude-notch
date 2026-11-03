@@ -78,7 +78,7 @@ struct SettingsView: View {
         }
       }
       Section("Kısayollar") {
-        ForEach(HotKeyRole.allCases, id: \.self) { role in
+        ForEach(HotKeyRole.configurable, id: \.self) { role in
           ShortcutRecorder(
             role: role, active: $recordingRole, combo: settings.shortcut(role),
             registered: revision >= 0 && shortcuts.registered(role),
@@ -96,7 +96,7 @@ struct SettingsView: View {
             shortcuts.reset()
             revision += 1
           }
-          .disabled(HotKeyRole.allCases.allSatisfy {
+          .disabled(HotKeyRole.configurable.allSatisfy {
             settings.shortcut($0) == KeyCombo.defaultCombo($0)
           })
         }
@@ -131,6 +131,11 @@ struct SettingsView: View {
             .disabled(!settings.soundEnabled(e))
           }
         }
+        Toggle("Sessiz mod: yalnız izin istekleri ve sorular", isOn: $settings.silentMode)
+        Text("Panel bandındaki 🔔 ile de açılıp kapanır. “Bitti” ve modül adaları ile sesleri "
+          + "susar; panelde her şey yine görünür.")
+          .font(.caption).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
         Toggle("Sessiz saatler", isOn: $settings.quietHours)
         if settings.quietHours {
           HStack {

@@ -48,6 +48,11 @@ struct NotchActions {
   var answerQuestion: @MainActor (String, [String: [String]]) -> Void = { _, _ in }
   /// Hand a held question to the terminal and focus it.
   var releaseQuestion: @MainActor (String) -> Void = { _ in }
+  /// Picks / un-picks option `index` of the question on screen (same path as ⌃⌥1…4).
+  var pickOption: @MainActor (String, Int) -> Void = { _, _ in }
+  /// "Sonraki" / "Gönder" (same as ⌃⌥Y), and "Geri".
+  var questionNext: @MainActor (String) -> Void = { _ in }
+  var questionBack: @MainActor (String) -> Void = { _ in }
   /// A shelf chip dropped on a session row: copy it and focus that session's tab.
   /// Returns false when nothing from the shelf was being dragged.
   var dropShelf: @MainActor (String) -> Bool = { _ in false }
@@ -212,10 +217,14 @@ struct NotchRootView: View {
         .opacity(mode == .collapsed && surface.visible && !segments.isEmpty ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-      if mode == .collapsed && surface.visible && g.hasNotch && modules.earsVisible {
+      // The ears also flank an external screen's pill: the middle of a notchless menu bar is
+      // free, so they are always full there.
+      if mode == .collapsed && surface.visible && modules.earsVisible
+        && (g.hasNotch || !segments.isEmpty)
+      {
         SpotifyEars(
-          spotify: modules.spotify, full: modules.earsFull, notchWidth: g.notchWidth,
-          height: g.bandHeight)
+          spotify: modules.spotify, full: modules.earsFull || !g.hasNotch,
+          notchWidth: g.notchWidth, height: g.bandHeight)
           .onTapGesture { actions.expand(g.displayID) }
           .transition(.opacity)
       }

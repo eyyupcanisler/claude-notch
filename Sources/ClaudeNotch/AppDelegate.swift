@@ -11,6 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var pruneTimer: Timer?
   private var signalSources: [DispatchSourceSignal] = []
 
+  /// Opening the app again (Spotlight, Finder, Launchpad) while it runs shows Settings: it has
+  /// no Dock icon or window of its own, so this is its "front door".
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+    controller?.openSettings()
+    return false
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     if let id = Bundle.main.bundleIdentifier {
       let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
