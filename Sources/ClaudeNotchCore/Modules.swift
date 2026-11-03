@@ -551,3 +551,37 @@ public struct Pomodoro: Sendable, Equatable {
     completed = 0
   }
 }
+
+// MARK: - Context window (from the statusLine payload)
+
+/// How much of a session's context window is left, from one statusLine payload
+/// (`session_id`, `context_window.remaining_percentage`).
+public struct ContextLeft: Sendable, Equatable {
+  public var sessionID: String
+  public var percent: Double
+
+  public init(sessionID: String, percent: Double) {
+    self.sessionID = sessionID
+    self.percent = percent
+  }
+
+  /// The row shows it from here down; a single warning peek fires at `alertMark`.
+  public static let showMark: Double = 25
+  public static let alertMark: Double = 10
+
+  public static func statusLine(_ data: Data) -> ContextLeft? {
+    guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let id = root["session_id"] as? String, !id.isEmpty,
+      let cw = root["context_window"] as? [String: Any],
+      let p = (cw["remaining_percentage"] as? NSNumber)?.doubleValue
+    else { return nil }
+    return ContextLeft(sessionID: id, percent: min(100, max(0, p)))
+  }
+
+  /// True when this reading crosses `alertMark` downward from `previous` (nil = first reading,
+  /// which never alerts: the app may have started with a nearly full session).
+  public func crossesAlert(from previous: Double?) -> Bool {
+    guard let previous else { return false }
+    return previous > Self.alertMark && percent <= Self.alertMark
+  }
+}

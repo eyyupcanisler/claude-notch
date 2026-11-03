@@ -10,6 +10,10 @@ import Observation
 @Observable
 final class UsageModule {
   private(set) var usage: PlanUsage?
+  /// Context window left per session id (each status line refresh writes one session's).
+  private(set) var contextLeft: [String: Double] = [:]
+  /// A session's context fell under the alert mark (session id, percent left).
+  @ObservationIgnored var onContextLow: (@MainActor (String, Double) -> Void)?
 
   @ObservationIgnored var onNote: (@MainActor (ModuleNote) -> Void)?
   @ObservationIgnored private var source: DispatchSourceFileSystemObject?
@@ -43,9 +47,13 @@ final class UsageModule {
   }
 
   private func read() {
-    guard let data = try? Data(contentsOf: Self.file),
-      let u = PlanUsage.statusLine(data, at: Date())
-    else { return }
+    guard let data = try? Data(contentsOf: Self.file) else { return }
+    if let c = ContextLeft.statusLine(data) {
+      let previous = contextLeft[c.sessionID]
+      if previous != c.percent { contextLeft[c.sessionID] = c.percent }
+      if c.crossesAlert(from: previous) { onContextLow?(c.sessionID, c.percent) }
+    }
+    guard let u = PlanUsage.statusLine(data, at: Date()) else { return }
     guard u != usage else { return }
     usage = u
     if let mark = u.newMark(shown: warned), let w = u.fiveHour {

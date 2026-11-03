@@ -280,3 +280,16 @@ final class PomodoroTests: XCTestCase {
     XCTAssertEqual(p.phase, .focus)
   }
 }
+
+final class ContextLeftTests: XCTestCase {
+  func testParseAndAlertEdge() {
+    let json = #"{"session_id":"s1","context_window":{"remaining_percentage":18.4}}"#
+    let c = ContextLeft.statusLine(Data(json.utf8))
+    XCTAssertEqual(c, ContextLeft(sessionID: "s1", percent: 18.4))
+    XCTAssertNil(ContextLeft.statusLine(Data(#"{"session_id":"s1"}"#.utf8)))
+    let low = ContextLeft(sessionID: "s1", percent: 9)
+    XCTAssertTrue(low.crossesAlert(from: 12))
+    XCTAssertFalse(low.crossesAlert(from: 9.5), "already under the mark")
+    XCTAssertFalse(low.crossesAlert(from: nil), "first reading never alerts")
+  }
+}

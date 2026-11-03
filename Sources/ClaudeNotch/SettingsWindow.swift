@@ -137,7 +137,26 @@ struct SettingsView: View {
             EmptyView()
           }
         }
-        Toggle("Zamanlayıcı (panelin üst bandındaki ⏲ ile kurulur)", isOn: $settings.timerEnabled)
+        Toggle(
+          "Zamanlayıcı (panelin üst bandındaki ⏲ ile kurulur)", isOn: $settings.timerEnabled)
+        if settings.timerEnabled {
+          Picker("Pomodoro düzeni", selection: Binding(
+            get: { PomoPreset.match(settings) }, set: { $0.apply(to: settings) })
+          ) {
+            ForEach(PomoPreset.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Stepper(
+            "Odak: \(settings.pomoFocus) dk", value: $settings.pomoFocus, in: 5...180, step: 5)
+          Stepper("Kısa mola: \(settings.pomoShort) dk", value: $settings.pomoShort, in: 1...60)
+          Stepper(
+            "Uzun mola: \(settings.pomoLong) dk", value: $settings.pomoLong, in: 1...90, step: 5)
+          Stepper(
+            "Uzun moladan önce: \(settings.pomoRounds) odak", value: $settings.pomoRounds, in: 1...8)
+          Text("Ultradiyen döngü: beyin ~90 dk odak, ~20 dk dinlenme ritminde çalışır; uzun "
+            + "işler için 90 / 20 düzenini seç.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         Toggle("Şarj: kablo takılınca ve pil %10’a inince", isOn: $settings.batteryEnabled)
         Toggle("Spotify: çalarken çentiğin yanında kapak", isOn: $settings.spotifyEnabled)
         if settings.spotifyEnabled {
@@ -316,5 +335,45 @@ struct ShortcutRecorder: View {
     recording = false
     if active == role { active = nil }
     pause(false)
+  }
+}
+
+/// Ready-made Pomodoro layouts; editing a value by hand shows "Özel".
+enum PomoPreset: String, CaseIterable, Hashable {
+  case classic
+  case deep
+  case ultradian
+  case custom
+
+  var title: String {
+    switch self {
+    case .classic: return "Klasik · 25 / 5, uzun 15"
+    case .deep: return "Derin · 50 / 10, uzun 30"
+    case .ultradian: return "Ultradiyen · 90 / 20"
+    case .custom: return "Özel"
+    }
+  }
+
+  private var values: (Int, Int, Int, Int)? {
+    switch self {
+    case .classic: return (25, 5, 15, 4)
+    case .deep: return (50, 10, 30, 3)
+    case .ultradian: return (90, 20, 30, 3)
+    case .custom: return nil
+    }
+  }
+
+  @MainActor
+  static func match(_ s: NotchSettings) -> PomoPreset {
+    allCases.first { p in
+      guard let v = p.values else { return false }
+      return v == (s.pomoFocus, s.pomoShort, s.pomoLong, s.pomoRounds)
+    } ?? .custom
+  }
+
+  @MainActor
+  func apply(to s: NotchSettings) {
+    guard let v = values else { return }
+    (s.pomoFocus, s.pomoShort, s.pomoLong, s.pomoRounds) = v
   }
 }

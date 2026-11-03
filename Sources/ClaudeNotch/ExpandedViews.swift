@@ -25,7 +25,7 @@ struct ExpandedToolbar: View {
         BandIconButton(
           icon: "gearshape", label: "Ayarlar", active: false, action: actions.openSettings)
         if settings.timerEnabled, case .idle = modules.timer.state, modules.timerDraft == nil {
-          TimerStartMenu(modules: modules)
+          TimerStartMenu(modules: modules, settings: settings)
         }
         if ui.ghosttyConsent.missing {
           BandIconButton(
@@ -33,6 +33,9 @@ struct ExpandedToolbar: View {
             action: actions.ghosttyConsent)
         }
         Spacer(minLength: 0)
+        if settings.weatherEnabled, let w = modules.weather.now {
+          BandWeather(weather: w).padding(.trailing, 12)
+        }
       }
       .padding(.leading, 10)
       .frame(width: sideWidth)
@@ -43,9 +46,6 @@ struct ExpandedToolbar: View {
           u.fiveHour != nil || u.sevenDay != nil
         {
           BandUsage(usage: u)
-        }
-        if settings.weatherEnabled, let w = modules.weather.now {
-          BandWeather(weather: w)
         }
         BandChips(store: store, actions: actions)
       }
@@ -205,7 +205,8 @@ struct ExpandedBody: View {
         if let card, let session = slotSession {
           SessionRow(
             session: session, kind: .card(card.id), store: store, ui: ui, actions: actions,
-            title: store.displayName(for: session))
+            title: store.displayName(for: session),
+            contextLeft: modules.usage.contextLeft[session.id])
             .notchEnter(1)
         }
       }
@@ -217,7 +218,8 @@ struct ExpandedBody: View {
               ForEach(Array(rows.enumerated()), id: \.element.id) { i, session in
                 SessionRow(
                   session: session, kind: kinds[i], store: store, ui: ui, actions: actions,
-                  title: store.displayName(for: session))
+                  title: store.displayName(for: session),
+                  contextLeft: modules.usage.contextLeft[session.id])
                   .notchEnter(min(i + 2, 8))
               }
             }
@@ -399,6 +401,8 @@ struct SessionRow: View {
   let ui: NotchUIState
   let actions: NotchActions
   let title: String
+  /// Context window left (from the status line bridge); shown from 25 % down.
+  var contextLeft: Double?
   @State private var hover = false
   @Environment(\.notchTheme) private var theme
 
@@ -538,6 +542,18 @@ struct SessionRow: View {
         }
       }
       Spacer(minLength: 4)
+      if let left = contextLeft, left <= ContextLeft.showMark {
+        Text("bağlam %\(Int(left.rounded()))")
+          .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+          .foregroundStyle(left <= ContextLeft.alertMark ? theme.error : theme.needs)
+          .padding(.horizontal, 6)
+          .frame(height: 16)
+          .background(
+            Capsule().fill(
+              (left <= ContextLeft.alertMark ? theme.error : theme.needs).opacity(0.15)))
+          .fixedSize()
+          .help("Bağlam penceresinin %\(Int(left.rounded()))’i kaldı")
+      }
       if trailing {
         if hover {
           RowActions(session: session, actions: actions)

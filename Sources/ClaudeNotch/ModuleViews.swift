@@ -41,6 +41,7 @@ struct ModuleStrip: View {
 /// Band button (idle timer only): pick a duration, the timer starts and its tile appears.
 struct TimerStartMenu: View {
   let modules: ModuleCenter
+  let settings: NotchSettings
   @State private var hover = false
 
   var body: some View {
@@ -51,7 +52,9 @@ struct TimerStartMenu: View {
       Divider()
       Button("Özel süre…") { modules.beginTimerDraft() }
       Divider()
-      Button("Pomodoro (25 dk odak · 5 dk mola)") { modules.startPomodoro() }
+      Button("Pomodoro (\(settings.pomoFocus) dk odak · \(settings.pomoShort) dk mola)") {
+        modules.startPomodoro()
+      }
     } label: {
       Image(systemName: "timer")
         .font(.system(size: 11.5, weight: .medium))

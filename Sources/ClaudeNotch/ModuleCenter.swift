@@ -266,7 +266,9 @@ final class ModuleCenter {
 
   /// Starts a Pomodoro cycle at its first focus block (25 / 5, long 15 after 4).
   func startPomodoro() {
-    var p = Pomodoro()
+    var p = Pomodoro(
+      focus: settings.pomoFocus, short: settings.pomoShort, long: settings.pomoLong,
+      rounds: settings.pomoRounds)
     p.reset()
     pomodoro = p
     run(minutes: p.minutes(.focus))

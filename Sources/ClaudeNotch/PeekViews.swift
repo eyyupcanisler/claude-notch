@@ -225,6 +225,7 @@ struct ModulePeekView: View {
     case .battery: return (note.level ?? 1) <= 0.1 ? theme.error : theme.done
     case .shelf: return Color(hex: 0xC3A8FF)
     case .weather: return Color(hex: 0x56CFE3)
+    case .claude: return theme.needs
     case .usage: return (note.digits.flatMap(Int.init) ?? 0) >= 95 ? theme.error : theme.needs
     }
   }

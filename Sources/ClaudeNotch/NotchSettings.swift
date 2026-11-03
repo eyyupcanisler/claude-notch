@@ -148,6 +148,19 @@ final class NotchSettings {
     didSet { defaults.set(tuckEars, forKey: "module.spotifyTuck") }
   }
   static let timerChoices = [5, 15, 25, 50]
+  /// Pomodoro cycle: focus / short break / long break minutes, focus blocks before a long one.
+  var pomoFocus: Int {
+    didSet { defaults.set(pomoFocus, forKey: "module.pomoFocus") }
+  }
+  var pomoShort: Int {
+    didSet { defaults.set(pomoShort, forKey: "module.pomoShort") }
+  }
+  var pomoLong: Int {
+    didSet { defaults.set(pomoLong, forKey: "module.pomoLong") }
+  }
+  var pomoRounds: Int {
+    didSet { defaults.set(pomoRounds, forKey: "module.pomoRounds") }
+  }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -174,6 +187,14 @@ final class NotchSettings {
     timerEnabled = defaults.object(forKey: "module.timer") as? Bool ?? true
     let minutes = defaults.integer(forKey: "module.timerMinutes")
     timerMinutes = (1...180).contains(minutes) ? minutes : 25
+    func stored(_ key: String, _ range: ClosedRange<Int>, _ fallback: Int) -> Int {
+      let v = defaults.integer(forKey: key)
+      return range.contains(v) ? v : fallback
+    }
+    pomoFocus = stored("module.pomoFocus", 5...180, 25)
+    pomoShort = stored("module.pomoShort", 1...60, 5)
+    pomoLong = stored("module.pomoLong", 1...90, 15)
+    pomoRounds = stored("module.pomoRounds", 1...8, 4)
     batteryEnabled = defaults.object(forKey: "module.battery") as? Bool ?? true
     spotifyEnabled = defaults.bool(forKey: "module.spotify")
     tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true

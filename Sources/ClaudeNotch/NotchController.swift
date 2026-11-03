@@ -79,6 +79,15 @@ final class NotchController {
     planner.permissionHold = settings.peekDuration.seconds
     registerShortcuts()
     modules.onNote = { [weak self] note in self?.moduleNote(note) }
+    modules.usage.onContextLow = { [weak self] sid, left in
+      guard let self else { return }
+      let name = self.store.sessions[sid].map { self.store.displayName(for: $0) } ?? "Oturum"
+      self.moduleNote(
+        ModuleNote(
+          source: .claude, id: "ctx:\(sid)", title: "\(name): bağlam dolmak üzere",
+          subtitle: "Yakında otomatik sıkıştırma; gerekiyorsa /compact ile kendin başlat",
+          digits: "\(Int(left.rounded()))", unit: "%", validUntil: Date().addingTimeInterval(600)))
+    }
     settingsWindow = SettingsWindowController(
       settings: settings,
       shortcuts: ShortcutBridge(
@@ -1104,6 +1113,17 @@ final class NotchController {
   private func handle(_ effect: StoreEffect) {
     guard case .attention(let sessionID, let kind) = effect else {
       // Sounds and expansion are driven by the attention kind (no auto-expand).
+      return
+    }
+    if kind == "quiet" {
+      // Working but silent for 10 min: a module-level note (never over a Claude peek).
+      let name = store.sessions[sessionID].map { store.displayName(for: $0) } ?? "Oturum"
+      moduleNote(
+        ModuleNote(
+          source: .claude, id: "quiet:\(sessionID):\(Int(Date().timeIntervalSince1970))",
+          title: "\(name) 10 dk’dır sessiz",
+          subtitle: "Uzun bir komut çalışıyor ya da takılmış olabilir", digits: "10", unit: "dk",
+          validUntil: Date().addingTimeInterval(600)))
       return
     }
     onAttention?(sessionID, kind)

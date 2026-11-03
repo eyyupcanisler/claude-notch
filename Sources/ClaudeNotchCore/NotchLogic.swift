@@ -317,6 +317,7 @@ public struct ModuleNote: Sendable, Equatable {
     case shelf
     case weather
     case usage
+    case claude
   }
 
   public var source: Source

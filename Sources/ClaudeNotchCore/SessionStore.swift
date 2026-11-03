@@ -639,6 +639,7 @@ public final class SessionStore {
         t.timeIntervalSince(s.lastUpdate) >= Self.quietAfter
       {
         setStatus(&u, .quiet, at: t)
+        emit(.attention(sessionID: id, kind: "quiet"))
       }
       u.agents = u.agents.filter { t.timeIntervalSince($0.value.lastSeen) < Self.agentStaleAfter }
       if u != s { sessions[id] = u }
