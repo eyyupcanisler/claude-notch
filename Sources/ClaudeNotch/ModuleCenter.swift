@@ -46,6 +46,7 @@ final class ModuleCenter {
   let shelf = ShelfModule()
   let weather = WeatherModule()
   let usage = UsageModule()
+  let google = GoogleCalendarModule()
 
   /// Ears beside the notch while the panel is closed: Spotify is playing.
   var earsVisible: Bool { settings.spotifyEnabled && spotify.isPlaying }
@@ -67,6 +68,8 @@ final class ModuleCenter {
   private func track() {
     withObservationTracking {
       _ = settings.calendarEnabled
+      _ = settings.calendarGoogle
+      _ = settings.calendarOwnAlerts
       _ = settings.timerEnabled
       _ = settings.timerMinutes
       _ = settings.batteryEnabled
@@ -96,7 +99,23 @@ final class ModuleCenter {
     if shelf.onImage == nil {
       shelf.onImage = { [weak self] item in self?.shelfNote(item) }
     }
-    if settings.calendarEnabled { enableCalendar() } else { disableCalendar() }
+    let useGoogle = settings.calendarEnabled && settings.calendarGoogle
+    if google.onEvents == nil {
+      google.onEvents = { [weak self] items in
+        guard let self, self.settings.calendarEnabled, self.settings.calendarGoogle else { return }
+        self.process(items)
+      }
+    }
+    if useGoogle {
+      // Only when switching over: a later settings change must not wipe Google's events.
+      if eventStore != nil || calendarAccess != .off { disableCalendar() }
+    } else if settings.calendarEnabled {
+      enableCalendar()
+    } else {
+      disableCalendar()
+    }
+    if google.isEnabled != useGoogle, !useGoogle { events = []; nextEvent = nil }
+    google.setEnabled(useGoogle)
     if !settings.timerEnabled { resetTimer() }
     if case .idle = timer.state { timer.duration = TimeInterval(settings.timerMinutes * 60) }
     if settings.batteryEnabled {
@@ -169,29 +188,53 @@ final class ModuleCenter {
     if calendarAccess != .asking { calendarAccess = .off }
   }
 
-  /// Fetches the next 12 hours (at most 60 events), fires due reminders, schedules one wake.
+  /// macOS Calendar: fetches the next 12 hours (at most 60 events). Google: re-runs the
+  /// reminders on the events it fetched last (it refreshes them itself every 5 min).
   private func reloadCalendar() {
+    if settings.calendarGoogle {
+      process(events)
+      return
+    }
     guard let store = eventStore else { return }
     let now = Date()
     let predicate = store.predicateForEvents(
       withStart: now.addingTimeInterval(-3600),
       end: now.addingTimeInterval(CalendarReminder.horizon), calendars: nil)
-    events = store.events(matching: predicate).prefix(60).map { e in
-      CalendarItem(
-        id: "\(e.calendarItemIdentifier)@\(Int(e.startDate.timeIntervalSince1970))",
-        title: e.title?.isEmpty == false ? e.title : "Etkinlik", start: e.startDate,
-        end: e.endDate, isAllDay: e.isAllDay, location: e.location)
+    process(
+      store.events(matching: predicate).prefix(60).map { e in
+        CalendarItem(
+          id: "\(e.calendarItemIdentifier)@\(Int(e.startDate.timeIntervalSince1970))",
+          title: e.title?.isEmpty == false ? e.title : "Etkinlik", start: e.startDate,
+          end: e.endDate, isAllDay: e.isAllDay, location: e.location,
+          joinURL: e.url.flatMap { $0.scheme == "https" ? $0 : nil },
+          alerts: e.hasAlarms
+            ? (e.alarms ?? []).compactMap { a in
+              a.absoluteDate.map { e.startDate.timeIntervalSince($0) } ?? -a.relativeOffset
+            } : [])
+      })
+  }
+
+  /// Fires due reminders on `items`, updates the tile, schedules one wake.
+  private func process(_ items: [CalendarItem]) {
+    let now = Date()
+    events = items
+    // Keys are "<event id>@<seconds before>": keep only those of events still listed.
+    let ids = Set(events.map(\.id))
+    reminded = reminded.filter { k in
+      ids.contains(String(k[..<(k.lastIndex(of: "@") ?? k.endIndex)]))
     }
-    reminded.formIntersection(events.map(\.id))
-    for item in CalendarReminder.due(events, now: now, shown: reminded) {
-      reminded.insert(item.id)
+    let due = CalendarReminder.due(
+      events, now: now, shown: reminded, useEventAlerts: settings.calendarOwnAlerts)
+    reminded.formUnion(due.keys)
+    for item in due.items {
       let until = CalendarReminder.untilText(item, now: now)
       let sub = [Self.clock(item.start), item.location].compactMap { $0 }.filter { !$0.isEmpty }
       onNote?(
         ModuleNote(
-          source: .calendar, id: "cal:\(item.id)", title: item.title,
+          source: .calendar, id: "cal:\(item.id):\(Int(now.timeIntervalSince1970))",
+          title: item.title,
           subtitle: sub.joined(separator: " · "), digits: until.digits, unit: until.unit,
-          validUntil: item.start))
+          link: item.joinURL, validUntil: item.start))
       settings.play("Tink")
     }
     nextEvent = CalendarReminder.next(events, now: now)
@@ -203,7 +246,11 @@ final class ModuleCenter {
   private func scheduleCalendarWake(_ now: Date) {
     calendarWake?.cancel()
     var wake = now.addingTimeInterval(3600)
-    if let r = CalendarReminder.nextWake(events, now: now, shown: reminded) { wake = min(wake, r) }
+    if let r = CalendarReminder.nextWake(
+      events, now: now, shown: reminded, useEventAlerts: settings.calendarOwnAlerts)
+    {
+      wake = min(wake, r)
+    }
     if let next = nextEvent {
       wake = min(wake, next.start > now ? next.start : next.end)
     }

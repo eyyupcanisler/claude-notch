@@ -9,3 +9,4 @@ build/
 .env*
 __pycache__/
 *.pyc
+Resources/AppIcon.iconset/

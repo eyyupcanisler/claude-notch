@@ -13,17 +13,25 @@ public struct CalendarItem: Sendable, Equatable {
   public var end: Date
   public var isAllDay: Bool
   public var location: String?
+  /// Video meeting link (Google Meet / Zoom …), when the event has one.
+  public var joinURL: URL?
+  /// The event's own reminders, as seconds before its start (Google Calendar reminders, macOS
+  /// alarms). nil: the calendar says nothing, the app's default lead applies; empty: the event
+  /// has no reminders.
+  public var alerts: [TimeInterval]?
 
   public init(
     id: String, title: String, start: Date, end: Date, isAllDay: Bool = false,
-    location: String? = nil
+    location: String? = nil, joinURL: URL? = nil, alerts: [TimeInterval]? = nil
   ) {
+    self.alerts = alerts
     self.id = id
     self.title = title
     self.start = start
     self.end = end
     self.isAllDay = isAllDay
     self.location = location
+    self.joinURL = joinURL
   }
 }
 
@@ -41,22 +49,46 @@ public enum CalendarReminder {
       .min { $0.start < $1.start }
   }
 
-  /// When the reminder for `item` is due (`lead` before its start).
-  public static func dueAt(_ item: CalendarItem) -> Date { item.start.addingTimeInterval(-lead) }
+  /// The moments `item` should be announced: its own reminders when `useEventAlerts` and it
+  /// has them, else `lead` before the start.
+  public static func alertTimes(_ item: CalendarItem, useEventAlerts: Bool) -> [Date] {
+    let offsets = useEventAlerts ? (item.alerts ?? [lead]) : [lead]
+    return Set(offsets.filter { $0 >= 0 }).map { item.start.addingTimeInterval(-$0) }.sorted()
+  }
 
-  /// Events whose reminder is due now and was not shown yet, earliest first. An event already
-  /// running is never reminded (the app may have started late).
-  public static func due(_ items: [CalendarItem], now: Date, shown: Set<String>) -> [CalendarItem] {
-    items
-      .filter { !$0.isAllDay && !shown.contains($0.id) && dueAt($0) <= now && $0.start > now }
-      .sorted { $0.start < $1.start }
+  /// "event@seconds-before": one key per reminder, so a 1 h and a 10 min reminder both show.
+  static func key(_ item: CalendarItem, _ at: Date) -> String {
+    "\(item.id)@\(Int(item.start.timeIntervalSince(at)))"
+  }
+
+  /// Reminders due now and not shown yet: per event only its latest due one (an app that
+  /// started late never replays an old one); every due key comes back in `keys` to mark shown.
+  /// An event already running is never reminded.
+  public static func due(
+    _ items: [CalendarItem], now: Date, shown: Set<String>, useEventAlerts: Bool = true
+  ) -> (items: [CalendarItem], keys: Set<String>) {
+    var out: [CalendarItem] = []
+    var keys: Set<String> = []
+    for item in items where !item.isAllDay && item.start > now {
+      let dueKeys = alertTimes(item, useEventAlerts: useEventAlerts)
+        .filter { $0 <= now }.map { key(item, $0) }.filter { !shown.contains($0) }
+      guard !dueKeys.isEmpty else { continue }
+      keys.formUnion(dueKeys)
+      out.append(item)
+    }
+    return (out.sorted { $0.start < $1.start }, keys)
   }
 
   /// The next moment a reminder becomes due (the one wake-up to schedule), nil when none.
-  public static func nextWake(_ items: [CalendarItem], now: Date, shown: Set<String>) -> Date? {
-    items
-      .filter { !$0.isAllDay && !shown.contains($0.id) && $0.start > now }
-      .map { max(now, dueAt($0)) }
+  public static func nextWake(
+    _ items: [CalendarItem], now: Date, shown: Set<String>, useEventAlerts: Bool = true
+  ) -> Date? {
+    items.filter { !$0.isAllDay && $0.start > now }
+      .flatMap { item in
+        alertTimes(item, useEventAlerts: useEventAlerts)
+          .filter { !shown.contains(key(item, $0)) }
+      }
+      .map { max(now, $0) }
       .min()
   }
 
@@ -359,11 +391,13 @@ public struct WeatherNow: Sendable, Equatable {
     -> (Date, Int)?
   {
     guard !isWet else { return nil }
-    return rainChances.first { $0.0 > now && $0.0.timeIntervalSince(now) <= window && $0.1 >= threshold }
+    return rainChances.first {
+      $0.0 > now && $0.0.timeIntervalSince(now) <= window && $0.1 >= threshold
+    }
   }
 
-  /// Parses `/v1/forecast?current=temperature_2m,weather_code,is_day&hourly=precipitation_probability`
-  /// with `timezone=UTC` and `timeformat=unixtime`.
+  /// Parses `/v1/forecast` (`current=temperature_2m,weather_code,is_day`,
+  /// `hourly=precipitation_probability`, `timezone=UTC`, `timeformat=unixtime`).
   public static func openMeteo(_ data: Data, at t: Date) -> WeatherNow? {
     struct Reply: Decodable {
       struct Current: Decodable {

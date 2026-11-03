@@ -141,8 +141,16 @@ struct CalendarTile: View {
               }
             }
           } sub: {
-            Text("\(ModuleCenter.clock(event.start)) · \(event.title)")
-              .font(.system(size: 10.5)).foregroundStyle(theme.secondary).lineLimit(1)
+            HStack(spacing: 6) {
+              Text("\(ModuleCenter.clock(event.start)) · \(event.title)")
+                .font(.system(size: 10.5)).foregroundStyle(theme.secondary).lineLimit(1)
+              // The meeting link from 15 min before until it ends.
+              if let link = event.joinURL, running || event.start.timeIntervalSince(now) <= 900 {
+                Spacer(minLength: 0)
+                SmallButton(title: "Katıl", style: .primary) { NSWorkspace.shared.open(link) }
+                  .help(link.host ?? link.absoluteString)
+              }
+            }
           }
         }
       }

@@ -19,6 +19,27 @@ Claude Code ──hook──> hooks/claude-notch-hook.sh ──curl──> Unix 
 - Uygulama kapalıysa ya da soket yoksa hook sessizce çıkar (çıktı yok, `exit 0`); terminaldeki
   normal izin akışı etkilenmez. Köprü hiçbir zaman varsayılan olarak "izin ver" demez.
 
+## Google Takvim (doğrudan bağlantı)
+
+ClaudeNotch Google'a kendi OAuth istemcinle bağlanır (yalnız okuma). Bir kez:
+
+1. <https://console.cloud.google.com> → yeni bir proje (ör. "ClaudeNotch").
+2. **APIs & Services → Library** → "Google Calendar API" → **Enable**.
+3. **APIs & Services → OAuth consent screen** (Google Auth Platform):
+   - Google Workspace hesabıysan **Internal** seç: doğrulama gerekmez, oturum kalıcıdır.
+   - Kişisel Gmail ise **External** + kendini **Test users**'a ekle. "Testing" durumunda
+     Google oturumu 7 günde bir sona erdirir; kalıcı olsun istersen yayın durumunu
+     "In production" yap (doğrulanmamış uygulama uyarısını bir kez geçmen gerekir).
+   - Scope: `.../auth/calendar.readonly`.
+4. **Credentials → Create credentials → OAuth client ID → Application type: Desktop app**
+   → oluştur → **Download JSON** (`client_secret_….json`).
+5. ClaudeNotch Ayarları → Modüller → Takvim → Kaynak: **Google Takvim** → **İstemci
+   dosyasını seç…** → indirdiğin JSON → **Google ile bağlan** → tarayıcıda izin ver.
+
+İstemci bilgisi ve jetonlar macOS Anahtar Zinciri'nde tutulur
+(`com.eyyupcan.claudenotch.google`); JSON dosyasını depoya koyma. Toplantının Meet / Zoom
+bağlantısı varsa ada ve takvim kartı başlangıçtan 15 dk önce **Katıl** düğmesi gösterir.
+
 ## Derleme
 
 ```sh

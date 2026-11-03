@@ -286,6 +286,10 @@ struct ModulePeekView: View {
         }
       }
       Spacer(minLength: 0)
+      if let link = note.link {
+        SmallButton(title: "Katıl", style: .primary) { NSWorkspace.shared.open(link) }
+          .help(link.host ?? link.absoluteString)
+      }
     }
     .frame(minHeight: 30)
     .notchEnter(0)

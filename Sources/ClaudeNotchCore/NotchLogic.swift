@@ -329,13 +329,16 @@ public struct ModuleNote: Sendable, Equatable {
   public var unit: String?
   /// 0…1 for a level bar (battery).
   public var level: Double?
+  /// A link the peek offers as a button (a meeting's video link: "Katıl").
+  public var link: URL?
   /// A note that waited behind a Claude peek is dropped after this (a meeting that started).
   public var validUntil: Date
 
   public init(
     source: Source, id: String, title: String, subtitle: String? = nil, digits: String? = nil,
-    unit: String? = nil, level: Double? = nil, validUntil: Date
+    unit: String? = nil, level: Double? = nil, link: URL? = nil, validUntil: Date
   ) {
+    self.link = link
     self.source = source
     self.id = id
     self.title = title

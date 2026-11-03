@@ -72,15 +72,37 @@ final class ModulesTests: XCTestCase {
     XCTAssertNil(CalendarReminder.next([ev("far", start: 13 * 3600)], now: t0))
   }
 
-  func testDueAndWake() {
+  func testDueAndWakeWithDefaultLead() {
     let items = [ev("a", start: 900), ev("b", start: 3600)]
-    XCTAssertEqual(CalendarReminder.due(items, now: t0, shown: []).map(\.id), [])
+    XCTAssertEqual(CalendarReminder.due(items, now: t0, shown: []).items.map(\.id), [])
     XCTAssertEqual(CalendarReminder.nextWake(items, now: t0, shown: []), at(300))
-    XCTAssertEqual(CalendarReminder.due(items, now: at(300), shown: []).map(\.id), ["a"])
-    XCTAssertEqual(CalendarReminder.due(items, now: at(300), shown: ["a"]).map(\.id), [])
-    XCTAssertEqual(CalendarReminder.nextWake(items, now: at(300), shown: ["a"]), at(3000))
-    XCTAssertEqual(CalendarReminder.due(items, now: at(1000), shown: []).map(\.id), [],
+    let d = CalendarReminder.due(items, now: at(300), shown: [])
+    XCTAssertEqual(d.items.map(\.id), ["a"])
+    XCTAssertEqual(CalendarReminder.due(items, now: at(300), shown: d.keys).items.map(\.id), [])
+    XCTAssertEqual(CalendarReminder.nextWake(items, now: at(300), shown: d.keys), at(3000))
+    XCTAssertEqual(CalendarReminder.due(items, now: at(1000), shown: []).items.map(\.id), [],
       "a started already: no late reminder")
+  }
+
+  func testEventOwnAlerts() {
+    var a = ev("a", start: 7200)
+    a.alerts = [3600, 600]
+    var silent = ev("s", start: 7200)
+    silent.alerts = []
+    let items = [a, silent]
+    XCTAssertEqual(CalendarReminder.nextWake(items, now: t0, shown: []), at(3600))
+    let first = CalendarReminder.due(items, now: at(3600), shown: [])
+    XCTAssertEqual(first.items.map(\.id), ["a"], "1 h before; the silent event never")
+    XCTAssertEqual(CalendarReminder.nextWake(items, now: at(3600), shown: first.keys), at(6600))
+    let second = CalendarReminder.due(items, now: at(6600), shown: first.keys)
+    XCTAssertEqual(second.items.map(\.id), ["a"], "10 min before, again")
+    // App started late: both passed, only one note.
+    let late = CalendarReminder.due(items, now: at(6700), shown: [])
+    XCTAssertEqual(late.items.count, 1)
+    XCTAssertEqual(late.keys.count, 2)
+    // Off: always the default lead.
+    XCTAssertEqual(
+      CalendarReminder.alertTimes(a, useEventAlerts: false), [at(7200 - CalendarReminder.lead)])
   }
 
   func testUntilText() {
@@ -237,7 +259,8 @@ final class PlanUsageTests: XCTestCase {
 
   func testParsesRateLimits() {
     let json = """
-      {"model":{"id":"x"},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},
+      {"model":{"id":"x"},
+       "rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},
        "seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}
       """
     let u = PlanUsage.statusLine(Data(json.utf8), at: t0)

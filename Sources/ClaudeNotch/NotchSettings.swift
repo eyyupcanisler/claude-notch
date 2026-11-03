@@ -140,6 +140,15 @@ final class NotchSettings {
   var calendarEnabled: Bool {
     didSet { defaults.set(calendarEnabled, forKey: "module.calendar") }
   }
+  /// Where calendar events come from: macOS Calendar (EventKit) or Google's API directly.
+  var calendarGoogle: Bool {
+    didSet { defaults.set(calendarGoogle, forKey: "module.calendarGoogle") }
+  }
+  /// Remind at each event's own reminder times (Google reminders / macOS alarms), else always
+  /// 10 min before.
+  var calendarOwnAlerts: Bool {
+    didSet { defaults.set(calendarOwnAlerts, forKey: "module.calendarOwnAlerts") }
+  }
   var timerEnabled: Bool {
     didSet { defaults.set(timerEnabled, forKey: "module.timer") }
   }
@@ -218,6 +227,8 @@ final class NotchSettings {
     shortcutHintSeen = defaults.bool(forKey: "shortcutHintSeen")
     calendarEnabled = defaults.bool(forKey: "module.calendar")
     timerEnabled = defaults.object(forKey: "module.timer") as? Bool ?? true
+    calendarGoogle = defaults.bool(forKey: "module.calendarGoogle")
+    calendarOwnAlerts = defaults.object(forKey: "module.calendarOwnAlerts") as? Bool ?? true
     let minutes = defaults.integer(forKey: "module.timerMinutes")
     timerMinutes = (1...180).contains(minutes) ? minutes : 25
     func stored(_ key: String, _ range: ClosedRange<Int>, _ fallback: Int) -> Int {

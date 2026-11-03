@@ -1,5 +1,6 @@
 import AppKit
 import ClaudeNotchCore
+import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -28,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
     }
     installSignalHandlers()
+    // A reinstalled bundle loses its login item: register again if the user wanted it.
+    if UserDefaults.standard.bool(forKey: "loginWanted"), SMAppService.mainApp.status != .enabled {
+      try? SMAppService.mainApp.register()
+    }
 
     let router = RequestRouter(
       store: store, debugEnabled: ProcessInfo.processInfo.environment["CLAUDE_NOTCH_DEBUG"] == "1")
