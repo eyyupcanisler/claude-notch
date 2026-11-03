@@ -192,7 +192,7 @@ final class ModuleCenter {
           source: .calendar, id: "cal:\(item.id)", title: item.title,
           subtitle: sub.joined(separator: " · "), digits: until.digits, unit: until.unit,
           validUntil: item.start))
-      NSSound(named: NSSound.Name("Tink"))?.play()
+      settings.play("Tink")
     }
     nextEvent = CalendarReminder.next(events, now: now)
     scheduleCalendarWake(now)
@@ -318,7 +318,7 @@ final class ModuleCenter {
     timerTask = Task { [weak self] in
       try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
       guard !Task.isCancelled, let self, self.timer.settle(at: Date()) else { return }
-      NSSound(named: NSSound.Name("Glass"))?.play()
+      self.settings.play("Glass")
       let id = "timer:\(Int(end.timeIntervalSince1970))"
       guard var p = self.pomodoro else {
         self.onNote?(

@@ -7,14 +7,21 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
   case panel = 1
   case allow = 2
   case deny = 3
+  case timer = 4
+  case shelf = 5
 
   var title: String {
     switch self {
     case .panel: return "Paneli aç"
     case .allow: return "İzin ver"
     case .deny: return "Reddet"
+    case .timer: return "Pomodoro başlat / duraklat"
+    case .shelf: return "Raftaki son öğeyi kopyala"
     }
   }
+
+  /// Decision keys must use a safe chord (see `DecisionChord`); the others may be anything.
+  var isDecision: Bool { self == .allow || self == .deny }
 
   var defaultsKey: String { "hotkey.\(self)" }
 }
@@ -35,6 +42,10 @@ struct KeyCombo: Equatable, Hashable, Sendable {
       return KeyCombo(keyCode: KeyLayout.keyCode(for: "y") ?? UInt32(kVK_ANSI_Y), modifiers: mods)
     case .deny:
       return KeyCombo(keyCode: KeyLayout.keyCode(for: "n") ?? UInt32(kVK_ANSI_N), modifiers: mods)
+    case .timer:
+      return KeyCombo(keyCode: KeyLayout.keyCode(for: "p") ?? UInt32(kVK_ANSI_P), modifiers: mods)
+    case .shelf:
+      return KeyCombo(keyCode: KeyLayout.keyCode(for: "v") ?? UInt32(kVK_ANSI_V), modifiers: mods)
     }
   }
 
@@ -59,7 +70,7 @@ struct KeyCombo: Equatable, Hashable, Sendable {
   /// Why this chord cannot be `role`'s shortcut (Turkish), or nil. A decision shortcut acts
   /// from every app, so it must not be a chord people type or use for app shortcuts.
   func error(for role: HotKeyRole) -> String? {
-    guard role != .panel else { return nil }
+    guard role.isDecision else { return nil }
     let ok = DecisionChord.isAllowed(
       control: modifiers & UInt32(controlKey) != 0, option: modifiers & UInt32(optionKey) != 0,
       shift: modifiers & UInt32(shiftKey) != 0, command: modifiers & UInt32(cmdKey) != 0)

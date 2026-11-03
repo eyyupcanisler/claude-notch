@@ -51,6 +51,20 @@ public final class RequestRouter {
       responder.onPeerClosed {
         Task { @MainActor in store.connectionDropped(id: id) }
       }
+    case ("POST", "/question"):
+      guard let event = HookEvent.parse(req.body), event.toolName == "AskUserQuestion" else {
+        responder.respond(status: 400)
+        return
+      }
+      let held = store.addQuestion(event) { body in
+        responder.respond(status: 200, body: body ?? Data())
+      }
+      if let id = held?.id {
+        let store = self.store
+        responder.onPeerClosed {
+          Task { @MainActor in store.connectionDropped(id: id) }
+        }
+      }
     case ("GET", "/debug/state"):
       var snapshot = store.debugSnapshot().objectValue ?? [:]
       if let ui = uiStateProvider?() { snapshot["ui"] = ui }

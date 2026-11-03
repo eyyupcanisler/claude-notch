@@ -139,7 +139,29 @@ struct PeekBody: View {
     }
   }
 
+  @ViewBuilder
   private var attention: some View {
+    if let sid = peek.sessionIDs.first, let held = store.question(for: sid) {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
+          Image(systemName: "questionmark.bubble.fill")
+            .font(.system(size: 11, weight: .bold)).foregroundStyle(theme.needs)
+          Text("Claude soruyor")
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink).fixedSize()
+          Text(project(sid))
+            .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
+            .lineLimit(1).truncationMode(.middle)
+          Spacer(minLength: 0)
+        }
+        .notchEnter(0)
+        QuestionAnswerView(question: held, actions: actions).notchEnter(1)
+      }
+    } else {
+      attentionText
+    }
+  }
+
+  private var attentionText: some View {
     let session = peek.sessionIDs.first.flatMap { store.sessions[$0] }
     let text = session?.status.detail ?? "Claude yanıt bekliyor"
     return VStack(alignment: .leading, spacing: 6) {

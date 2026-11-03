@@ -55,6 +55,8 @@ public final class SessionStore {
   public internal(set) var sessions: [String: Session] = [:]
   /// Pending permission cards, oldest first.
   public private(set) var pending: [PendingPermission] = []
+  /// `AskUserQuestion` calls held until answered from the notch or released to the terminal.
+  public private(set) var questions: [PendingQuestion] = []
 
   @ObservationIgnored public var onEffect: (@MainActor (StoreEffect) -> Void)?
   @ObservationIgnored public var now: @MainActor () -> Date
@@ -546,11 +548,62 @@ public final class SessionStore {
   /// The held connection went away (curl killed / timed out): drop the card silently.
   public func connectionDropped(id: String) {
     remove(id, replyEmpty: true)
+    questions.removeAll { $0.id == id }
+  }
+
+  // MARK: - Questions
+
+  /// Holds an `AskUserQuestion` call; nil (reply empty at once) when its input is not the
+  /// documented shape, so the terminal asks as usual.
+  @discardableResult
+  public func addQuestion(_ e: HookEvent, reply: @escaping @Sendable (Data?) -> Void)
+    -> PendingQuestion?
+  {
+    guard let input = e.toolInput, let qs = AskedQuestion.parse(input) else {
+      reply(nil)
+      return nil
+    }
+    // One per session: a new call replaces an older one (its terminal dialog is gone).
+    for old in questions where old.sessionID == e.sessionID { releaseQuestion(id: old.id) }
+    let q = PendingQuestion(
+      id: "q" + String(UUID().uuidString.prefix(7)).lowercased(), sessionID: e.sessionID,
+      agentID: e.agentID, questions: qs, toolInput: input, createdAt: now(),
+      reply: PermissionReply(reply))
+    questions.append(q)
+    return q
+  }
+
+  public func question(for sessionID: String) -> PendingQuestion? {
+    questions.first { $0.sessionID == sessionID }
+  }
+
+  /// Answers from the notch. False when it is gone or the answers are incomplete.
+  @discardableResult
+  public func answerQuestion(id: String, answers: [String: [String]]) -> Bool {
+    guard let q = questions.first(where: { $0.id == id }), q.isComplete(answers) else {
+      return false
+    }
+    questions.removeAll { $0.id == id }
+    lastRemovalAt = now()
+    q.reply.send(PendingQuestion.answerBody(toolInput: q.toolInput, answers: answers))
+    return true
+  }
+
+  /// Hands the question to the terminal (empty reply: Claude Code shows it there).
+  public func releaseQuestion(id: String) {
+    guard let q = questions.first(where: { $0.id == id }) else { return }
+    questions.removeAll { $0.id == id }
+    q.reply.send(nil)
+  }
+
+  public func releaseQuestions(sessionID: String) {
+    for q in questions where q.sessionID == sessionID { releaseQuestion(id: q.id) }
   }
 
   /// Flushes every card of the session.
   public func flushPending(_ sessionID: String) {
     for card in pending where card.sessionID == sessionID { remove(card.id, replyEmpty: true) }
+    releaseQuestions(sessionID: sessionID)
   }
 
   /// Flushes only the cards asked by `agentID` (`nil` = main agent), so a main-agent Stop keeps
@@ -600,6 +653,8 @@ public final class SessionStore {
   @discardableResult
   public func markSeen(tty: String) -> Bool {
     guard HookContext.validTTY(tty) != nil else { return false }
+    // The user is at that terminal: a held question goes back to it.
+    for s in sessions.values where s.tty == tty { releaseQuestions(sessionID: s.id) }
     var any = false
     for s in sessions.values where s.tty == tty && (s.unseen || s.status.kind == "waiting") {
       markSeen(sessionID: s.id)

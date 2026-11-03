@@ -113,8 +113,36 @@ struct SettingsView: View {
       }
       Section("Bildirim sesleri") {
         ForEach(SoundEvent.allCases, id: \.self) { e in
-          Toggle(e.title, isOn: Binding(
-            get: { settings.soundEnabled(e) }, set: { settings.setSound(e, $0) }))
+          HStack {
+            Toggle(e.title, isOn: Binding(
+              get: { settings.soundEnabled(e) }, set: { settings.setSound(e, $0) }))
+            Spacer()
+            Picker("", selection: Binding(
+              get: { settings.soundName(e) },
+              set: {
+                settings.setSoundName(e, $0)
+                NSSound(named: NSSound.Name($0))?.play()
+              })
+            ) {
+              ForEach(NotchSettings.systemSounds, id: \.self) { Text($0).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 120)
+            .disabled(!settings.soundEnabled(e))
+          }
+        }
+        Toggle("Sessiz saatler", isOn: $settings.quietHours)
+        if settings.quietHours {
+          HStack {
+            Picker("Başlangıç", selection: $settings.quietStart) {
+              ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
+            }
+            Picker("Bitiş", selection: $settings.quietEnd) {
+              ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
+            }
+          }
+          Text("Bu aralıkta hiçbir ClaudeNotch sesi çalmaz; adalar yine düşer.")
+            .font(.caption).foregroundStyle(.secondary)
         }
       }
       Section("Modüller") {
@@ -151,7 +179,8 @@ struct SettingsView: View {
           Stepper(
             "Uzun mola: \(settings.pomoLong) dk", value: $settings.pomoLong, in: 1...90, step: 5)
           Stepper(
-            "Uzun moladan önce: \(settings.pomoRounds) odak", value: $settings.pomoRounds, in: 1...8)
+            "Uzun moladan önce: \(settings.pomoRounds) odak", value: $settings.pomoRounds,
+            in: 1...8)
           Text("Ultradiyen döngü: beyin ~90 dk odak, ~20 dk dinlenme ritminde çalışır; uzun "
             + "işler için 90 / 20 düzenini seç.")
             .font(.caption).foregroundStyle(.secondary)

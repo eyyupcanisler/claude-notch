@@ -42,10 +42,14 @@ fi
 
 # Our hooks JSON fragment.
 hooks_json() {
-  jq -n --arg perm "$CMD_PATH permission" --arg ev "$CMD_PATH event" --arg events "$EVENTS" '
+  jq -n --arg perm "$CMD_PATH permission" --arg ev "$CMD_PATH event" \
+    --arg q "$CMD_PATH question" --arg events "$EVENTS" '
     {PermissionRequest: [{hooks: [{type: "command", command: $perm, timeout: 600}]}]}
     + ($events | split(" ") | map({key: ., value: [{hooks: [{type: "command", command: $ev,
         async: true, timeout: 10}]}]}) | from_entries)
+    # AskUserQuestion: held until answered in the notch (an empty reply lets the terminal ask).
+    | .PreToolUse = ((.PreToolUse // []) + [{matcher: "AskUserQuestion",
+        hooks: [{type: "command", command: $q, timeout: 600}]}])
     | {hooks: .}'
 }
 

@@ -200,8 +200,14 @@ geçerli klavye düzenine göre bulunur.
 - `auto` izin modunda `PermissionRequest` nadiren tetiklenir; bu yüzden onay kartları çoğunlukla
   `default` / `acceptEdits` oturumlarında görünür. "Bitti" ve "girdi bekliyor" bildirimleri her
   modda çalışır. Terminalde yanıtlamak her zaman mümkündür.
-- `AskUserQuestion` ve `ExitPlanMode` terminalde etkileşim gerektirir: çentikte "Soru soruyor"
-  (ilk sorunun metniyle) ve "Plan onayı bekliyor" olarak görünür, karar verilmez.
+- `AskUserQuestion` çentikten yanıtlanabilir: `PreToolUse` kancası (eşleşen araç
+  `AskUserQuestion`) soruyu bekletir, çentikte seçenekler düğme olarak çıkar; seçip **Gönder**
+  dendiğinde yanıt `updatedInput.answers` ile Claude Code'a döner (çoklu seçimde etiketler
+  ", " ile birleşir). Düğmeler soru göründükten 0,8 sn sonra etkinleşir. **Terminalde yanıtla**,
+  o oturumun Ghostty sekmesine geçmek, uygulamanın kapanması ya da 10 dk zaman aşımı soruyu
+  terminale bırakır (boş yanıt). Serbest metin ("Diğer") terminalde kalır. Bu kanca
+  `scripts/install-hooks.sh` yeniden çalıştırılınca eklenir.
+- `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
 - İzni terminalde **reddederseniz** `PostToolUse` gelmez; kart, aynı oturumdaki (ve aynı
   alt ajandaki) farklı bir `PreToolUse` (1,5 sn'den sonra), `UserPromptSubmit`, `Stop`,
   `StopFailure`, `SessionEnd` ya da `idle_prompt` bildirimiyle temizlenir. Aynı çağrı yeniden

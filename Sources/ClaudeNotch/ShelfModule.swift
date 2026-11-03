@@ -16,10 +16,22 @@ final class ShelfModule {
   nonisolated static let previewPixels = 160
 
   private(set) var shelf = Shelf()
+  /// Pinned items: kept across launches (Application Support), outside the 6-item limit.
+  private(set) var pinned: [ShelfItem] = []
+  static let maxPinned = 6
+  static let pinFolder = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/ClaudeNotch/Pinned", isDirectory: true)
+  private static var pinIndex: URL { pinFolder.appendingPathComponent("pins.json") }
   /// Small previews of image items, by item id.
   private(set) var previews: [String: NSImage] = [:]
   /// The item just copied back from the shelf (a short "Kopyalandı" on its chip).
   private(set) var copiedID: String?
+  /// The chip being dragged (a session row accepts only shelf drags).
+  @ObservationIgnored var draggingID: String?
+
+  func item(id: String) -> ShelfItem? {
+    pinned.first { $0.id == id } ?? shelf.items.first { $0.id == id }
+  }
 
   /// A new image arrived (the controller shows "Rafa eklendi").
   @ObservationIgnored var onImage: (@MainActor (ShelfItem) -> Void)?
@@ -33,6 +45,88 @@ final class ShelfModule {
   init() {
     // Leftovers of an earlier run.
     try? FileManager.default.removeItem(at: Self.folder)
+    loadPins()
+  }
+
+  // MARK: Pins
+
+  private struct PinRecord: Codable {
+    var id: String
+    var text: String?
+    var image: String?
+    var width: Int?
+    var height: Int?
+    var file: String?
+  }
+
+  func isPinned(_ id: String) -> Bool { pinned.contains { $0.id == id } }
+
+  /// Pins a shelf item (an image is copied out of the temp folder) or unpins it.
+  func togglePin(_ item: ShelfItem) {
+    if let i = pinned.firstIndex(where: { $0.id == item.id }) {
+      let gone = pinned.remove(at: i)
+      if let f = gone.ownedFile { try? FileManager.default.removeItem(at: f) }
+      previews[gone.id] = nil
+      savePins()
+      return
+    }
+    guard pinned.count < Self.maxPinned else { return }
+    var kind = item.kind
+    if case .image(let file, let key, let w, let h) = item.kind {
+      try? FileManager.default.createDirectory(
+        at: Self.pinFolder, withIntermediateDirectories: true)
+      let dest = Self.pinFolder.appendingPathComponent("\(item.id).png")
+      guard (try? FileManager.default.copyItem(at: file, to: dest)) != nil else { return }
+      kind = .image(file: dest, key: key, width: w, height: h)
+    }
+    pinned.append(ShelfItem(id: item.id, kind: kind, addedAt: item.addedAt))
+    remove(item.id)
+    if case .image(let f, _, _, _) = kind, previews[item.id] == nil,
+      let src = CGImageSourceCreateWithURL(f as CFURL, nil)
+    {
+      previews[item.id] = Self.preview(src)
+    }
+    savePins()
+  }
+
+  private func savePins() {
+    let records = pinned.map { p -> PinRecord in
+      switch p.kind {
+      case .text(let s): return PinRecord(id: p.id, text: s)
+      case .image(let f, _, let w, let h):
+        return PinRecord(id: p.id, image: f.lastPathComponent, width: w, height: h)
+      case .file(let u): return PinRecord(id: p.id, file: u.path)
+      }
+    }
+    try? FileManager.default.createDirectory(at: Self.pinFolder, withIntermediateDirectories: true)
+    if let data = try? JSONEncoder().encode(records) {
+      try? data.write(to: Self.pinIndex, options: [.atomic])
+      try? FileManager.default.setAttributes(
+        [.posixPermissions: 0o600], ofItemAtPath: Self.pinIndex.path)
+    }
+  }
+
+  private func loadPins() {
+    guard let data = try? Data(contentsOf: Self.pinIndex),
+      let records = try? JSONDecoder().decode([PinRecord].self, from: data)
+    else { return }
+    pinned = records.compactMap { r in
+      if let t = r.text { return ShelfItem(id: r.id, kind: .text(t), addedAt: Date()) }
+      if let name = r.image {
+        let f = Self.pinFolder.appendingPathComponent(name)
+        guard FileManager.default.fileExists(atPath: f.path) else { return nil }
+        if let src = CGImageSourceCreateWithURL(f as CFURL, nil) {
+          previews[r.id] = Self.preview(src)
+        }
+        return ShelfItem(
+          id: r.id, kind: .image(file: f, key: name, width: r.width ?? 0, height: r.height ?? 0),
+          addedAt: Date())
+      }
+      if let path = r.file {
+        return ShelfItem(id: r.id, kind: .file(URL(fileURLWithPath: path)), addedAt: Date())
+      }
+      return nil
+    }
   }
 
   var isPolling: Bool { timer != nil }
@@ -120,7 +214,9 @@ final class ShelfModule {
 
   func clear() {
     for item in shelf.clear() { discard(item) }
-    previews = [:]
+    // Pinned items keep their previews.
+    let keep = Set(pinned.map(\.id))
+    previews = previews.filter { keep.contains($0.key) }
     try? FileManager.default.removeItem(at: Self.folder)
   }
 

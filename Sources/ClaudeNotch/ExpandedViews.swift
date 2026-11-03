@@ -404,6 +404,7 @@ struct SessionRow: View {
   /// Context window left (from the status line bridge); shown from 25 % down.
   var contextLeft: Double?
   @State private var hover = false
+  @State private var dropTarget = false
   @Environment(\.notchTheme) private var theme
 
   private var selected: Bool { ui.keyMode && ui.selectedSessionID == session.id }
@@ -458,6 +459,21 @@ struct SessionRow: View {
     }
     .contentShape(Rectangle())
     .onHover { hover = $0 }
+    // A shelf chip dropped here: copied, and this session's tab comes forward (⌃V pastes it).
+    .onDrop(of: [.item], isTargeted: $dropTarget) { _ in actions.dropShelf(session.id) }
+    .overlay(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .strokeBorder(Color(hex: 0xC3A8FF), lineWidth: dropTarget ? 1.5 : 0)
+        .allowsHitTesting(false))
+    .overlay(alignment: .bottomTrailing) {
+      if dropTarget {
+        Text("bırak: kopyala ve sekmeye git · ⌃V")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(Color(hex: 0xC3A8FF))
+          .padding(6)
+          .allowsHitTesting(false)
+      }
+    }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(title), \(statusText)")
   }
@@ -646,7 +662,11 @@ struct RichDetail: View {
     } else {
       switch session.status {
       case .question(let text, let options):
-        QuestionDetail(text: text, options: options) { actions.focus(session.id) }
+        if let held = store.question(for: session.id) {
+          QuestionAnswerView(question: held, actions: actions)
+        } else {
+          QuestionDetail(text: text, options: options) { actions.focus(session.id) }
+        }
       case .planApproval(let summary):
         TerminalAsk(title: "Plan onayı bekliyor", text: summary) { actions.focus(session.id) }
       case .waitingInput(let message):

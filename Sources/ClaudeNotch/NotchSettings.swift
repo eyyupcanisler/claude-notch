@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -105,6 +106,22 @@ final class NotchSettings {
     didSet { defaults.set(density.rawValue, forKey: "density") }
   }
   private(set) var sounds: [SoundEvent: Bool]
+  /// Chosen macOS sound per event (missing: the event's default).
+  private(set) var soundNames: [SoundEvent: String]
+  /// No sounds between `quietStart` and `quietEnd` (hours, wraps past midnight).
+  var quietHours: Bool {
+    didSet { defaults.set(quietHours, forKey: "quietHours") }
+  }
+  var quietStart: Int {
+    didSet { defaults.set(quietStart, forKey: "quietStart") }
+  }
+  var quietEnd: Int {
+    didSet { defaults.set(quietEnd, forKey: "quietEnd") }
+  }
+  static let systemSounds = [
+    "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
+    "Sosumi", "Submarine", "Tink",
+  ]
   var peekDuration: PeekDuration {
     didSet { defaults.set(peekDuration.rawValue, forKey: "peekDuration") }
   }
@@ -174,6 +191,16 @@ final class NotchSettings {
       map[e] = defaults.object(forKey: "sound.\(e.rawValue)") as? Bool ?? legacy
     }
     sounds = map
+    var names: [SoundEvent: String] = [:]
+    for e in SoundEvent.allCases {
+      if let n = defaults.string(forKey: "soundName.\(e.rawValue)"), Self.systemSounds.contains(n) {
+        names[e] = n
+      }
+    }
+    soundNames = names
+    quietHours = defaults.bool(forKey: "quietHours")
+    quietStart = defaults.object(forKey: "quietStart") as? Int ?? 23
+    quietEnd = defaults.object(forKey: "quietEnd") as? Int ?? 8
     peekDuration = PeekDuration(rawValue: defaults.string(forKey: "peekDuration") ?? "")
       ?? .normal
     var keys: [HotKeyRole: KeyCombo] = [:]
@@ -225,6 +252,27 @@ final class NotchSettings {
   }
 
   func soundEnabled(_ e: SoundEvent) -> Bool { sounds[e] ?? true }
+
+  func soundName(_ e: SoundEvent) -> String { soundNames[e] ?? e.soundName }
+
+  func setSoundName(_ e: SoundEvent, _ name: String) {
+    soundNames[e] = name
+    defaults.set(name, forKey: "soundName.\(e.rawValue)")
+  }
+
+  /// Inside the quiet hours now.
+  func isQuiet(at date: Date = Date()) -> Bool {
+    guard quietHours, quietStart != quietEnd else { return false }
+    let h = Calendar.current.component(.hour, from: date)
+    return quietStart < quietEnd ? (h >= quietStart && h < quietEnd)
+      : (h >= quietStart || h < quietEnd)
+  }
+
+  /// Plays `name` unless the quiet hours are on (every ClaudeNotch sound goes through here).
+  func play(_ name: String) {
+    guard !isQuiet() else { return }
+    NSSound(named: NSSound.Name(name))?.play()
+  }
 
   func setSound(_ e: SoundEvent, _ on: Bool) {
     sounds[e] = on

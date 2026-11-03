@@ -44,6 +44,13 @@ struct NotchActions {
   var bodyHeight: @MainActor (CGDirectDisplayID, NotchMode, CGFloat) -> Void = { _, _, _ in }
   /// Ghostty Automation: ask (macOS prompt) or open System Settings when denied.
   var ghosttyConsent: @MainActor () -> Void = {}
+  /// A held question answered in the notch (question id, labels by question text).
+  var answerQuestion: @MainActor (String, [String: [String]]) -> Void = { _, _ in }
+  /// Hand a held question to the terminal and focus it.
+  var releaseQuestion: @MainActor (String) -> Void = { _ in }
+  /// A shelf chip dropped on a session row: copy it and focus that session's tab.
+  /// Returns false when nothing from the shelf was being dragged.
+  var dropShelf: @MainActor (String) -> Bool = { _ in false }
 }
 
 // MARK: - Shape

@@ -111,7 +111,7 @@ send_event() {
     "${HEADERS[@]}" --data-binary @- http://localhost/event >/dev/null 2>&1
 }
 
-if [ "$MODE" != "permission" ]; then
+if [ "$MODE" != "permission" ] && [ "$MODE" != "question" ]; then
   send_event
   exit 0
 fi
@@ -121,6 +121,14 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)"
+ROUTE=permission
+if [ "$MODE" = "question" ]; then
+  # PreToolUse(AskUserQuestion): held until answered in the notch; an empty reply lets the
+  # terminal ask as usual.
+  [ "$TOOL" = "AskUserQuestion" ] || exit 0
+  ROUTE=question
+  TOOL=""
+fi
 case "$TOOL" in
   AskUserQuestion | ExitPlanMode)
     # Needs terminal interaction: only tell the notch, never decide.
@@ -128,7 +136,7 @@ case "$TOOL" in
     exit 0
     ;;
   "")
-    exit 0
+    [ "$ROUTE" = "question" ] || exit 0
     ;;
 esac
 
@@ -142,7 +150,7 @@ trap cleanup EXIT
 trap 'exit 0' HUP INT TERM
 
 curl -s -f --unix-socket "$SOCK" --connect-timeout 1 --max-time "$PERMISSION_MAX_TIME" \
-  "${HEADERS[@]}" --data-binary @- -o "$OUT" http://localhost/permission <<<"$INPUT" \
+  "${HEADERS[@]}" --data-binary @- -o "$OUT" "http://localhost/$ROUTE" <<<"$INPUT" \
   >/dev/null 2>&1 &
 PID=$!
 wait "$PID"

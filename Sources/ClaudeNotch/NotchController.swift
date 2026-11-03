@@ -229,6 +229,7 @@ final class NotchController {
   /// Applies the mode of every surface.
   func refresh() {
     let now = Date()
+    syncQuestionPeek()
     if let peek = planner.current, peek.kind == .permission,
       peek.cardID.flatMap({ store.card(id: $0) }) == nil
     {
@@ -619,7 +620,50 @@ final class NotchController {
     case .panel: if pressed { hotKeyPressed() }
     case .allow: globalShortcut(.allow, pressed ? .down : .up)
     case .deny: globalShortcut(.deny, pressed ? .down : .up)
+    case .timer: if pressed { timerHotKey() }
+    case .shelf: if pressed { shelfHotKey() }
     }
+  }
+
+  /// ⌃⌥P: no timer → a Pomodoro starts; running / paused → pause / resume; a finished
+  /// Pomodoro phase → the next one.
+  private func timerHotKey() {
+    guard settings.timerEnabled else { return }
+    switch modules.timer.state {
+    case .idle: modules.startPomodoro()
+    case .finished:
+      if modules.pomodoro != nil { modules.startNextPhase() } else { modules.startPomodoro() }
+    case .running, .paused: modules.toggleTimer()
+    }
+    let t = modules.timer
+    let title: String = {
+      switch t.state {
+      case .paused: return "Zamanlayıcı duraklatıldı"
+      default: return modules.pomodoro?.phase.isBreak == true ? "Mola sürüyor" : "Odak başladı"
+      }
+    }()
+    moduleNote(
+      ModuleNote(
+        source: .timer, id: "timerkey:\(Date().timeIntervalSince1970)", title: title,
+        subtitle: "⌃⌥P ile duraklat / sürdür",
+        digits: DotClock.countdown(t.remaining(at: Date())),
+        validUntil: Date().addingTimeInterval(5)))
+  }
+
+  /// ⌃⌥V: the newest shelf item back on the clipboard (then ⌘V / ⌃V where you are).
+  private func shelfHotKey() {
+    guard settings.shelfEnabled, let item = modules.shelf.shelf.items.first else { return }
+    modules.shelf.copy(item)
+    let what: String
+    switch item.kind {
+    case .text(let s): what = TextShortener.oneLine(s, limit: 60)
+    case .image(_, _, let w, let h): what = "Görüntü · \(w)×\(h)"
+    case .file(let u): what = u.lastPathComponent
+    }
+    moduleNote(
+      ModuleNote(
+        source: .shelf, id: "shelfkey:\(item.id):\(Date().timeIntervalSince1970)",
+        title: "Panoya kopyalandı", subtitle: what, validUntil: Date().addingTimeInterval(5)))
   }
 
   /// The request the user sees right now: the open panel's card, or the permission peek's.
@@ -1101,6 +1145,58 @@ final class NotchController {
     }
   }
 
+  // MARK: - Shelf to session
+
+  /// The dragged shelf item goes on the clipboard and the session's tab comes forward, so
+  /// ⌃V (Claude Code) or ⌘V pastes it there.
+  private func dropShelf(on sessionID: String) -> Bool {
+    defer { modules.shelf.draggingID = nil }
+    guard let id = modules.shelf.draggingID, let item = modules.shelf.item(id: id) else {
+      return false
+    }
+    modules.shelf.copy(item)
+    Task { @MainActor in _ = await focus(sessionID: sessionID) }
+    return true
+  }
+
+  // MARK: - Questions
+
+  /// Held questions keep their peek up until answered (like a permission card), and a new one
+  /// drops in even when its "question" peek already went back.
+  private var shownQuestions: Set<String> = []
+
+  private func syncQuestionPeek() {
+    let ids = Set(store.questions.map(\.id))
+    shownQuestions.formIntersection(ids)
+    guard expandedID == nil else { return }
+    for q in store.questions where !shownQuestions.contains(q.id) {
+      shownQuestions.insert(q.id)
+      planner.receive(attention: "question", sessionID: q.sessionID, at: Date())
+    }
+    if let cur = planner.current, cur.kind == .attention,
+      let sid = cur.sessionIDs.first, store.question(for: sid) != nil
+    {
+      planner.hold(at: Date(), seconds: settings.peekDuration.seconds ?? 600)
+    }
+  }
+
+  private func answerQuestion(_ id: String, _ answers: [String: [String]]) {
+    guard let q = store.questions.first(where: { $0.id == id }) else { return }
+    guard store.answerQuestion(id: id, answers: answers) else { return }
+    if planner.current?.sessionIDs.first == q.sessionID, planner.current?.kind == .attention {
+      planner.clear()
+    }
+    refresh()
+  }
+
+  private func releaseQuestion(_ id: String) {
+    guard let q = store.questions.first(where: { $0.id == id }) else { return }
+    store.releaseQuestion(id: id)
+    if planner.current?.sessionIDs.first == q.sessionID { planner.clear() }
+    Task { @MainActor in _ = await focus(sessionID: q.sessionID) }
+    refresh()
+  }
+
   // MARK: - Effects
 
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
@@ -1128,7 +1224,7 @@ final class NotchController {
     }
     onAttention?(sessionID, kind)
     if let e = SoundEvent(attention: kind), settings.soundEnabled(e) {
-      NSSound(named: NSSound.Name(e.soundName))?.play()
+      settings.play(settings.soundName(e))
     }
     guard expandedID == nil else { return }
     let cardID = kind == "permission"
@@ -1141,6 +1237,7 @@ final class NotchController {
   private func trackStore() {
     withObservationTracking {
       _ = store.pending.count
+      _ = store.questions.count
       _ = store.attentionCount
       _ = store.workingCount
       _ = store.activeWorkingCount
@@ -1243,7 +1340,10 @@ final class NotchController {
           s.state.bodyHeight[mode] = h
         }
       },
-      ghosttyConsent: { [weak self] in self?.ghosttyConsent(dryRun: false) }
+      ghosttyConsent: { [weak self] in self?.ghosttyConsent(dryRun: false) },
+      answerQuestion: { [weak self] id, answers in self?.answerQuestion(id, answers) },
+      releaseQuestion: { [weak self] id in self?.releaseQuestion(id) },
+      dropShelf: { [weak self] sid in self?.dropShelf(on: sid) ?? false }
     )
   }
 
@@ -1587,6 +1687,11 @@ final class NotchController {
           unit: m["unit"]?.stringValue, level: level, validUntil: Date().addingTimeInterval(60)))
     }
     if json["timer_toggle"] != nil { modules.toggleTimer() }
+    // Debug: answer the oldest held question with the given label(s) for every question.
+    if let label = json["answer_question"]?.stringValue, let q = store.questions.first {
+      let answers = Dictionary(uniqueKeysWithValues: q.questions.map { ($0.question, [label]) })
+      answerQuestion(q.id, answers)
+    }
     if let id = json["select_card"]?.stringValue { selectCard(id) }
     if let id = json["open_card"]?.stringValue { ui.openedCards.insert(id) }
     if let id = json["more_card"]?.stringValue { setMore(id) }

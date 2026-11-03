@@ -19,7 +19,9 @@ struct ModuleStrip: View {
   }
 
   private var showSpotify: Bool { settings.spotifyEnabled && modules.spotify.nowPlaying != nil }
-  private var showShelf: Bool { settings.shelfEnabled && !modules.shelf.shelf.items.isEmpty }
+  private var showShelf: Bool {
+    settings.shelfEnabled && !(modules.shelf.shelf.items.isEmpty && modules.shelf.pinned.isEmpty)
+  }
 
   var body: some View {
     if showCalendar || showTimer || showSpotify || showShelf {
@@ -538,16 +540,25 @@ struct ShelfRow: View {
           .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
         Spacer()
         Button("Temizle") { shelf.clear() }
+          .help("Sabitlenenler kalır")
           .buttonStyle(.plain)
           .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(theme.secondary)
       }
-      HStack(spacing: 6) {
-        ForEach(shelf.shelf.items) { item in
-          ShelfChip(item: item, shelf: shelf)
+      ScrollView(.horizontal) {
+        HStack(spacing: 6) {
+          ForEach(shelf.pinned) { item in
+            ShelfChip(item: item, shelf: shelf)
+          }
+          if !shelf.pinned.isEmpty && !shelf.shelf.items.isEmpty {
+            Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40)
+          }
+          ForEach(shelf.shelf.items) { item in
+            ShelfChip(item: item, shelf: shelf)
+          }
         }
-        Spacer(minLength: 0)
       }
+      .scrollIndicators(.never)
     }
     .padding(.horizontal, 10)
     .padding(.vertical, 8)
@@ -562,6 +573,7 @@ struct ShelfRow: View {
 struct ShelfChip: View {
   let item: ShelfItem
   let shelf: ShelfModule
+  private var pinned: Bool { shelf.isPinned(item.id) }
   @State private var hover = false
   @Environment(\.notchTheme) private var theme
 
@@ -586,22 +598,48 @@ struct ShelfChip: View {
       }
       .overlay(alignment: .topTrailing) {
         if hover {
-          Button { shelf.remove(item.id) } label: {
-            Image(systemName: "xmark")
-              .font(.system(size: 7.5, weight: .bold))
-              .foregroundStyle(theme.ink)
-              .frame(width: 16, height: 16)
-              .background(Circle().fill(Color.black.opacity(0.7)))
+          HStack(spacing: 3) {
+            Button { shelf.togglePin(item) } label: {
+              Image(systemName: pinned ? "pin.slash.fill" : "pin.fill")
+                .font(.system(size: 7.5, weight: .bold))
+                .foregroundStyle(theme.ink)
+                .frame(width: 16, height: 16)
+                .background(Circle().fill(Color.black.opacity(0.7)))
+            }
+            .buttonStyle(.plain)
+            .help(pinned ? "Sabitlemeyi kaldır" : "Sabitle (rafın 6’lık sınırına sayılmaz)")
+            .accessibilityLabel(pinned ? "Sabitlemeyi kaldır" : "Sabitle")
+            if !pinned {
+              Button { shelf.remove(item.id) } label: {
+                Image(systemName: "xmark")
+                  .font(.system(size: 7.5, weight: .bold))
+                  .foregroundStyle(theme.ink)
+                  .frame(width: 16, height: 16)
+                  .background(Circle().fill(Color.black.opacity(0.7)))
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel("Raftan kaldır")
+            }
           }
-          .buttonStyle(.plain)
           .padding(3)
-          .accessibilityLabel("Raftan kaldır")
+        }
+      }
+      .overlay(alignment: .topLeading) {
+        if pinned && !hover {
+          Image(systemName: "pin.fill")
+            .font(.system(size: 7, weight: .bold))
+            .foregroundStyle(Color(hex: 0xC3A8FF))
+            .padding(5)
+            .accessibilityHidden(true)
         }
       }
       .contentShape(shape)
       .onHover { hover = $0 }
       .onTapGesture { shelf.copy(item) }
-      .onDrag { shelf.provider(for: item) }
+      .onDrag {
+        shelf.draggingID = item.id
+        return shelf.provider(for: item)
+      }
       .animation(.easeOut(duration: 0.15), value: shelf.copiedID)
       .help(help)
   }
