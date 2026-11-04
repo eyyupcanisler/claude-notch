@@ -281,6 +281,7 @@ public final class SessionStore {
     }
     apply(context, to: &session)
     adoptDiscovered(context, into: &session, isNew: isNew)
+    if e.name != "SessionEnd" { retireSiblings(of: e.sessionID, pid: context.pid) }
     let before = session.status
     if let agent = e.agentID, e.name != "SubagentStop" {
       let old = session.agents[agent]
@@ -425,6 +426,17 @@ public final class SessionStore {
 
   /// A hook event of a process the scan found earlier: its placeholder goes, the hook session
   /// (its session_id) stays. A new hook session takes the placeholder's place in the line.
+  /// One Claude Code process runs one session at a time: an event from `sessionID` with this
+  /// pid retires any other session of the same process. /clear and /resume start a new session
+  /// id in the same process, and their SessionEnd can be missed (the app was restarting), which
+  /// left the old row alive forever (its pid still owns the tty).
+  private func retireSiblings(of sessionID: String, pid: Int32?) {
+    guard let pid else { return }
+    for s in sessions.values where s.id != sessionID && !s.isDiscovered && s.pid == pid {
+      removeSession(s.id)
+    }
+  }
+
   private func adoptDiscovered(_ context: HookContext, into session: inout Session, isNew: Bool) {
     for placeholder in discoveredMatches(context) where placeholder.id != session.id {
       if isNew { session.startedAt = min(session.startedAt, placeholder.startedAt) }
