@@ -92,14 +92,15 @@ enum Terminals {
     return HookContext.validTTY(r.output)
   }
 
-  /// Tab titles of Ghostty's terminals by tty. Only call when `automationStatus` is granted
-  /// (0): otherwise this would raise the consent prompt without a user action.
-  static func ghosttyTitles() async -> [String: String]? {
+  /// Tab titles of Ghostty's terminals by tty, and each tty's position in Ghostty's tab order
+  /// (window → tab → split). Only call when `automationStatus` is granted (0): otherwise this
+  /// would raise the consent prompt without a user action.
+  static func ghosttyTitles() async -> (titles: [String: String], order: [String: Int])? {
     guard isRunning(ghosttyBundleID),
       let lists = await AppleScriptRunner.runLists(TerminalScript.ghosttyTitles),
       lists.count == 2
     else { return nil }
-    return TabTitle.map(ttys: lists[0], names: lists[1])
+    return (TabTitle.map(ttys: lists[0], names: lists[1]), TabTitle.order(ttys: lists[0]))
   }
 
   /// Automation (Apple Events) permission towards `bundleID` without asking the user:
@@ -146,7 +147,8 @@ enum AppleScriptRunner {
   }
 
   /// Runs a script that returns a list of lists of text (e.g. `{tty of every terminal, name of
-  /// every terminal}`); nil on any error. Items that are not text become "".
+  /// every terminal}`); nil on any error. Items that are not text become "". Nested lists
+  /// (`... of every tab of every window`) are flattened depth first.
   static func runLists(_ source: String) async -> [[String]]? {
     await withCheckedContinuation { cont in
       queue.async {
@@ -163,15 +165,32 @@ enum AppleScriptRunner {
         var out: [[String]] = []
         for i in 1...desc.numberOfItems {
           guard let list = desc.atIndex(i) else { continue }
-          var items: [String] = []
-          if list.numberOfItems > 0 {
-            for j in 1...list.numberOfItems { items.append(list.atIndex(j)?.stringValue ?? "") }
-          }
-          out.append(items)
+          out.append(list.descriptorType == listType ? leaves(of: list) : [list.stringValue ?? ""])
         }
         cont.resume(returning: out)
       }
     }
+  }
+
+  private static let listType = DescType(typeAEList)
+
+  /// Text leaves of a list descriptor, depth first; a missing or non-text item becomes "" so
+  /// parallel lists (ttys, names) stay aligned.
+  private static func leaves(of list: NSAppleEventDescriptor) -> [String] {
+    guard list.numberOfItems > 0 else { return [] }
+    var out: [String] = []
+    for j in 1...list.numberOfItems {
+      guard let item = list.atIndex(j) else {
+        out.append("")
+        continue
+      }
+      if item.descriptorType == listType {
+        out += leaves(of: item)
+      } else {
+        out.append(item.stringValue ?? "")
+      }
+    }
+    return out
   }
 
   /// The consent prompt waits for the user: never on the script queue (a focus script would

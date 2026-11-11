@@ -61,6 +61,8 @@ public final class SessionStore {
   @ObservationIgnored public var onEffect: (@MainActor (StoreEffect) -> Void)?
   @ObservationIgnored public var now: @MainActor () -> Date
   @ObservationIgnored public var probe: ProcessProbe
+  /// Position of each tty in Ghostty's tab order (see `applyTabOrder`); empty when unknown.
+  public private(set) var tabOrder: [String: Int] = [:]
   @ObservationIgnored public private(set) var lastRemovalAt = Date.distantPast
   @ObservationIgnored private var recentPre: [String: [(key: String, at: Date)]] = [:]
   /// Exit watches of the sessions' claude processes (session id -> pid + watch).
@@ -155,6 +157,11 @@ public final class SessionStore {
       let title = s.tty.flatMap { titles[$0] }
       if s.tabTitle != title { sessions[id]?.tabTitle = title }
     }
+  }
+
+  /// Ghostty's tab order by tty (see `TabTitle.order`). Writes only when it changed.
+  public func applyTabOrder(_ order: [String: Int]) {
+    if tabOrder != order { tabOrder = order }
   }
 
   // MARK: - Derived: attention

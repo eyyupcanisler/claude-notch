@@ -270,6 +270,33 @@ final class V4Tests: XCTestCase {
     XCTAssertNil(store.sessions["s20"]?.tabTitle)
   }
 
+  func testListAndLineFollowGhosttyTabOrder() {
+    XCTAssertEqual(
+      TabTitle.order(
+        ttys: ["/dev/ttys003", "bad", "/dev/ttys001", "/dev/ttys003", "", "/dev/ttys002"]),
+      ["/dev/ttys003": 0, "/dev/ttys001": 1, "/dev/ttys002": 2])
+    // Started 1, 2, 3, then one outside Ghostty (no tty).
+    for (pid, tty) in [(Int32(31), "/dev/ttys001"), (32, "/dev/ttys002"), (33, "/dev/ttys003")] {
+      procs.set(pid, tty: tty)
+      store.handleEvent(
+        HookEvent(name: "SessionStart", sessionID: "s\(pid)", cwd: "/Users/x/p\(pid)"),
+        context: HookContext(termProgram: "ghostty", tty: tty, pid: pid))
+    }
+    store.handleEvent(
+      HookEvent(name: "SessionStart", sessionID: "other", cwd: "/Users/x/o"), termProgram: nil)
+    store.handleEvent(
+      HookEvent(name: "PreToolUse", sessionID: "s32", cwd: "/Users/x/p32",
+        toolName: "AskUserQuestion"),
+      termProgram: "ghostty")
+    store.applyTabOrder(["/dev/ttys003": 0, "/dev/ttys001": 1, "/dev/ttys002": 2])
+    // Tab order, whatever the status (s32 waits for an answer); unknown tabs last.
+    XCTAssertEqual(store.displayOrder.map(\.id), ["s33", "s31", "s32", "other"])
+    XCTAssertEqual(store.statusLine.map(\.sessionID), ["s33", "s31", "s32", "other"])
+    // Tab moved in Ghostty: the next read reorders.
+    store.applyTabOrder(["/dev/ttys001": 0, "/dev/ttys002": 1, "/dev/ttys003": 2])
+    XCTAssertEqual(store.displayOrder.map(\.id), ["s31", "s32", "s33", "other"])
+  }
+
   // MARK: - Review fixes
 
   func testDecisionChordsMustNotBeTypedOrAppShortcuts() {

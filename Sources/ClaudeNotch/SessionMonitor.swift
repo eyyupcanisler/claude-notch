@@ -49,7 +49,8 @@ final class SessionMonitor {
     store.applyDiscovery(records)
   }
 
-  /// Reads Ghostty's tab titles, only while Automation is already granted (never prompts).
+  /// Reads Ghostty's tab titles and tab order, only while Automation is already granted (never
+  /// prompts).
   func refreshTabTitles() {
     guard !readingTitles, !store.sessions.isEmpty else { return }
     readingTitles = true
@@ -57,9 +58,10 @@ final class SessionMonitor {
       guard let self else { return }
       defer { self.readingTitles = false }
       guard await self.refreshAutomationStatus() == 0,
-        let titles = await Terminals.ghosttyTitles()
+        let tabs = await Terminals.ghosttyTitles()
       else { return }
-      self.store.applyTabTitles(titles)
+      self.store.applyTabTitles(tabs.titles)
+      self.store.applyTabOrder(tabs.order)
     }
   }
 

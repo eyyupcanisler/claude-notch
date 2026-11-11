@@ -118,7 +118,7 @@ final class NotchLogicTests: XCTestCase {
       top: 956))
   }
 
-  func testDisplayOrderGroupsAndFreeze() {
+  func testDisplayOrderIgnoresStatusAndFreeze() {
     var clock = Date(timeIntervalSince1970: 1000)
     let store = SessionStore(now: { clock })
     func ev(_ name: String, _ sid: String, tool: String? = nil) -> HookEvent {
@@ -135,12 +135,15 @@ final class NotchLogicTests: XCTestCase {
     clock = clock.addingTimeInterval(SessionStore.quietAfter + 1)
     store.handleEvent(ev("PreToolUse", "work", tool: "Bash"), termProgram: nil)
     store.sweep()
-    XCTAssertEqual(store.displayOrder.map(\.id), ["ask", "done", "work", "quiet", "idle"])
+    // No terminal tabs known: creation order, the status does not move a row.
+    XCTAssertEqual(store.displayOrder.map(\.id), ["idle", "work", "done", "quiet", "ask"])
+    XCTAssertEqual(
+      store.displayOrder.map { store.group(of: $0) }, [.idle, .working, .done, .quiet, .needsYou])
     let frozen = store.displayOrder.map(\.id)
     store.handleEvent(ev("Stop", "work"), termProgram: nil)
     store.handleEvent(ev("SessionStart", "new"), termProgram: nil)
     store.handleEvent(ev("SessionEnd", "idle"), termProgram: nil)
     let shown = SessionStore.applyFrozen(frozen, to: store.displayOrder).map(\.id)
-    XCTAssertEqual(shown, ["ask", "done", "work", "quiet", "new"])
+    XCTAssertEqual(shown, ["work", "done", "quiet", "ask", "new"])
   }
 }

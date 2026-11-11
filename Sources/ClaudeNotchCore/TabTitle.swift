@@ -52,14 +52,27 @@ public enum TabTitle {
     }
     return out
   }
+
+  /// Position of each tty in Ghostty's tab order (the order of `ttys`); invalid ttys are
+  /// skipped, the first position of a tty wins.
+  public static func order(ttys: [String]) -> [String: Int] {
+    var out: [String: Int] = [:]
+    for tty in ttys {
+      guard let tty = HookContext.validTTY(tty), out[tty] == nil else { continue }
+      out[tty] = out.count
+    }
+    return out
+  }
 }
 
 extension TerminalScript {
-  /// Ghostty: the ttys and the titles of every terminal, as a list of two lists.
+  /// Ghostty: the ttys and the titles of every terminal in tab order (window → tab → split),
+  /// as two (nested) lists. `every terminal` alone is not in tab order.
   public static let ghosttyTitles = """
     with timeout of \(timeoutSeconds) seconds
       tell application "Ghostty"
-        return {tty of every terminal, name of every terminal}
+        return {tty of every terminal of every tab of every window, \
+    name of every terminal of every tab of every window}
       end tell
     end timeout
     """

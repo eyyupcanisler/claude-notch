@@ -624,11 +624,10 @@ extension SessionStore {
     }
   }
 
-  /// One segment per session in creation order (a segment never moves when its session changes
+  /// One segment per session in tab order (a segment never moves when its session changes
   /// state); with more than `maxLineSegments` sessions the most urgent ones are shown.
   public var statusLine: [LineSegment] {
-    let byAge = sessions.values.sorted { ($0.startedAt, $0.id) < ($1.startedAt, $1.id) }
-    var picked = byAge.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
+    var picked = tabOrdered.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
     if picked.count > Self.maxLineSegments {
       let rank = Dictionary(uniqueKeysWithValues: picked.enumerated().map { ($1.sessionID, $0) })
       let key = { (x: LineSegment) in (x.state.priority, rank[x.sessionID] ?? 0) }
@@ -658,13 +657,16 @@ extension SessionStore {
     }
   }
 
-  /// needs-you, done, working, quiet, idle; creation order inside a group.
-  public var displayOrder: [Session] {
-    sessions.values.sorted {
-      let a = group(of: $0)
-      let b = group(of: $1)
-      if a != b { return a < b }
-      return ($0.startedAt, $0.id) < ($1.startedAt, $1.id)
+  /// The panel list: same order as the terminal tabs (`tabOrdered`), whatever the status; the
+  /// status shows on the row (`group(of:)`), it does not move the row.
+  public var displayOrder: [Session] { tabOrdered }
+
+  /// Ghostty tab order (by tty, see `applyTabOrder`); sessions not in a known tab follow, in
+  /// creation order.
+  public var tabOrdered: [Session] {
+    let pos = { (s: Session) in s.tty.flatMap { self.tabOrder[$0] } ?? Int.max }
+    return sessions.values.sorted {
+      (pos($0), $0.startedAt, $0.id) < (pos($1), $1.startedAt, $1.id)
     }
   }
 
