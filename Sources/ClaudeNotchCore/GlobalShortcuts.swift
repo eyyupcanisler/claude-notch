@@ -209,3 +209,15 @@ public enum JumpTarget {
     return newestUnseen { if case .done = $0 { return true } else { return false } }
   }
 }
+
+// MARK: - Key labels
+
+/// Uppercasing a key's character for its label. Every language uppercases ASCII the same way
+/// except `i` (Turkish and Azeri give `İ`); other scripts have their own rules (Greek accents,
+/// Lithuanian, Armenian). Only those need the keyboard layout's language, whose lookup makes
+/// macOS build ICU character sets (about 0.6 MB, kept for the life of the process).
+public enum KeyLabelCase {
+  public static func needsLayoutLocale(_ character: String) -> Bool {
+    character.unicodeScalars.contains { !$0.isASCII || $0 == "i" }
+  }
+}

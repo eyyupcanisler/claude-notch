@@ -66,6 +66,17 @@ public enum LanguageChoice: String, CaseIterable, Sendable {
   public func apply(to appDomain: UserDefaults, macPreferred: [String] = macPreferredLanguages) {
     appDomain.set(appleLanguages(macPreferred: macPreferred), forKey: "AppleLanguages")
   }
+
+  /// Sets `AppleLanguages` for this launch only: in the argument domain of `defaults`, as a
+  /// `-AppleLanguages` launch argument would, so nothing is saved. Demo mode uses it: the demo
+  /// shares the bundle id, so `apply` would write the installed app's own settings.
+  public func applyForThisLaunch(
+    to defaults: UserDefaults, macPreferred: [String] = macPreferredLanguages
+  ) {
+    var args = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    args["AppleLanguages"] = appleLanguages(macPreferred: macPreferred)
+    defaults.setVolatileDomain(args, forName: UserDefaults.argumentDomain)
+  }
 }
 
 /// The language the app's UI resolved to: the one `LanguageChoice` set at launch (by default

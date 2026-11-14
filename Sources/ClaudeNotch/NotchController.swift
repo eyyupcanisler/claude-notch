@@ -52,6 +52,9 @@ final class NotchController {
   private var menuOpen = false
   /// Debug: keeps forced modes (no peek expiry, no hover collapse).
   private var debugFreeze = false
+  /// Debug: module notes fired since launch, by source (scripts/measure-memory.sh records
+  /// whether a calendar reminder fired during a run).
+  private var debugNotesFired: [String: Int] = [:]
   /// Debug: pretend the active screen is this display.
   /// Demo recordings stay on the notch screen (the recorded one), wherever the pointer is.
   private var forcedActiveID: CGDirectDisplayID? = NotchSettings.isDemo
@@ -1330,6 +1333,7 @@ final class NotchController {
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
   /// Claude peek (the planner queues it).
   private func moduleNote(_ note: ModuleNote) {
+    debugNotesFired[note.source.rawValue, default: 0] += 1
     guard expandedID == nil, !focusQuiet else { return }
     if planner.receive(module: note, at: Date()) { refresh() }
   }
@@ -1686,6 +1690,7 @@ final class NotchController {
     return .object([
       "surfaces": .array(surf), "active_display": activeID.map { .int(Int($0)) } ?? .null,
       "expanded_display": expandedID.map { .int(Int($0)) } ?? .null, "peek": peek,
+      "module_notes": .object(debugNotesFired.mapValues { .int($0) }),
       "display_mode": .string(settings.displayMode.rawValue),
       "density": .string(settings.density.rawValue), "pinned": .bool(ui.pinned),
       "key_mode": .bool(ui.keyMode),

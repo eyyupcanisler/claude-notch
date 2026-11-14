@@ -64,16 +64,3 @@ public enum TabTitle {
     return out
   }
 }
-
-extension TerminalScript {
-  /// Ghostty: the ttys and the titles of every terminal in tab order (window → tab → split),
-  /// as two (nested) lists. `every terminal` alone is not in tab order.
-  public static let ghosttyTitles = """
-    with timeout of \(timeoutSeconds) seconds
-      tell application "Ghostty"
-        return {tty of every terminal of every tab of every window, \
-    name of every terminal of every tab of every window}
-      end tell
-    end timeout
-    """
-}

@@ -180,7 +180,7 @@ enum KeyLayout {
   static func label(keyCode: UInt32) -> String {
     if let s = special[Int(keyCode)] { return s }
     guard let c = character(keyCode: keyCode), !c.isEmpty else { return "#\(keyCode)" }
-    return c.uppercased(with: layoutLocale)
+    return KeyLabelCase.needsLayoutLocale(c) ? c.uppercased(with: layoutLocale) : c.uppercased()
   }
 
   /// Casing follows the keyboard layout's language, not the UI language: on Turkish-Q the `i`

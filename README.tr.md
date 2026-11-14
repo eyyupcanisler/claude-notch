@@ -165,8 +165,9 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   çıkınca satır kalkar. `SessionEnd`'den sonraki 10 sn yeniden
   keşfedilmez (/clear).
 - **Sekme adı (Ghostty):** Ghostty için Otomasyon izni **zaten verilmişse** (uygulama izni
-  kendiliğinden sormaz) panel açılınca ve oturum varken ~15 sn'de bir tek bir AppleScript
-  çağrısıyla (`tty` ve `name of every terminal`) sekme adları okunur. Ad satırın ikincil
+  kendiliğinden sormaz) panel açılınca ve oturum varken ~15 sn'de bir iki ham Apple Event
+  `get` isteğiyle (her terminalin `tty` ve `name` değeri; AppleScript derlenmez) sekme adları
+  okunur. Ad satırın ikincil
   metni olur ve aynı projedeki oturumları ayırt eder (ad da aynıysa dal / tty eki eklenir).
   Kontrol, çift yönlü ve görünmez karakterler atılır, Claude Code'un baştaki dönen / durum
   simgesi (⠂ ◐ ✳) silinir, uzun adın ortası kısaltılır. İzin yoksa eski ayırt edici (dal, tty

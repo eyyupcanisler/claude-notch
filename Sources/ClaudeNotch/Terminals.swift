@@ -84,20 +84,21 @@ enum Terminals {
     return app == .activated ? .activatedApp : .failed
   }
 
-  /// tty of Ghostty's focused terminal. Only call when `automationStatus` is granted (0):
-  /// otherwise this would raise the consent prompt without a user action.
+  /// tty of Ghostty's focused terminal (raw Apple Event, no AppleScript). Only call when
+  /// `automationStatus` is granted (0); the event itself never asks for consent.
   static func focusedGhosttyTTY() async -> String? {
-    guard isRunning(ghosttyBundleID) else { return nil }
-    let r = await AppleScriptRunner.run(TerminalScript.ghosttyFocusedTTY, reuse: true)
-    return HookContext.validTTY(r.output)
+    guard isRunning(ghosttyBundleID),
+      let texts = await AppleScriptRunner.get({ [GhosttyQuery.focusedTTY()] }, from: ghosttyBundleID)
+    else { return nil }
+    return HookContext.validTTY(texts.first?.first)
   }
 
   /// Tab titles of Ghostty's terminals by tty, and each tty's position in Ghostty's tab order
-  /// (window → tab → split). Only call when `automationStatus` is granted (0): otherwise this
-  /// would raise the consent prompt without a user action.
+  /// (window → tab → split), read with raw Apple Events (no AppleScript). Only call when
+  /// `automationStatus` is granted (0); the events themselves never ask for consent.
   static func ghosttyTitles() async -> (titles: [String: String], order: [String: Int])? {
     guard isRunning(ghosttyBundleID),
-      let lists = await AppleScriptRunner.runLists(TerminalScript.ghosttyTitles, reuse: true),
+      let lists = await AppleScriptRunner.get(GhosttyQuery.titles, from: ghosttyBundleID),
       lists.count == 2
     else { return nil }
     return (TabTitle.map(ttys: lists[0], names: lists[1]), TabTitle.order(ttys: lists[0]))
@@ -121,8 +122,8 @@ struct ScriptResult: Sendable {
   var errorCode: Int?
 }
 
-/// Runs AppleScript in-process on one serial queue (never on the main thread: an Apple Event
-/// to a busy terminal blocks until it answers or times out).
+/// Runs AppleScript and raw Apple Events in-process on one serial queue (never on the main
+/// thread: an Apple Event to a busy terminal blocks until it answers or times out).
 enum AppleScriptRunner {
   private static let queue = DispatchQueue(
     label: "com.eyyupcan.claudenotch.applescript", qos: .userInitiated)
@@ -143,7 +144,9 @@ enum AppleScriptRunner {
     guard script.compileAndReturnError(&error) else {
       return (nil, (error?[NSAppleScript.errorNumber] as? NSNumber)?.intValue ?? -1)
     }
-    compiled[source] = script
+    // Fixed sources only, so this never fills up; the cap is a guard against a reused source
+    // that is built from a variable by mistake.
+    if compiled.count < 16 { compiled[source] = script }
     return (script, nil)
   }
 
@@ -161,6 +164,9 @@ enum AppleScriptRunner {
         let desc = script.executeAndReturnError(&error)
         if let error {
           let code = (error[NSAppleScript.errorNumber] as? NSNumber)?.intValue ?? -1
+          // A cached script that fails for another reason than a missing Automation grant
+          // (for example after Spotify quit and relaunched) is compiled again next time.
+          if reuse, code != -1743, code != -1744 { compiled[source] = nil }
           cont.resume(returning: ScriptResult(output: nil, errorCode: code))
         } else {
           cont.resume(returning: ScriptResult(output: desc.stringValue, errorCode: nil))
@@ -169,52 +175,39 @@ enum AppleScriptRunner {
     }
   }
 
-  /// Runs a script that returns a list of lists of text (e.g. `{tty of every terminal, name of
-  /// every terminal}`); nil on any error. Items that are not text become "". Nested lists
-  /// (`... of every tab of every window`) are flattened depth first. `reuse` as in `run`.
-  static func runLists(_ source: String, reuse: Bool = false) async -> [[String]]? {
+  /// Sends one `get` Apple Event per specifier to the running app `bundleID` and returns each
+  /// reply as text (`AEQuery.texts`); nil on any error. Raw events, not AppleScript: nothing is
+  /// compiled, so there is no XProtect scan and the AppleScript component is not loaded for
+  /// them. Same 4 s timeout as the scripts. `kAEDoNotPromptForUserConsent`: a missing
+  /// Automation grant fails (-1744) instead of asking. The specifiers are built on the queue
+  /// (descriptors are not Sendable).
+  static func get(
+    _ specifiers: @escaping @Sendable () -> [NSAppleEventDescriptor], from bundleID: String
+  ) async -> [[String]]? {
     await withCheckedContinuation { cont in
       queue.async {
-        guard let script = Self.script(source, reuse: reuse).0 else {
-          cont.resume(returning: nil)
-          return
-        }
-        var error: NSDictionary?
-        let desc = script.executeAndReturnError(&error)
-        guard error == nil, desc.numberOfItems > 0 else {
-          cont.resume(returning: nil)
-          return
-        }
         var out: [[String]] = []
-        for i in 1...desc.numberOfItems {
-          guard let list = desc.atIndex(i) else { continue }
-          out.append(list.descriptorType == listType ? leaves(of: list) : [list.stringValue ?? ""])
+        for specifier in specifiers() {
+          let event = AEQuery.get(specifier, bundleID: bundleID)
+          guard
+            let reply = try? event.sendEvent(
+              options: [.waitForReply, .neverInteract, doNotPrompt],
+              timeout: TimeInterval(TerminalScript.timeoutSeconds)),
+            (reply.paramDescriptor(forKeyword: keyErrorNumber)?.int32Value ?? 0) == 0,
+            let value = reply.paramDescriptor(forKeyword: keyDirectObject)
+          else {
+            cont.resume(returning: nil)
+            return
+          }
+          out.append(AEQuery.texts(of: value))
         }
         cont.resume(returning: out)
       }
     }
   }
 
-  private static let listType = DescType(typeAEList)
-
-  /// Text leaves of a list descriptor, depth first; a missing or non-text item becomes "" so
-  /// parallel lists (ttys, names) stay aligned.
-  private static func leaves(of list: NSAppleEventDescriptor) -> [String] {
-    guard list.numberOfItems > 0 else { return [] }
-    var out: [String] = []
-    for j in 1...list.numberOfItems {
-      guard let item = list.atIndex(j) else {
-        out.append("")
-        continue
-      }
-      if item.descriptorType == listType {
-        out += leaves(of: item)
-      } else {
-        out.append(item.stringValue ?? "")
-      }
-    }
-    return out
-  }
+  /// kAEDoNotPromptForUserConsent (AEDataModel.h), not in SendOptions.
+  private static let doNotPrompt = NSAppleEventDescriptor.SendOptions(rawValue: 0x0002_0000)
 
   /// The consent prompt waits for the user: never on the script queue (a focus script would
   /// stall behind it).

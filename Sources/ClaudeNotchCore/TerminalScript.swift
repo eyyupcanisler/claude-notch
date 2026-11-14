@@ -66,12 +66,6 @@ public enum TerminalScript {
     """)
   }
 
-  /// Ghostty: tty of the focused terminal of the front window ("" when there is no window).
-  public static let ghosttyFocusedTTY = wrap("Ghostty", """
-      if (count of windows) is 0 then return ""
-      return tty of (focused terminal of (selected tab of front window))
-  """)
-
   /// Terminal.app: select the tab whose tty matches and bring its window to the front.
   public static func terminalAppFocus(tty: String) -> String? {
     guard let tty = HookContext.validTTY(tty) else { return nil }

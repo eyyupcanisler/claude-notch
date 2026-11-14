@@ -195,7 +195,6 @@ final class V2Tests: XCTestCase {
     let sources = [
       TerminalScript.ghosttyFocus(tty: "/dev/ttys012"),
       TerminalScript.ghosttyFocus(directory: "/tmp/a \"b\""),
-      TerminalScript.ghosttyFocusedTTY,
       TerminalScript.terminalAppFocus(tty: "/dev/ttys012")
     ]
     for (i, src) in sources.enumerated() {

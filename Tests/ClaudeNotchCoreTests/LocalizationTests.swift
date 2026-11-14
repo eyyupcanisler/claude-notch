@@ -206,6 +206,26 @@ final class LocalizationTests: XCTestCase {
     XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
   }
 
+  /// The demo's language (`applyForThisLaunch`) is read like a saved one but is never saved:
+  /// the demo shares the installed app's settings domain.
+  func testLanguageForThisLaunchIsNotSaved() throws {
+    let scratch = try ScratchDefaults("test.claudenotch.language.launch")
+    let defaults = scratch.defaults
+    let before = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    defer {
+      defaults.setVolatileDomain(before, forName: UserDefaults.argumentDomain)
+      scratch.remove()
+    }
+    LanguageChoice.turkish.applyForThisLaunch(to: defaults, macPreferred: ["en-US"])
+    XCTAssertEqual(
+      defaults.volatileDomain(forName: UserDefaults.argumentDomain)["AppleLanguages"]
+        as? [String], ["tr"])
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["tr"])
+    XCTAssertNil(defaults.object(forKey: LanguageChoice.defaultsKey))
+    XCTAssertNil(
+      defaults.persistentDomain(forName: scratch.name)?["AppleLanguages"])
+  }
+
   /// Only the first of the Mac's languages counts, in any spelling macOS uses.
   func testSystemCodeReadsTheFirstMacLanguage() {
     XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["tr"]), "tr")
