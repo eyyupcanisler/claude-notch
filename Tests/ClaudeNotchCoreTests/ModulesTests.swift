@@ -108,7 +108,7 @@ final class ModulesTests: XCTestCase {
   func testUntilText() {
     XCTAssertEqual(CalendarReminder.untilText(ev("a", start: 600), now: t0).digits, "10")
     XCTAssertEqual(CalendarReminder.untilText(ev("a", start: 61), now: t0).digits, "2")
-    XCTAssertEqual(CalendarReminder.untilText(ev("a", start: 7300), now: t0).unit, "sa")
+    XCTAssertEqual(CalendarReminder.untilText(ev("a", start: 7300), now: t0).unit, "h")
   }
 
   // MARK: Timer
@@ -236,7 +236,7 @@ final class WeatherTests: XCTestCase {
     XCTAssertEqual(w?.rainChances.count, 3)
     XCTAssertEqual(w?.rainSoon(now: t0)?.1, 70)
     XCTAssertNil(w?.rainSoon(now: t0, window: 3600))
-    XCTAssertEqual(WeatherNow.describe(code: 63, isDay: true).text, "Yağmurlu")
+    XCTAssertEqual(WeatherNow.describe(code: 63, isDay: true).text, "Rainy")
   }
 
   func testNoRainAlertWhileAlreadyWet() {

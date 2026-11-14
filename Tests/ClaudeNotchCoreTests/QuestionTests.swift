@@ -47,6 +47,6 @@ final class QuestionActivityTests: XCTestCase {
     let json = #"{"questions":[{"question":"Hangi düzen?","header":"D","options":[{"label":"A"}]}]}"#
     let input = JSONValue.parse(Data(json.utf8))
     XCTAssertEqual(
-      ToolSummary.target(toolName: "AskUserQuestion", input: input), "Soru: Hangi düzen?")
+      ToolSummary.target(toolName: "AskUserQuestion", input: input), "Question: Hangi düzen?")
   }
 }

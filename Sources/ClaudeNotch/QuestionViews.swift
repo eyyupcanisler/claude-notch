@@ -2,7 +2,7 @@ import ClaudeNotchCore
 import SwiftUI
 
 /// Answers a held `AskUserQuestion` in the notch: one question at a time, its options as
-/// buttons (tap selects; a multi-select question toggles), then "Gönder". Keys do the same:
+/// buttons (tap selects; a multi-select question toggles), then "Send". Keys do the same:
 /// ⌃⌥1…4 pick, ⌃⌥Y goes on / sends, ⌃⌥N hands it to the terminal. Buttons and keys arm 0.8 s
 /// after the question appears, so a click or key meant for something else never answers it.
 /// The state lives in `NotchUIState` (the peek, the panel row and the keys share it).
@@ -41,7 +41,7 @@ struct QuestionAnswerView: View {
             .foregroundStyle(theme.tertiary)
         }
         if current.multiSelect {
-          Text("birden çok seçilebilir").font(.system(size: 10)).foregroundStyle(theme.tertiary)
+          Text("select one or more").font(.system(size: 10)).foregroundStyle(theme.tertiary)
         }
       }
       Text(current.question)
@@ -59,15 +59,15 @@ struct QuestionAnswerView: View {
       }
       HStack(spacing: 6) {
         Button { actions.releaseQuestion(question.id) } label: {
-          keyed("Terminalde yanıtla", key: denyKey, primary: false)
+          keyed(loc("Answer in terminal"), key: denyKey, primary: false)
         }
         .buttonStyle(.plain)
         Spacer(minLength: 0)
         if index > 0 {
-          SmallButton(title: "Geri", style: .secondary) { actions.questionBack(question.id) }
+          SmallButton(title: loc("Back"), style: .secondary) { actions.questionBack(question.id) }
         }
         Button { actions.questionNext(question.id) } label: {
-          keyed(isLast ? "Gönder" : "Sonraki", key: allowKey, primary: true)
+          keyed(isLast ? loc("Send") : loc("Next"), key: allowKey, primary: true)
         }
         .buttonStyle(.plain)
         .disabled(picked.isEmpty || !armed)
@@ -81,7 +81,7 @@ struct QuestionAnswerView: View {
     }
   }
 
-  /// A button face with its global key ("Gönder ⌃⌥Y").
+  /// A button face with its global key ("Send ⌃⌥Y").
   private func keyed(_ title: String, key: String?, primary: Bool) -> some View {
     HStack(spacing: 5) {
       Text(title).font(.system(size: 11.5, weight: .semibold))

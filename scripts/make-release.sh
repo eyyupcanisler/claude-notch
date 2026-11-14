@@ -6,13 +6,13 @@
 set -eu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-VERSION="${1:?Sürüm gerekli, ör. 1.0.0}"
+VERSION="${1:?Version required, e.g. 1.0.0}"
 DRAFT="${2:-}"
 TAG="v$VERSION"
 DIST="$ROOT/dist"
 ZIP="$DIST/ClaudeNotch-$VERSION.zip"
 
-[ -z "$(git status --porcelain)" ] || { echo "Önce değişiklikleri commit'leyin." >&2; exit 1; }
+[ -z "$(git status --porcelain)" ] || { echo "Commit your changes first." >&2; exit 1; }
 CLAUDE_NOTCH_VERSION="$VERSION" scripts/build-app.sh
 mkdir -p "$DIST"
 rm -f "$ZIP"
@@ -25,13 +25,13 @@ echo "$ZIP  $SUM"
 
 NOTES_FILE="$DIST/notes-$VERSION.md"
 cat > "$NOTES_FILE" <<NOTES_EOF
-**Kurulum / Install**
+**Install**
 
-1. \`ClaudeNotch-$VERSION.zip\` dosyasını indir, aç, **ClaudeNotch.app**'i **Applications** (ya da ~/Applications) klasörüne taşı.
-2. İlk açılışta macOS uygulamayı engeller (Apple Developer ID ile imzalı değil): **System Settings → Privacy & Security → Open Anyway**. Ya da Terminal'de: \`xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app\`
-3. Spotlight'tan **ClaudeNotch**'ı tekrar aç → Ayarlar → **Genel → Claude Code bağlantısı → Kancaları kur**.
+1. Download \`ClaudeNotch-$VERSION.zip\`, unzip it and move **ClaudeNotch.app** to **Applications** (or ~/Applications).
+2. On first launch macOS blocks the app (it is not signed with an Apple Developer ID): **System Settings → Privacy & Security → Open Anyway**. Or in Terminal: \`xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app\`
+3. Open **ClaudeNotch** again from Spotlight → Settings → **General → Claude Code connection → Install hooks**.
 
-Gereksinim: macOS 14+ (macOS 14'te \`brew install jq\`), Claude Code.
+Requires: macOS 14+ (on macOS 14, \`brew install jq\`), Claude Code.
 
 SHA-256: \`$SUM\`
 NOTES_EOF

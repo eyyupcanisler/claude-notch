@@ -195,7 +195,7 @@ public enum GoogleCalendar {
         join = URL(string: uri)
       }
       if let j = join, j.scheme != "https" { join = nil }
-      let title = (e["summary"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Etkinlik"
+      let title = (e["summary"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? loc("Event")
       // reminders.useDefault: the calendar's defaults; else the event's overrides (possibly
       // none: the event asked for no reminder).
       let rem = e["reminders"] as? [String: Any]

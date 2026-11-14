@@ -26,7 +26,7 @@ public enum ShortcutAction: Sendable, Equatable {
   case pageDown(String)
   /// Risky request: start the hold (the decision comes when the hold completes).
   case holdStart(String)
-  /// The allow key came up before the hold completed: only the "Basılı tut" hint.
+  /// The allow key came up before the hold completed: only the "Hold" hint.
   case holdCancel(String)
   case allow(String)
   case deny(String)
@@ -124,7 +124,7 @@ public struct GlobalKeyLatch: Sendable {
   }
 }
 
-/// Which modifier sets a decision shortcut (İzin ver / Reddet) may use. Such a chord acts from
+/// Which modifier sets a decision shortcut (Allow / Deny) may use. Such a chord acts from
 /// every app, so it must never be something people type or press for other reasons:
 /// - ⌥ / ⌥⇧ alone types characters (⌥Q is @ on Turkish-Q),
 /// - ⌘ / ⌘⇧ alone is an app shortcut (⌘V, ⌘⇧Z ...),
@@ -136,7 +136,7 @@ public enum DecisionChord {
     return command && option
   }
 
-  public static let error =
-    "İzin ver ve Reddet için ⌃ ile birlikte bir değiştirici daha (ör. ⌃⌥) ya da ⌘⌥ kullanın; "
-    + "tek ⌥ karakter yazar, tek ⌘ uygulama kısayoludur, tek ⌃ terminal tuşudur."
+  public static var error: String {
+    loc("For Allow and Deny, use ⌃ with one more modifier (e.g. ⌃⌥) or ⌘⌥; ⌥ alone types characters, ⌘ alone is an app shortcut, ⌃ alone is a terminal key.")
+  }
 }

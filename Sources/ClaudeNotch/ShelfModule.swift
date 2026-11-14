@@ -24,7 +24,7 @@ final class ShelfModule {
   private static var pinIndex: URL { pinFolder.appendingPathComponent("pins.json") }
   /// Small previews of image items, by item id.
   private(set) var previews: [String: NSImage] = [:]
-  /// The item just copied back from the shelf (a short "Kopyalandı" on its chip).
+  /// The item just copied back from the shelf (a short "Copied" on its chip).
   private(set) var copiedID: String?
   /// The chip being dragged (a session row accepts only shelf drags).
   @ObservationIgnored var draggingID: String?
@@ -33,7 +33,7 @@ final class ShelfModule {
     pinned.first { $0.id == id } ?? shelf.items.first { $0.id == id }
   }
 
-  /// A new image arrived (the controller shows "Rafa eklendi").
+  /// A new image arrived (the controller shows "Added to the shelf").
   @ObservationIgnored var onImage: (@MainActor (ShelfItem) -> Void)?
   @ObservationIgnored private var timer: Timer?
   @ObservationIgnored private var lastChange = NSPasteboard.general.changeCount

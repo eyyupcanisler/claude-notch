@@ -9,10 +9,10 @@ import Observation
 //   sessions[id] / orderedSessions   Stable order: needs-you (card, question, plan, waiting,
 //                                    unseen error) > done-unseen > working/quiet > rest; inside
 //                                    a group by start time. sortedSessions = most recent first.
-//   Session.status                   idle | working(tool) | quiet ("Sessiz", 10 min without
+//   Session.status                   idle | working(tool) | quiet ("Quiet", 10 min without
 //                                    events) | done(msg) | waitingInput(msg) |
 //                                    question(text, options) | planApproval(summary) | error(msg).
-//                                    .label is the Turkish label, .kind a stable string.
+//                                    .label is the localized label, .kind a stable string.
 //   Session.unseen / isDoneUnseen    done (or error) the user has not looked at yet.
 //   Session.tty / pid / branch       Identity from the hook (validated). ttySuffix = "s012".
 //   Session.activeAgents             Subagents seen recently (agent_id / agent_type / tool).
@@ -338,14 +338,14 @@ public final class SessionStore {
     case "Stop":
       flushPending(e.sessionID, agentID: e.agentID)
       session.agents = [:]
-      setStatus(&session, .done(Self.clean(e.lastAssistantMessage, fallback: "Tamamlandı")), at: t)
+      setStatus(&session, .done(Self.clean(e.lastAssistantMessage, fallback: loc("Completed"))), at: t)
       session.unseen = true
       announce(e.sessionID, "done", sound: "Glass")
     case "StopFailure":
       flushPending(e.sessionID, agentID: e.agentID)
       session.agents = [:]
       let text = e.errorText ?? e.lastAssistantMessage
-      setStatus(&session, .error(Self.clean(text, fallback: "Bir hata oluştu")), at: t)
+      setStatus(&session, .error(Self.clean(text, fallback: loc("An error occurred"))), at: t)
       session.unseen = true
       announce(e.sessionID, "error", sound: "Basso")
     case "Notification":
@@ -353,7 +353,7 @@ public final class SessionStore {
     case "PermissionRequest":
       // Forwarded as an event by the bridge: the tool needs interaction in the terminal.
       let status = interactiveStatus(e)
-        ?? .waitingInput("Girdi bekliyor: \(e.toolName ?? "araç")")
+        ?? .waitingInput(loc("Waiting for input: \(e.toolName ?? loc("tool"))"))
       setStatus(&session, status, at: t)
     case "SubagentStart":
       break
@@ -378,7 +378,7 @@ public final class SessionStore {
     switch e.toolName {
     case "AskUserQuestion":
       let q = e.question
-      let text = q?.text.isEmpty == false ? q?.text ?? "" : "Claude bir soru soruyor"
+      let text = q?.text.isEmpty == false ? q?.text ?? "" : loc("Claude is asking a question")
       return .question(text: text, options: q?.options ?? [])
     case "ExitPlanMode":
       return .planApproval(e.planSummary)
@@ -389,7 +389,7 @@ public final class SessionStore {
 
   private func handleNotification(_ e: HookEvent, session: inout Session, at t: Date) {
     let type = e.notificationType ?? ""
-    let text = Self.clean(e.message ?? e.title, fallback: "Girdi bekliyor")
+    let text = Self.clean(e.message ?? e.title, fallback: loc("Waiting for input"))
     switch type {
     case "permission_prompt":
       // The card (or the question / plan dialog) already says it.
@@ -546,7 +546,7 @@ public final class SessionStore {
     return true
   }
 
-  /// Denies every card of the session in one step ("Tümünü reddet"). The per-card arm guard
+  /// Denies every card of the session in one step ("Deny all"). The per-card arm guard
   /// after a removal must not stop cards 2...N of an explicit bulk action. Returns the count.
   @discardableResult
   public func denyAll(sessionID: String, message: String = PermissionDecision.defaultDenyMessage)

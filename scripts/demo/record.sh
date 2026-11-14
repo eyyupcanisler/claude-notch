@@ -96,7 +96,7 @@ wait "$REC" || true
 kill "$BACK" 2>/dev/null || true
 
 mkdir -p "$OUT"
-echo "kayıt: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$TMP/demo.mov") sn"
+echo "recording: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$TMP/demo.mov") s"
 ffmpeg -loglevel error -y -i "$TMP/demo.mov" \
   -vf "fps=18,scale=680:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle" \
   "$OUT/demo.gif"

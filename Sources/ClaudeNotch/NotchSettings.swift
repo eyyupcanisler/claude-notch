@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import Foundation
 import Observation
 
@@ -12,9 +13,9 @@ enum DisplayMode: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .automatic: return "Otomatik"
-    case .notchOnly: return "Sadece çentikli"
-    case .all: return "Tümü"
+    case .automatic: return loc("Automatic")
+    case .notchOnly: return loc("Notched screen only")
+    case .all: return loc("All screens")
     }
   }
 }
@@ -25,8 +26,8 @@ enum Density: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .compact: return "Kompakt"
-    case .rich: return "Zengin"
+    case .compact: return loc("Compact")
+    case .rich: return loc("Rich")
     }
   }
 }
@@ -40,10 +41,10 @@ enum SoundEvent: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .permission: return "İzin isteği"
-    case .question: return "Soru ve girdi bekleme"
-    case .done: return "Bitti"
-    case .error: return "Hata"
+    case .permission: return loc("Permission request")
+    case .question: return loc("Question or waiting for input")
+    case .done: return loc("Done")
+    case .error: return loc("Error")
     }
   }
 
@@ -85,10 +86,10 @@ enum PeekDuration: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .short: return "8 sn"
-    case .normal: return "15 sn"
-    case .long: return "30 sn"
-    case .untilAnswered: return "Yanıtlanana kadar"
+    case .short: return loc("8 s")
+    case .normal: return loc("15 s")
+    case .long: return loc("30 s")
+    case .untilAnswered: return loc("Until answered")
     }
   }
 }
@@ -132,7 +133,7 @@ final class NotchSettings {
   }
   /// Global shortcuts (missing role: the default).
   private(set) var shortcuts: [HotKeyRole: KeyCombo]
-  /// The one-time "⌃⌥Y izin ver · ⌃⌥N reddet" line under the peek was used / dismissed.
+  /// The one-time "⌃⌥Y allow · ⌃⌥N deny" line under the peek was used / dismissed.
   var shortcutHintSeen: Bool {
     didSet { defaults.set(shortcutHintSeen, forKey: "shortcutHintSeen") }
   }

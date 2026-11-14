@@ -102,7 +102,7 @@ public struct HookEvent: Sendable, Equatable {
 
   public var projectName: String {
     let last = (cwd as NSString).lastPathComponent
-    return last.isEmpty || last == "/" ? "Oturum" : last
+    return last.isEmpty || last == "/" ? loc("Session") : last
   }
 }
 
@@ -156,16 +156,16 @@ public enum ToolSummary {
     switch toolName {
     case "Write":
       guard let content = field("content") else { return nil }
-      return sanitize("içerik (\(content.count) karakter): \(content)", limit: 4000)
+      return sanitize(loc("content (\(content.count) characters): \(content)"), limit: 4000)
     case "Edit":
       guard let old = field("old_string"), let new = field("new_string") else { return nil }
-      return sanitize("eski: \(old)\nyeni: \(new)", limit: 4000)
+      return sanitize(loc("old: \(old)\nnew: \(new)"), limit: 4000)
     case "MultiEdit":
       guard let edits = input?["edits"], edits != .null else { return nil }
-      return sanitize("düzenlemeler: \(edits.canonical())", limit: 4000)
+      return sanitize(loc("edits: \(edits.canonical())"), limit: 4000)
     case "NotebookEdit":
       guard let src = field("new_source") else { return nil }
-      return sanitize("yeni kaynak: \(src)", limit: 4000)
+      return sanitize(loc("new source: \(src)"), limit: 4000)
     default:
       return nil
     }
@@ -194,20 +194,20 @@ public enum ToolSummary {
     let tail = 70
     guard chars.count > head + tail else { return String(chars.prefix(fitLimit)) + "…" }
     let hidden = chars.count - head - tail
-    return String(chars.prefix(head)) + " … [\(hidden) karakter gizli] … "
+    return String(chars.prefix(head)) + loc(" … [\(hidden) characters hidden] … ")
       + String(chars.suffix(tail))
   }
 
   /// Makes invisible / deceptive characters visible: newlines and tabs as `\n` `\t`,
   /// control, bidi, zero-width and other format characters as `\u{XXXX}`, long runs of spaces
-  /// as `⟨N boşluk⟩`. Output is cut at `limit` characters with a marker.
+  /// as `⟨N spaces⟩`. Output is cut at `limit` characters with a marker.
   public static func sanitize(_ s: String, limit: Int = .max) -> String {
     var out = ""
     var spaces = 0
     var count = 0
     func flushSpaces() {
       if spaces >= 4 {
-        out += "⟨\(spaces) boşluk⟩"
+        out += loc("⟨\(String(spaces)) spaces⟩")
       } else {
         out += String(repeating: " ", count: spaces)
       }
@@ -216,7 +216,7 @@ public enum ToolSummary {
     for scalar in s.unicodeScalars {
       if count >= limit {
         flushSpaces()
-        return out + "… [kesildi]"
+        return out + loc("… [cut]")
       }
       count += 1
       if scalar == " " {
@@ -250,7 +250,7 @@ public enum ToolSummary {
     }
   }
 
-  /// Human readable description of a permission suggestion (for the "Her zaman" tooltip).
+  /// Human readable description of a permission suggestion (for the "Always" tooltip).
   public static func describeSuggestion(_ s: JSONValue) -> String {
     let type = s["type"]?.stringValue ?? "?"
     let dest = s["destination"]?.stringValue
@@ -264,7 +264,7 @@ public enum ToolSummary {
       }
       core = rules.joined(separator: ", ")
     case "setMode":
-      core = "mod: \(s["mode"]?.stringValue ?? "?")"
+      core = loc("mode: \(s["mode"]?.stringValue ?? "?")")
     case "addDirectories", "removeDirectories":
       core = (s["directories"]?.arrayValue ?? []).compactMap { $0.stringValue }
         .joined(separator: ", ")
@@ -272,7 +272,7 @@ public enum ToolSummary {
       core = type
     }
     if let dest { core += " → \(dest)" }
-    // Whole, never cut: "Her zaman" saves exactly this rule, so the user must be able to see
+    // Whole, never cut: "Always" saves exactly this rule, so the user must be able to see
     // all of it (the card scrolls a long rule). Sanitized: newlines / bidi / zero-width
     // characters in raw rule content become visible.
     return sanitize(core)
@@ -284,7 +284,9 @@ public enum PermissionDecision: Sendable, Equatable {
   case always
   case deny(message: String)
 
-  public static let defaultDenyMessage = "Kullanıcı bu isteği ClaudeNotch üzerinden reddetti."
+  public static var defaultDenyMessage: String {
+    loc("The user denied this request through ClaudeNotch.")
+  }
 
   /// JSON body to print from the PermissionRequest hook.
   public func responseBody(suggestions: [JSONValue]) -> Data {

@@ -57,7 +57,7 @@ public struct PendingQuestion: Sendable, Identifiable {
       "hookSpecificOutput": .object([
         "hookEventName": .string("PreToolUse"),
         "permissionDecision": .string("allow"),
-        "permissionDecisionReason": .string("ClaudeNotch: yanıt çentikten verildi"),
+        "permissionDecisionReason": .string(loc("ClaudeNotch: answered from the notch")),
         "updatedInput": .object(input),
       ])
     ])

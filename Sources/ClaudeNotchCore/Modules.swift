@@ -92,13 +92,13 @@ public enum CalendarReminder {
       .min()
   }
 
-  /// "10 dk" / "şimdi" until the start, whole minutes rounded up.
+  /// "10 min" / "0 min" until the start, whole minutes rounded up.
   public static func untilText(_ item: CalendarItem, now: Date) -> (digits: String, unit: String) {
     let s = item.start.timeIntervalSince(now)
-    if s <= 30 { return ("0", "dk") }
+    if s <= 30 { return ("0", loc("min")) }
     let m = Int((s / 60).rounded(.up))
-    if m < 60 { return ("\(m)", "dk") }
-    return ("\(m / 60)", "sa")
+    if m < 60 { return ("\(m)", loc("min")) }
+    return ("\(m / 60)", loc("h"))
   }
 }
 
@@ -421,17 +421,17 @@ public struct WeatherNow: Sendable, Equatable {
       isDay: r.current.is_day == 1, rainChances: hours, readAt: t)
   }
 
-  /// Turkish label and an SF Symbol for a WMO weather code.
+  /// Localized label and an SF Symbol for a WMO weather code.
   public static func describe(code: Int, isDay: Bool) -> (text: String, symbol: String) {
     switch code {
-    case 0: return ("Açık", isDay ? "sun.max.fill" : "moon.stars.fill")
-    case 1, 2: return ("Parçalı bulutlu", isDay ? "cloud.sun.fill" : "cloud.moon.fill")
-    case 3: return ("Bulutlu", "cloud.fill")
-    case 45, 48: return ("Sisli", "cloud.fog.fill")
-    case 51...57: return ("Çiseliyor", "cloud.drizzle.fill")
-    case 61...67, 80...82: return ("Yağmurlu", "cloud.rain.fill")
-    case 71...77, 85, 86: return ("Karlı", "cloud.snow.fill")
-    case 95...99: return ("Fırtınalı", "cloud.bolt.rain.fill")
+    case 0: return (loc("Clear sky"), isDay ? "sun.max.fill" : "moon.stars.fill")
+    case 1, 2: return (loc("Partly cloudy"), isDay ? "cloud.sun.fill" : "cloud.moon.fill")
+    case 3: return (loc("Cloudy"), "cloud.fill")
+    case 45, 48: return (loc("Foggy"), "cloud.fog.fill")
+    case 51...57: return (loc("Drizzle"), "cloud.drizzle.fill")
+    case 61...67, 80...82: return (loc("Rainy"), "cloud.rain.fill")
+    case 71...77, 85, 86: return (loc("Snowy"), "cloud.snow.fill")
+    case 95...99: return (loc("Stormy"), "cloud.bolt.rain.fill")
     default: return ("", "cloud.fill")
     }
   }

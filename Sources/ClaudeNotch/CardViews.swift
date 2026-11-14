@@ -22,7 +22,7 @@ struct CardGate {
   var read: Bool { opened && ui.readToEnd.contains(card.id) }
   /// A long request is allowed only after its whole text was on screen.
   var canAllow: Bool { armed && (!card.needsExpansion || read) }
-  /// "Her zaman" also waits until its whole rule has been on screen, and a moment more.
+  /// "Always" also waits until its whole rule has been on screen, and a moment more.
   var ruleRead: Bool { ui.moreCardID == card.id && ui.ruleRead.contains(card.id) }
   var canAlways: Bool {
     canAllow && card.alwaysDescription != nil && ruleRead && Date() >= ui.moreArmedAt
@@ -43,9 +43,9 @@ struct PermissionCardView: View {
   private var gate: CardGate { CardGate(card: card, store: store, ui: ui) }
 
   private var detailTitle: String {
-    if gate.opened { return "Daralt" }
+    if gate.opened { return loc("Collapse") }
     return card.needsExpansion
-      ? "Tümünü göster (\(fullBody.count) karakter)" : "Ayrıntıyı göster"
+      ? loc("Show all (\(fullBody.count) characters)") : loc("Show details")
   }
 
   private var fullBody: String {
@@ -85,7 +85,7 @@ struct PermissionCardView: View {
       ToolIcon(tool: card.toolName).foregroundStyle(theme.needs)
       Text(card.toolName)
         .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink)
-      Text(card.agentID == nil ? "izin istiyor" : "alt ajan izin istiyor")
+      Text(card.agentID == nil ? "asks for permission" : "subagent asks for permission")
         .font(.system(size: 11.5)).foregroundStyle(theme.secondary)
       Spacer(minLength: 4)
       if let pos = store.queuePosition(of: card.id), pos.total > 1 {
@@ -97,7 +97,7 @@ struct PermissionCardView: View {
 
   @ViewBuilder
   private var code: some View {
-    let collapsed = card.fullText.isEmpty ? "(ayrıntı yok)" : card.collapsedText
+    let collapsed = card.fullText.isEmpty ? loc("(no details)") : card.collapsedText
     let text = gate.opened ? fullBody : collapsed
     Group {
       if gate.opened {
@@ -119,22 +119,22 @@ struct PermissionCardView: View {
   private var buttons: some View {
     HStack(spacing: 6) {
       ActionButton(
-        title: "Reddet", style: .secondary, keycap: ui.keyMode ? "⌘⌫" : ui.denyKey,
+        title: loc("Deny"), style: .secondary, keycap: ui.keyMode ? "⌘⌫" : ui.denyKey,
         enabled: gate.armed
       ) {
         actions.decide(card.id, .deny(message: PermissionDecision.defaultDenyMessage), .click)
       }
       if card.needsExpansion && !gate.read {
         Text(gate.opened
-          ? (ui.keyMode ? "Sonuna kadar kaydırın · Boşluk" : "Sonuna kadar kaydırın")
-          : "Önce tümünü göster")
+          ? (ui.keyMode ? "Scroll to the end · Space" : "Scroll to the end")
+          : "Show all first")
           .font(.system(size: 11)).foregroundStyle(theme.needs)
           .lineLimit(1)
       }
       Spacer(minLength: 0)
       MoreButton(open: ui.moreCardID == card.id) { actions.toggleMore(card.id) }
       AllowButton(
-        card: card, gate: gate, ui: ui, decision: .allow, title: "İzin ver",
+        card: card, gate: gate, ui: ui, decision: .allow, title: loc("Allow"),
         keycap: ui.keyMode ? "⌘⏎" : ui.allowKey, source: .click, actions: actions)
     }
   }
@@ -148,15 +148,15 @@ struct CardPager: View {
 
   var body: some View {
     HStack(spacing: 0) {
-      pagerButton("chevron.left", "Önceki istek") { actions.pager(-1) }
+      pagerButton("chevron.left", loc("Previous request")) { actions.pager(-1) }
       Text("\(index + 1)/\(total)")
         .font(.system(size: 11, weight: .semibold)).monospacedDigit()
         .foregroundStyle(theme.secondary)
         .frame(minWidth: 26)
-      pagerButton("chevron.right", "Sonraki istek") { actions.pager(1) }
+      pagerButton("chevron.right", loc("Next request")) { actions.pager(1) }
     }
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("İstek \(index + 1) / \(total)")
+    .accessibilityLabel("Request \(index + 1) of \(total)")
   }
 
   private func pagerButton(_ icon: String, _ label: String, _ action: @escaping () -> Void)
@@ -190,7 +190,7 @@ struct CountdownRing: View {
         if !compact || left < 120 {
           Text(left < 120
           ? String(format: "%d:%02d", Int(left) / 60, Int(left) % 60)
-          : "\(Int(left / 60)) dk")
+          : loc("\(Int(left / 60)) min"))
           .font(.system(size: 11, weight: .medium)).monospacedDigit()
           .foregroundStyle(urgent ? theme.needs : theme.tertiary)
         }
@@ -207,8 +207,8 @@ struct CountdownRing: View {
         }
         .frame(width: 11, height: 11)
       }
-      .help("Yanıt için kalan süre: \(Int(left) / 60) dk \(Int(left) % 60) sn")
-      .accessibilityLabel("Kalan süre \(Int(left) / 60) dakika")
+      .help("Time left to answer: \(Int(left) / 60) min \(Int(left) % 60) s")
+      .accessibilityLabel("\(Int(left) / 60) minutes left")
     }
   }
 }
@@ -219,13 +219,13 @@ struct RiskTag: View {
   @Environment(\.notchTheme) private var theme
 
   private var holdText: String {
-    allowKey.map { "· basılı tutun (fare ya da \($0)) ya da ⌘⏎" } ?? "· basılı tutun ya da ⌘⏎"
+    allowKey.map { loc("· hold (mouse or \($0)) or ⌘⏎") } ?? loc("· hold or ⌘⏎")
   }
 
   var body: some View {
     HStack(spacing: 5) {
       Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 9.5, weight: .bold))
-      Text("Riskli komut: \(reason)").font(.system(size: 11, weight: .semibold))
+      Text("Risky command: \(reason)").font(.system(size: 11, weight: .semibold))
       Text(holdText).font(.system(size: 11)).opacity(0.8)
     }
     .foregroundStyle(theme.error)
@@ -233,7 +233,7 @@ struct RiskTag: View {
   }
 }
 
-/// "Her zaman" lives here, with the full rule it would add.
+/// "Always" lives here, with the full rule it would add.
 struct MoreSection: View {
   let card: PendingPermission
   let gate: CardGate
@@ -247,7 +247,7 @@ struct MoreSection: View {
       if let rule = card.alwaysDescription {
         HStack(alignment: .center, spacing: 10) {
           VStack(alignment: .leading, spacing: 2) {
-            Text("Her zaman izin ver")
+            Text("Always allow")
               .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(theme.ink)
             Text(ruleCaption)
               .font(.system(size: 11))
@@ -256,11 +256,11 @@ struct MoreSection: View {
           }
           Spacer(minLength: 4)
           AllowButton(
-            card: card, gate: gate, ui: ui, decision: .always, title: "Her zaman",
+            card: card, gate: gate, ui: ui, decision: .always, title: loc("Always"),
             keycap: ui.keyMode ? "⌘⇧⏎" : nil, source: .click, actions: actions, primary: false)
         }
         // The whole rule, never shortened: what is shown is what gets saved. A rule longer
-        // than four lines scrolls, and "Her zaman" waits until its end was on screen.
+        // than four lines scrolls, and "Always" waits until its end was on screen.
         DetailText(
           text: rule, color: NSColor(theme.secondary), maxHeight: Self.ruleMaxHeight,
           page: ui.rulePage[card.id] ?? 0, font: Self.ruleFont
@@ -268,14 +268,14 @@ struct MoreSection: View {
           .padding(.horizontal, 8)
           .padding(.vertical, 6)
           .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(theme.faint))
-          .accessibilityLabel("Eklenecek kural: \(rule)")
+          .accessibilityLabel("Rule to add: \(rule)")
       } else {
-        Text("Bu istek için kalıcı kural önerisi yok.")
+        Text("No permanent rule is suggested for this request.")
           .font(.system(size: 11)).foregroundStyle(theme.tertiary)
       }
       if store(card).count > 1 {
         Button { actions.denyAll(card.sessionID) } label: {
-          Text("Bu oturumdaki \(store(card).count) isteğin tümünü reddet")
+          Text("Deny all \(store(card).count) requests in this session")
             .font(.system(size: 11, weight: .medium)).foregroundStyle(theme.error)
             .contentShape(Rectangle())
         }
@@ -293,8 +293,8 @@ struct MoreSection: View {
   static let ruleMaxHeight = DetailText.height(lines: 4, font: ruleFont)
 
   private var ruleCaption: String {
-    if gate.ruleRead { return "Bu kural kalıcı olarak eklenir" }
-    return ui.keyMode ? "Kuralı sonuna kadar kaydırın · Boşluk" : "Kuralı sonuna kadar kaydırın"
+    if gate.ruleRead { return loc("This rule is added permanently") }
+    return ui.keyMode ? loc("Scroll the rule to the end · Space") : loc("Scroll the rule to the end")
   }
 }
 
@@ -315,8 +315,8 @@ struct MoreButton: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .help("Diğer seçenekler: Her zaman")
-    .accessibilityLabel("Diğer seçenekler")
+    .help("More options: Always")
+    .accessibilityLabel("More options")
   }
 }
 
@@ -398,7 +398,7 @@ struct PressScale: ButtonStyle {
   }
 }
 
-/// İzin ver / Her zaman. Risky requests need a 600 ms hold (ring fills) or ⌘⏎.
+/// Allow / Always. Risky requests need a 600 ms hold (ring fills) or ⌘⏎.
 struct AllowButton: View {
   let card: PendingPermission
   let gate: CardGate
@@ -424,8 +424,8 @@ struct AllowButton: View {
   private var keyHolding: Bool { decision == .allow && ui.keyHoldCardID == card.id }
 
   private var holdLabel: String {
-    if holding || keyHolding { return "Tutun…" }
-    return tapped ? "Basılı tutun" : "Basılı tut: \(title)"
+    if holding || keyHolding { return loc("Hold…") }
+    return tapped ? loc("Press and hold") : loc("Hold: \(title)")
   }
 
   var body: some View {
@@ -475,7 +475,7 @@ struct AllowButton: View {
         .onChanged { _ in begin() }
         .onEnded { _ in cancel() }
     )
-    .accessibilityLabel("\(title), basılı tutun")
+    .accessibilityLabel("\(title), press and hold")
     .accessibilityAddTraits(.isButton)
   }
 
@@ -502,7 +502,7 @@ struct AllowButton: View {
 
 // MARK: - Full request text
 
-/// The opened request text (or a long "Her zaman" rule) in a native scroll view, at most
+/// The opened request text (or a long "Always" rule) in a native scroll view, at most
 /// `maxHeight` tall. Reports once the end of the text has been on screen (see `ReadProgress`:
 /// a text that fits counts at once, a longer one only after a real scroll reaches its end),
 /// and scrolls one page down when `page` grows (Space).

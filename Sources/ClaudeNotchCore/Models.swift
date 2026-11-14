@@ -15,14 +15,14 @@ public enum SessionStatus: Sendable, Equatable {
 
   public var label: String {
     switch self {
-    case .idle: return "Boşta"
-    case .working: return "Çalışıyor"
-    case .quiet: return "Sessiz"
-    case .done: return "Bitti"
-    case .waitingInput: return "Girdi bekliyor"
-    case .question: return "Soru soruyor"
-    case .planApproval: return "Plan onayı bekliyor"
-    case .error: return "Hata"
+    case .idle: return loc("Idle")
+    case .working: return loc("Working")
+    case .quiet: return loc("Quiet")
+    case .done: return loc("Done")
+    case .waitingInput: return loc("Waiting for input")
+    case .question: return loc("Asking a question")
+    case .planApproval: return loc("Waiting for plan approval")
+    case .error: return loc("Error")
     }
   }
 
@@ -224,7 +224,7 @@ public struct PendingPermission: Sendable, Identifiable {
       && ToolSummary.displayWidth(fullText) <= Self.peekLimit
   }
 
-  /// Rule text for the "Her zaman" section (whole and sanitized), if a suggestion exists.
+  /// Rule text for the "Always" section (whole and sanitized), if a suggestion exists.
   public var alwaysDescription: String? {
     let pick = suggestions.first { $0["type"]?.stringValue == "addRules" } ?? suggestions.first
     return pick.map { ToolSummary.describeSuggestion($0) }

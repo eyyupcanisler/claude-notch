@@ -111,7 +111,7 @@ public final class SocketServer: @unchecked Sendable {
     l.start(queue: queue)
     if ready.wait(timeout: .now() + 3) == .timedOut {
       l.cancel()
-      throw SocketServerError.startFailed("zaman aşımı")
+      throw SocketServerError.startFailed(loc("timed out"))
     }
     if let err = box.get() {
       l.cancel()

@@ -26,7 +26,7 @@ struct NotchActions {
   var toggleDetail: @MainActor (String) -> Void = { _ in }
   /// The opened card's text was on screen down to its end (card id, trigger).
   var readToEnd: @MainActor (String, String) -> Void = { _, _ in }
-  /// The card's "Her zaman" rule was on screen down to its end (card id, trigger).
+  /// The card's "Always" rule was on screen down to its end (card id, trigger).
   var ruleRead: @MainActor (String, String) -> Void = { _, _ in }
   var toggleMore: @MainActor (String) -> Void = { _ in }
   var pager: @MainActor (Int) -> Void = { _ in }
@@ -39,7 +39,7 @@ struct NotchActions {
   var togglePin: @MainActor () -> Void = {}
   var openSettings: @MainActor () -> Void = {}
   var expand: @MainActor (CGDirectDisplayID) -> Void = { _ in }
-  /// Selects the oldest card (the "N izin" chip).
+  /// Selects the oldest card (the "N permissions" chip).
   var showCards: @MainActor () -> Void = {}
   var bodyHeight: @MainActor (CGDirectDisplayID, NotchMode, CGFloat) -> Void = { _, _, _ in }
   /// Ghostty Automation: ask (macOS prompt) or open System Settings when denied.
@@ -50,7 +50,7 @@ struct NotchActions {
   var releaseQuestion: @MainActor (String) -> Void = { _ in }
   /// Picks / un-picks option `index` of the question on screen (same path as ⌃⌥1…4).
   var pickOption: @MainActor (String, Int) -> Void = { _, _ in }
-  /// "Sonraki" / "Gönder" (same as ⌃⌥Y), and "Geri".
+  /// "Next" / "Send" (same as ⌃⌥Y), and "Back".
   var questionNext: @MainActor (String) -> Void = { _ in }
   var questionBack: @MainActor (String) -> Void = { _ in }
   /// A shelf chip dropped on a session row: copy it and focus that session's tab.
@@ -296,7 +296,7 @@ struct NotchRootView: View {
   }
 }
 
-/// Solid black in every mode (the "Gösterge" look: the hardware notch simply grows). The open
+/// Solid black in every mode (the "Gauge" look: the hardware notch simply grows). The open
 /// panel adds the matte grain below the band; its opacity changes in the shape's transaction,
 /// so it arrives with the same spring.
 struct NotchBackground: View {
@@ -348,9 +348,9 @@ struct NotchSignals {
 
   var accessibilityText: String {
     var parts: [String] = []
-    if working > 0 { parts.append("\(working) oturum çalışıyor") }
+    if working > 0 { parts.append(loc("\(working) sessions working")) }
     let perms = store.pending.count
-    if perms > 0 { parts.append("\(perms) izin bekliyor") }
+    if perms > 0 { parts.append(loc("\(perms) permissions waiting")) }
     let cardSessions = Set(store.pending.map(\.sessionID))
     let others = store.sessions.values.filter { s in
       guard !cardSessions.contains(s.id) else { return false }
@@ -359,10 +359,10 @@ struct NotchSignals {
       default: return false
       }
     }.count
-    if others > 0 { parts.append("\(others) oturum yanıt bekliyor") }
-    if errorCount > 0 { parts.append("\(errorCount) hata") }
-    if store.doneUnseenCount > 0 { parts.append("\(store.doneUnseenCount) oturum bitti") }
-    return parts.isEmpty ? "Claude: etkin oturum yok" : "Claude: " + parts.joined(separator: ", ")
+    if others > 0 { parts.append(loc("\(others) sessions awaiting reply")) }
+    if errorCount > 0 { parts.append(loc("\(errorCount) errors")) }
+    if store.doneUnseenCount > 0 { parts.append(loc("\(store.doneUnseenCount) sessions done")) }
+    return parts.isEmpty ? loc("Claude: no active sessions") : "Claude: " + parts.joined(separator: ", ")
   }
 }
 

@@ -29,20 +29,20 @@ final class NotchUIState {
   /// needing the user while the pointer is over the list keeps its row shape.
   var frozenRich: Set<String> = []
   /// No card was pending at freeze time: a new card does not push the list down under the
-  /// pointer (the "N izin" chip shows it instead).
+  /// pointer (the "N permissions" chip shows it instead).
   var slotFrozenEmpty = false
   /// Card ids whose full text the user opened (allowing a long request needs that first).
   var openedCards: Set<String> = []
-  /// Card whose ⋯ section ("Her zaman" rule) is open.
+  /// Card whose ⋯ section ("Always" rule) is open.
   var moreCardID: String?
-  /// "Her zaman" (click or ⌘⇧⏎) is accepted from then on: the rule it adds must have been on
+  /// "Always" (click or ⌘⇧⏎) is accepted from then on: the rule it adds must have been on
   /// screen for a moment.
   var moreArmedAt = Date.distantPast
   /// Opened cards whose full text was scrolled to its end (allowing a long request needs it).
   var readToEnd: Set<String> = []
   /// Page-down requests for an opened card's text (Space while it is not read to the end).
   var detailPage: [String: Int] = [:]
-  /// Cards whose "Her zaman" rule has been on screen down to its end (saving it needs that).
+  /// Cards whose "Always" rule has been on screen down to its end (saving it needs that).
   var ruleRead: Set<String> = []
   /// Page-down requests for a card's rule text (Space while the rule is not read).
   var rulePage: [String: Int] = [:]
@@ -64,9 +64,9 @@ final class NotchUIState {
   var questionArmedAt: [String: Date] = [:]
   /// Hold-to-allow progress (0...1) of the card held with the global allow shortcut.
   var holdProgress: [String: Double] = [:]
-  /// Card whose hold runs with the global allow shortcut (label "Tutun…", set without motion).
+  /// Card whose hold runs with the global allow shortcut (label "Hold…", set without motion).
   var keyHoldCardID: String?
-  /// A tap (not a hold) of the global allow shortcut on this risky card: "Basılı tutun".
+  /// A tap (not a hold) of the global allow shortcut on this risky card: "Press and hold".
   var holdHintCardID: String?
   /// The panel was opened by a global shortcut (full text of a request) while the pointer was
   /// elsewhere: it stays open until the pointer has been over it, a decision, or the peek time.
@@ -74,7 +74,7 @@ final class NotchUIState {
   /// Keycaps of the registered global shortcuts ("⌃⌥Y"), nil when not registered.
   var allowKey: String?
   var denyKey: String?
-  /// One-time line under the permission peek ("⌃⌥Y izin ver · ⌃⌥N reddet"), nil once used.
+  /// One-time line under the permission peek ("⌃⌥Y allow · ⌃⌥N deny"), nil once used.
   var shortcutHint: String?
   /// Last known Automation status towards Ghostty (see `GhosttyConsent`).
   var ghosttyAutomation: Int32?

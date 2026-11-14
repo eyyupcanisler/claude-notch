@@ -1,6 +1,6 @@
 import Foundation
 
-/// What made a scrollable text (an opened request, a long "Her zaman" rule) check whether its
+/// What made a scrollable text (an opened request, a long "Always" rule) check whether its
 /// end is on screen.
 public enum ReadTrigger: String, Sendable {
   /// After a SwiftUI update / a frame change of the text's scroll view.

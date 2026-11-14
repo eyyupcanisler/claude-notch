@@ -32,12 +32,12 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .panel: return "Paneli aç"
-    case .allow: return "İzin ver"
-    case .deny: return "Reddet"
-    case .timer: return "Pomodoro başlat / duraklat"
-    case .shelf: return "Raftaki son öğeyi kopyala"
-    case .option1, .option2, .option3, .option4: return "Soru seçeneği \((optionIndex ?? 0) + 1)"
+    case .panel: return loc("Open the panel")
+    case .allow: return loc("Allow")
+    case .deny: return loc("Deny")
+    case .timer: return loc("Start / pause Pomodoro")
+    case .shelf: return loc("Copy the latest shelf item")
+    case .option1, .option2, .option3, .option4: return loc("Question option \((optionIndex ?? 0) + 1)")
     }
   }
 
@@ -92,7 +92,7 @@ struct KeyCombo: Equatable, Hashable, Sendable {
     self.modifiers = modifiers & Self.modifierMask
   }
 
-  /// Why this chord cannot be `role`'s shortcut (Turkish), or nil. A decision shortcut acts
+  /// Why this chord cannot be `role`'s shortcut (localized), or nil. A decision shortcut acts
   /// from every app, so it must not be a chord people type or use for app shortcuts.
   func error(for role: HotKeyRole) -> String? {
     guard role.isDecision else { return nil }
@@ -153,7 +153,18 @@ enum KeyLayout {
   static func label(keyCode: UInt32) -> String {
     if let s = special[Int(keyCode)] { return s }
     guard let c = character(keyCode: keyCode), !c.isEmpty else { return "#\(keyCode)" }
-    return c.uppercased(with: Locale(identifier: "tr_TR"))
+    return c.uppercased(with: layoutLocale)
+  }
+
+  /// Casing follows the keyboard layout's language, not the UI language: on Turkish-Q the `i`
+  /// key reads `İ` and the `ı` key reads `I`, whichever language the app shows.
+  private static var layoutLocale: Locale {
+    guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+      let raw = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages),
+      let languages = Unmanaged<CFArray>.fromOpaque(raw).takeUnretainedValue() as? [String],
+      let first = languages.first
+    else { return Locale.current }
+    return Locale(identifier: first)
   }
 
   /// Key code that types `char` with no modifiers in the current layout.

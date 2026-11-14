@@ -7,12 +7,12 @@ import Foundation
 // MARK: - Risky commands
 
 public enum RiskClassifier {
-  /// Short Turkish reason when the request is destructive enough to need hold-to-allow (or
+  /// Short localized reason when the request is destructive enough to need hold-to-allow (or
   /// ⌘⏎), nil otherwise. Only shell commands are classified. `text` may be raw or the
   /// sanitized display text (a literal `\n` / `\t` is treated as a separator).
   public static func risk(toolName: String, text: String) -> String? {
     guard toolName == "Bash" else { return nil }
-    if text.count > ToolSummary.fullLimit { return "çok uzun komut" }
+    if text.count > ToolSummary.fullLimit { return loc("very long command") }
     let cmd = normalize(text)
     if hasRecursiveForceRemove(cmd) { return "rm -rf" }
     for (pattern, reason) in patterns where matches(pattern, cmd) { return reason }
@@ -124,26 +124,26 @@ public enum RiskClassifier {
   /// nil otherwise.
   static func exfiltration(_ cmd: String) -> String? {
     let masked = maskQuoted(cmd)
-    for p in uploadPatterns where matches(p, masked) { return "dosya yükleme" }
+    for p in uploadPatterns where matches(p, masked) { return loc("file upload") }
     for (name, args) in commands(cmd) {
       let operands = args.filter { !$0.hasPrefix("-") }
       switch name {
       case "sftp":
-        return "uzak sunucuya kopya"
+        return loc("copy to a remote server")
       case "scp":
-        if operands.contains(where: isRemotePath) { return "uzak sunucuya kopya" }
+        if operands.contains(where: isRemotePath) { return loc("copy to a remote server") }
       case "rsync":
         if operands.contains(where: { isRemotePath($0) || $0.hasPrefix("rsync://") }) {
-          return "uzak sunucuya kopya"
+          return loc("copy to a remote server")
         }
       case "nc", "ncat", "netcat", "socat":
-        return "ağ bağlantısı (\(name))"
+        return loc("network connection (\(name))")
       default:
         break
       }
     }
     if matches(secretPattern, cmd) && matches(carrierPattern, cmd) {
-      return "gizli dosya aktarımı"
+      return loc("secret file transfer")
     }
     return nil
   }
@@ -164,12 +164,16 @@ public enum RiskClassifier {
   }
 
   /// Line breaks become `;`, every other whitespace (tabs, NBSP, ...) one space; the sanitizer's
-  /// `\n` / `\t` / `⟨N boşluk⟩` markers are undone the same way.
+  /// `\n` / `\t` / `⟨N spaces⟩` markers (`⟨N boşluk⟩` in Turkish) are undone the same way.
+  /// N may carry a thousands separator (`1,234`, `1.234`, a no-break space), in case it was
+  /// formatted for a locale.
   static func normalize(_ text: String) -> String {
     // Not the `\r` marker: that would turn the alias bypass `\rm` into `m`.
     var s = text.replacingOccurrences(of: "\\n", with: " ; ")
       .replacingOccurrences(of: "\\t", with: " ")
-    if let re = try? NSRegularExpression(pattern: "⟨[0-9]+ boşluk⟩") {
+    if let re = try? NSRegularExpression(
+      pattern: "⟨[0-9][0-9.,'\\u00A0\\u202F ]* (spaces|boşluk)⟩")
+    {
       s = re.stringByReplacingMatches(
         in: s, range: NSRange(s.startIndex..., in: s), withTemplate: " ")
     }
@@ -281,7 +285,7 @@ extension ToolSummary {
       return URL(string: full)?.host ?? TextShortener.middle(full, limit: 48)
     case "AskUserQuestion":
       let q = AskedQuestion.parse(input)?.first?.question
-      return q.map { "Soru: " + TextShortener.oneLine($0, limit: 54) } ?? "Soru soruyor"
+      return q.map { loc("Question: \(TextShortener.oneLine($0, limit: 54))") } ?? loc("Asking a question")
     default:
       return TextShortener.oneLine(full, limit: 60)
     }
@@ -332,7 +336,7 @@ public struct ModuleNote: Sendable, Equatable {
   public var unit: String?
   /// 0…1 for a level bar (battery).
   public var level: Double?
-  /// A link the peek offers as a button (a meeting's video link: "Katıl").
+  /// A link the peek offers as a button (a meeting's video link: "Join").
   public var link: URL?
   /// A note that waited behind a Claude peek is dropped after this (a meeting that started).
   public var validUntil: Date
@@ -493,14 +497,15 @@ public struct PeekPlanner: Sendable {
     pendingModule = nil
   }
 
-  /// "api bitti", "api hata verdi", "3 oturum bitti", "3 oturum bitti · 1 hata".
+  /// "api done", "api failed", "3 sessions done", "2 sessions done · 1 error".
   public static func finishedTitle(names: [String], errors: Int) -> String {
     if names.count == 1 {
-      return errors > 0 ? "\(names[0]) hata verdi" : "\(names[0]) bitti"
+      return errors > 0 ? loc("\(names[0]) failed") : loc("\(names[0]) done")
     }
     let done = names.count - errors
-    if done == 0 { return "\(names.count) oturumda hata" }
-    return errors > 0 ? "\(done) oturum bitti · \(errors) hata" : "\(names.count) oturum bitti"
+    if done == 0 { return loc("Errors in \(names.count) sessions") }
+    return errors > 0
+      ? loc("\(done) sessions done · \(errors) errors") : loc("\(names.count) sessions done")
   }
 }
 
@@ -738,21 +743,21 @@ public struct DecisionKeyGate: Sendable {
   }
 }
 
-/// One short Turkish time format for session rows: "şimdi", "45 sn önce", "5 dk önce",
-/// "2 sa önce", "3 gün önce". Only the largest unit is shown so rows stay scannable.
+/// One short time format for session rows: "now", "45 s ago", "5 min ago", "2 h ago",
+/// "3 days ago". Only the largest unit is shown so rows stay scannable.
 public enum RelativeTime {
   public static func short(_ seconds: TimeInterval) -> String {
     let s = max(0, Int(seconds))
-    if s < 10 { return "şimdi" }
-    if s < 60 { return "\(s) sn önce" }
-    if s < 3600 { return "\(s / 60) dk önce" }
-    if s < 86_400 { return "\(s / 3600) sa önce" }
-    return "\(s / 86_400) gün önce"
+    if s < 10 { return loc("now") }
+    if s < 60 { return loc("\(s) s ago") }
+    if s < 3600 { return loc("\(s / 60) min ago") }
+    if s < 86_400 { return loc("\(s / 3600) h ago") }
+    return loc("\(s / 86_400) days ago")
   }
 }
 
-/// Elapsed time for the dot-matrix gauge: "mm:ss" under an hour, then whole hours ("3" + "sa")
-/// or days ("2" + "gün"). The unit is drawn as small text beside the dots.
+/// Elapsed time for the dot-matrix gauge: "mm:ss" under an hour, then whole hours ("3" + "h")
+/// or days ("2" + "d"). The unit is drawn as small text beside the dots.
 public enum DotClock {
   public struct Reading: Equatable, Sendable {
     public let digits: String
@@ -764,8 +769,8 @@ public enum DotClock {
     if s < 3600 {
       return Reading(digits: String(format: "%02d:%02d", s / 60, s % 60), unit: nil)
     }
-    if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: "sa") }
-    return Reading(digits: "\(s / 86_400)", unit: "gün")
+    if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: loc("h")) }
+    return Reading(digits: "\(s / 86_400)", unit: loc("d"))
   }
 
   /// A countdown: "mm:ss", or "h:mm:ss" from an hour up (timers up to 180 min).
@@ -775,10 +780,10 @@ public enum DotClock {
     return String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60)
   }
 
-  /// Whole minutes at least ("12" + "dk"), for times that need no seconds (idle rows).
+  /// Whole minutes at least ("12" + "min"), for times that need no seconds (idle rows).
   public static func coarse(_ seconds: TimeInterval) -> Reading {
     let s = max(0, Int(seconds))
-    if s < 3600 { return Reading(digits: "\(max(1, s / 60))", unit: "dk") }
+    if s < 3600 { return Reading(digits: "\(max(1, s / 60))", unit: loc("min")) }
     return reading(seconds)
   }
 }

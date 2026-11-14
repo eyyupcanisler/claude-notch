@@ -84,13 +84,13 @@ final class GoogleCalendarModule {
   func chooseClientFile() {
     let panel = NSOpenPanel()
     panel.allowedContentTypes = [.json]
-    panel.message = "Google Cloud’dan indirdiğin istemci dosyasını (client_secret_….json) seç"
+    panel.message = loc("Choose the client file you downloaded from Google Cloud (client_secret_….json)")
     panel.canChooseDirectories = false
     NSApp.activate()
     guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url)
     else { return }
     guard let c = GoogleCalendar.Client.parse(data) else {
-      status = .failed("Bu bir Google “Masaüstü uygulaması” istemci dosyası değil.")
+      status = .failed(loc("This is not a Google “Desktop app” client file."))
       return
     }
     client = c
@@ -109,7 +109,7 @@ final class GoogleCalendarModule {
     onEvents?([])
   }
 
-  /// Forgets the client too (Settings "İstemciyi kaldır").
+  /// Forgets the client too (Settings "Remove client").
   func removeClient() {
     disconnect()
     client = nil
@@ -127,7 +127,7 @@ final class GoogleCalendarModule {
     let params = NWParameters.tcp
     params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
     guard let l = try? NWListener(using: params) else {
-      status = .failed("Yerel giriş adresi açılamadı.")
+      status = .failed(loc("The local sign-in address could not be opened."))
       return
     }
     listener = l
@@ -149,7 +149,7 @@ final class GoogleCalendarModule {
           else { return }
           NSWorkspace.shared.open(url)
         case .failed:
-          self.status = .failed("Yerel giriş adresi kapandı.")
+          self.status = .failed(loc("The local sign-in address closed."))
           self.stopListener()
         default: break
         }
@@ -186,11 +186,11 @@ final class GoogleCalendarModule {
           Self.reply(conn, status: "404 Not Found", body: "")
           return
         case .error(let e):
-          page = "Bağlantı kurulamadı (\(e)). Bu sekmeyi kapatıp Ayarlar’dan yeniden dene."
+          page = loc("Could not connect (\(e)). Close this tab and try again from Settings.")
           self.status = .failed(
-            e == "access_denied" ? "Google izni verilmedi." : "Giriş hatası: \(e)")
+            e == "access_denied" ? loc("Google access was not granted.") : loc("Sign-in error: \(e)"))
         case .code(let code):
-          page = "ClaudeNotch Google Takvim’e bağlandı. Bu sekmeyi kapatabilirsin."
+          page = loc("ClaudeNotch is connected to Google Calendar. You can close this tab.")
           Task { await self.exchange(code: code, client: client, verifier: verifier) }
         }
         Self.reply(conn, status: "200 OK", body: Self.html(page))
@@ -223,7 +223,7 @@ final class GoogleCalendarModule {
     guard let data = await post(GoogleCalendar.tokenEndpoint, body),
       let t = GoogleCalendar.Tokens.parse(data, at: Date())
     else {
-      status = .failed("Google jetonu alınamadı.")
+      status = .failed(loc("Could not get a Google token."))
       return
     }
     store(t)
@@ -254,7 +254,7 @@ final class GoogleCalendarModule {
       // invalid_grant: revoked, or a 7-day "Testing" client token expired.
       tokens = nil
       CredentialStore.delete("tokens")
-      status = .failed("Google oturumu sona erdi; yeniden bağlan.")
+      status = .failed(loc("The Google session expired; connect again."))
       return nil
     }
     store(fresh)

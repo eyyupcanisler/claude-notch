@@ -18,8 +18,8 @@ terminal, and keep a few handy tools one glance away.
 
 </div>
 
-> The interface is in Turkish for now. ClaudeNotch is a personal open-source project, not an
-> Anthropic product.
+> The interface follows your Mac's language (English or Turkish). ClaudeNotch is a personal
+> open-source project, not an Anthropic product.
 
 ## What it does
 
@@ -55,7 +55,7 @@ ships it).
    ID: go to **System Settings → Privacy & Security** and click **Open Anyway**.
    (Or in Terminal: `xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app`.)
 3. Open **ClaudeNotch** again from Spotlight to get its Settings, then
-   **Genel → Claude Code bağlantısı → Kancaları kur** (install hooks). It adds the hooks to
+   **General → Claude Code connection → Install hooks**. It adds the hooks to
    `~/.claude/settings.json` after backing it up and leaves the rest of the file alone.
 
 That's it: your next Claude Code message shows up in the notch.
@@ -74,7 +74,7 @@ scripts/install-hooks.sh           # adds the hooks to ~/.claude/settings.json (
 ```
 
 Either way: ClaudeNotch has no Dock icon, launching it again opens its Settings. Turn on
-*Oturum açılışında başlat* (start at login) in the General tab.
+*Open at login* in the General tab.
 
 Optional:
 
@@ -106,13 +106,13 @@ Claude Code ── hook ──▶ hooks/claude-notch-hook.sh ── curl ──�
 | ⌃⌥P | Start / pause a Pomodoro |
 | ⌃⌥V | Copy the newest shelf item back to the clipboard |
 
-All of them can be changed in Settings → *Kısayollar*.
+All of them can be changed in Settings → *Shortcuts*.
 
 ## Google Calendar (optional)
 
 ClaudeNotch can read Google Calendar directly with **your own** OAuth client (read-only):
 create a Google Cloud project, enable the Calendar API, add an OAuth consent screen and a
-**Desktop app** client, download its JSON and pick it in Settings → *Modüller* → *Takvim*. The
+**Desktop app** client, download its JSON and pick it in Settings → *Modules* → *Calendar*. The
 step-by-step guide is in the [Turkish README](README.tr.md#google-takvim-doğrudan-bağlantı).
 Your client and tokens stay on your Mac in a `0600` file; nothing is sent anywhere but Google.
 

@@ -3,7 +3,7 @@ import ClaudeNotchCore
 import Observation
 
 /// Weather for one city the user typed (no location permission): Open-Meteo, no API key.
-/// One request every 30 min while on (and after wake); a single "yağmur geliyor" note when
+/// One request every 30 min while on (and after wake); a single "rain expected" note when
 /// rain becomes likely within 2 h while it is dry.
 @MainActor
 @Observable
@@ -58,7 +58,7 @@ final class WeatherModule {
     else { return }
     c.queryItems = [
       .init(name: "name", value: q), .init(name: "count", value: "1"),
-      .init(name: "language", value: "tr"),
+      .init(name: "language", value: AppLanguage.code),
     ]
     guard let url = c.url else { return }
     searchNote = ""
@@ -66,7 +66,7 @@ final class WeatherModule {
       guard let (data, _) = try? await URLSession.shared.data(from: url),
         let p = WeatherPlace.geocoding(data)
       else {
-        searchNote = "“\(q)” bulunamadı."
+        searchNote = loc("“\(q)” not found.")
         return
       }
       place = p
@@ -98,8 +98,8 @@ final class WeatherModule {
       onNote?(
         ModuleNote(
           source: .weather, id: "rain:\(Int(hour.timeIntervalSince1970))",
-          title: "Yağmur bekleniyor",
-          subtitle: "\(p.name) · \(ModuleCenter.clock(hour)) civarı %\(chance)",
+          title: loc("Rain expected"),
+          subtitle: loc("\(p.name) · around \(ModuleCenter.clock(hour)), \(chance)%"),
           digits: "\(chance)", unit: "%", validUntil: hour))
     }
   }

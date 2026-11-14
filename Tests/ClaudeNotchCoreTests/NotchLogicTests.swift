@@ -82,12 +82,14 @@ final class NotchLogicTests: XCTestCase {
   }
 
   func testFinishedTitles() {
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 0), "api bitti")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 1), "api hata verdi")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 0), "2 oturum bitti")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 0), "api done")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 1), "api failed")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 0), "2 sessions done")
     XCTAssertEqual(
-      PeekPlanner.finishedTitle(names: ["a", "b", "c"], errors: 1), "2 oturum bitti · 1 hata")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 2), "2 oturumda hata")
+      // The test runner has no stringsdict, so plural forms show as the key ("1 errors");
+      // LocalizationTests checks the real English plurals ("2 sessions done · 1 error").
+      PeekPlanner.finishedTitle(names: ["a", "b", "c"], errors: 1), "2 sessions done · 1 errors")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 2), "Errors in 2 sessions")
   }
 
   func testHoverIntentNeedsDwellAndIgnoresSweeps() {

@@ -93,7 +93,7 @@ final class V4Tests: XCTestCase {
     p.receive(attention: "permission", sessionID: "a", cardID: "c1", at: t0)
     XCTAssertFalse(p.expire(at: t0.addingTimeInterval(14.9)))
     XCTAssertTrue(p.expire(at: t0.addingTimeInterval(15)))
-    // "Yanıtlanana kadar": never expires on its own.
+    // "Until answered": never expires on its own.
     p.permissionHold = nil
     p.receive(attention: "permission", sessionID: "a", cardID: "c1", at: t0)
     XCTAssertFalse(p.expire(at: t0.addingTimeInterval(100_000)))
@@ -157,7 +157,7 @@ final class V4Tests: XCTestCase {
     let s = store.sessions["found:20"]
     XCTAssertEqual(s?.project, "api")
     XCTAssertEqual(s?.status, .idle)
-    XCTAssertEqual(s?.status.label, "Boşta")
+    XCTAssertEqual(s?.status.label, "Idle")
     XCTAssertEqual(s?.isDiscovered, true)
     XCTAssertEqual(s?.tty, "/dev/ttys004")
     XCTAssertEqual(s?.pid, 20)

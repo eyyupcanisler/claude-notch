@@ -9,7 +9,7 @@ struct PeekBody: View {
   let peek: PeekItem
   let displayID: CGDirectDisplayID
   let actions: NotchActions
-  /// Preview of a "Rafa eklendi" image.
+  /// Preview of a "Added to the shelf" image.
   var shelfPreview: NSImage?
   @Environment(\.notchTheme) private var theme
 
@@ -67,7 +67,7 @@ struct PeekBody: View {
       HStack(spacing: 6) {
         Image(systemName: "exclamationmark.triangle.fill")
           .font(.system(size: 10.5, weight: .bold)).foregroundStyle(theme.needs)
-        Text("Claude izin istiyor")
+        Text("Claude asks for permission")
           .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink)
           .fixedSize()
         Text(project(card.sessionID))
@@ -86,7 +86,7 @@ struct PeekBody: View {
             .padding(.horizontal, 5)
             .frame(height: 15)
             .background(Capsule().fill(theme.needs))
-            .help("\(store.pending.count - 1) istek daha")
+            .help("\(store.pending.count - 1) more requests")
         }
       }
       .notchEnter(0)
@@ -98,7 +98,7 @@ struct PeekBody: View {
         .notchEnter(1)
       HStack(spacing: 6) {
         ActionButton(
-          title: "Reddet", style: .secondary, keycap: ui.denyKey, enabled: gate.armed,
+          title: loc("Deny"), style: .secondary, keycap: ui.denyKey, enabled: gate.armed,
           compact: true
         ) {
           actions.decide(card.id, .deny(message: PermissionDecision.defaultDenyMessage), .peek)
@@ -112,7 +112,7 @@ struct PeekBody: View {
         // panel shows it in full first.
         if !card.fitsPeek {
           ActionButton(
-            title: "Tümünü gör", style: .primary, keycap: ui.allowKey, enabled: true,
+            title: loc("See all"), style: .primary, keycap: ui.allowKey, enabled: true,
             compact: true
           ) {
             actions.selectCard(card.id)
@@ -120,9 +120,9 @@ struct PeekBody: View {
           }
         } else {
           MoreButton(open: false) { actions.expand(displayID) }
-            .help("Paneli aç")
+            .help("Open the panel")
           AllowButton(
-            card: card, gate: gate, ui: ui, decision: .allow, title: "İzin ver",
+            card: card, gate: gate, ui: ui, decision: .allow, title: loc("Allow"),
             keycap: ui.allowKey, source: .peek, actions: actions, compact: true)
         }
       }
@@ -146,7 +146,7 @@ struct PeekBody: View {
         HStack(spacing: 6) {
           Image(systemName: "questionmark.bubble.fill")
             .font(.system(size: 11, weight: .bold)).foregroundStyle(theme.needs)
-          Text("Claude soruyor")
+          Text("Claude asks")
             .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink).fixedSize()
           Text(project(sid))
             .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
@@ -163,7 +163,7 @@ struct PeekBody: View {
 
   private var attentionText: some View {
     let session = peek.sessionIDs.first.flatMap { store.sessions[$0] }
-    let text = session?.status.detail ?? "Claude yanıt bekliyor"
+    let text = session?.status.detail ?? loc("Claude is waiting for a reply")
     return VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
         Image(systemName: "questionmark.bubble.fill")
@@ -172,7 +172,7 @@ struct PeekBody: View {
           .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink)
           .lineLimit(1)
         Spacer(minLength: 4)
-        Text(session?.status.label ?? "Yanıt bekliyor")
+        Text(session?.status.label ?? loc("Waiting for a reply"))
           .font(.system(size: 11.5, weight: .medium)).foregroundStyle(theme.secondary)
           .lineLimit(1).fixedSize()
       }
@@ -184,7 +184,7 @@ struct PeekBody: View {
           .lineLimit(2)
           .frame(maxWidth: .infinity, alignment: .leading)
         if let id = session?.id {
-          SmallButton(title: "Terminale git", style: .primary) { actions.focus(id) }
+          SmallButton(title: loc("Go to terminal"), style: .primary) { actions.focus(id) }
         }
       }
       .notchEnter(1)
@@ -193,7 +193,7 @@ struct PeekBody: View {
 
   private var finished: some View {
     let names = peek.sessionIDs.map { id in
-      store.sessions[id].map { store.displayName(for: $0) } ?? "Oturum"
+      store.sessions[id].map { store.displayName(for: $0) } ?? loc("Session")
     }
     let allErrors = peek.errorIDs.count == peek.sessionIDs.count
     let title = PeekPlanner.finishedTitle(names: names, errors: peek.errorIDs.count)
@@ -226,7 +226,7 @@ struct PeekBody: View {
           }
         }
         .accessibilityElement()
-        .accessibilityLabel("Süre \(r.digits) \(r.unit ?? "")")
+        .accessibilityLabel("Duration \(r.digits) \(r.unit ?? "")")
       }
     }
     .frame(height: 18)
@@ -287,7 +287,7 @@ struct ModulePeekView: View {
       }
       Spacer(minLength: 0)
       if let link = note.link {
-        SmallButton(title: "Katıl", style: .primary) { NSWorkspace.shared.open(link) }
+        SmallButton(title: loc("Join"), style: .primary) { NSWorkspace.shared.open(link) }
           .help(link.host ?? link.absoluteString)
       }
     }

@@ -20,14 +20,14 @@ struct ExpandedToolbar: View {
       HStack(spacing: 2) {
         BandIconButton(
           icon: ui.pinned ? "pin.fill" : "pin",
-          label: ui.pinned ? "Sabitlemeyi kaldır" : "Sabitle", active: ui.pinned,
+          label: ui.pinned ? loc("Unpin") : loc("Pin"), active: ui.pinned,
           action: actions.togglePin)
         BandIconButton(
-          icon: "gearshape", label: "Ayarlar", active: false, action: actions.openSettings)
+          icon: "gearshape", label: loc("Settings"), active: false, action: actions.openSettings)
         BandIconButton(
           icon: settings.silentMode ? "bell.slash.fill" : "bell",
           label: settings.silentMode
-            ? "Sessiz mod açık: yalnız izin istekleri ve sorular" : "Sessiz modu aç",
+            ? loc("Silent mode is on: only permission requests and questions") : loc("Turn on silent mode"),
           active: settings.silentMode,
           tint: settings.silentMode ? NotchTheme.bandNeeds : nil
         ) { settings.silentMode.toggle() }
@@ -64,12 +64,12 @@ struct ExpandedToolbar: View {
 
   private var consentLabel: String {
     ui.ghosttyConsent == .denied
-      ? "Ghostty izni kapalı: Sistem Ayarları'nda aç"
-      : "Ghostty izni: sekmesine geçmek için izin ver"
+      ? loc("Ghostty permission is off: turn it on in System Settings")
+      : loc("Ghostty permission: allow switching to its tabs")
   }
 }
 
-/// "N izin" (shows the oldest card) and "N çalışıyor", in the band.
+/// "N permissions" (shows the oldest card) and "N working", in the band.
 struct BandChips: View {
   let store: SessionStore
   let actions: NotchActions
@@ -79,14 +79,14 @@ struct BandChips: View {
       Spacer(minLength: 0)
       if !store.pending.isEmpty {
         Button(action: actions.showCards) {
-          BandChip(text: "\(store.pending.count) izin", color: NotchTheme.bandNeeds, solid: true)
+          BandChip(text: loc("\(store.pending.count) permissions"), color: NotchTheme.bandNeeds, solid: true)
         }
         .buttonStyle(.plain)
-        .help("En eski isteği göster")
+        .help("Show the oldest request")
       }
       if store.activeWorkingCount > 0 {
         BandChip(
-          text: "\(store.activeWorkingCount) çalışıyor", color: NotchTheme.bandWorking,
+          text: loc("\(store.activeWorkingCount) working"), color: NotchTheme.bandWorking,
           solid: false)
       }
     }
@@ -332,9 +332,9 @@ struct EmptyStateView: View {
 
   var body: some View {
     VStack(spacing: 4) {
-      Text("Etkin oturum yok")
+      Text("No active sessions")
         .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(theme.secondary)
-      Text("Bir Claude Code oturumu başlattığınızda burada görünür.")
+      Text("Start a Claude Code session and it shows up here.")
         .font(.system(size: 11)).foregroundStyle(theme.tertiary)
     }
     .frame(maxWidth: .infinity)
@@ -344,7 +344,7 @@ struct EmptyStateView: View {
 
 // MARK: - Summary (body)
 
-/// What the band chips do not say: questions, errors, unseen "done", and "Tümünü okundu say".
+/// What the band chips do not say: questions, errors, unseen "done", and "Mark all as read".
 /// Hidden when there is none of it.
 struct SummaryChips: View {
   let store: SessionStore
@@ -360,16 +360,16 @@ struct SummaryChips: View {
     let s = NotchSignals(store: store)
     HStack(spacing: 5) {
       if s.questions > 0 {
-        Chip(text: "\(s.questions) yanıt bekliyor", color: theme.needs, solid: true)
+        Chip(text: loc("\(s.questions) awaiting reply"), color: theme.needs, solid: true)
       }
-      if s.errorCount > 0 { Chip(text: "\(s.errorCount) hata", color: theme.error, solid: false) }
+      if s.errorCount > 0 { Chip(text: loc("\(s.errorCount) errors"), color: theme.error, solid: false) }
       if store.doneUnseenCount > 0 {
-        Chip(text: "\(store.doneUnseenCount) bitti", color: theme.done, solid: false)
+        Chip(text: loc("\(store.doneUnseenCount) done"), color: theme.done, solid: false)
       }
       Spacer(minLength: 0)
       if store.doneUnseenCount + s.errorCount > 0 {
         Button(action: actions.markAllSeen) {
-          Text("Tümünü okundu say")
+          Text("Mark all as read")
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.tertiary)
             .contentShape(Rectangle())
@@ -474,7 +474,7 @@ struct SessionRow: View {
         .allowsHitTesting(false))
     .overlay(alignment: .bottomTrailing) {
       if dropTarget {
-        Text("bırak: kopyala ve sekmeye git · ⌃V")
+        Text("drop: copy and go to the tab · ⌃V")
           .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(Color(hex: 0xC3A8FF))
           .padding(6)
@@ -541,7 +541,7 @@ struct SessionRow: View {
   }
 
   private var statusText: String {
-    store.hasPending(for: session.id) ? "İzin istiyor" : session.status.label
+    store.hasPending(for: session.id) ? loc("Asks for permission") : session.status.label
   }
 
   /// Clicking the identity line jumps to the terminal. Compact rows draw their own trailing
@@ -566,7 +566,7 @@ struct SessionRow: View {
       }
       Spacer(minLength: 4)
       if let left = contextLeft, left <= ContextLeft.showMark {
-        Text("bağlam %\(Int(left.rounded()))")
+        Text("context \(Int(left.rounded()))%")
           .font(.system(size: 10, weight: .semibold)).monospacedDigit()
           .foregroundStyle(left <= ContextLeft.alertMark ? theme.error : theme.needs)
           .padding(.horizontal, 6)
@@ -575,7 +575,7 @@ struct SessionRow: View {
             Capsule().fill(
               (left <= ContextLeft.alertMark ? theme.error : theme.needs).opacity(0.15)))
           .fixedSize()
-          .help("Bağlam penceresinin %\(Int(left.rounded()))’i kaldı")
+          .help("\(Int(left.rounded()))% of the context window left")
       }
       if trailing {
         if hover {
@@ -625,9 +625,9 @@ struct SessionRow: View {
     }
     switch session.status {
     case .working(let tool):
-      return session.activity ?? tool ?? "Düşünüyor…"
+      return session.activity ?? tool ?? loc("Thinking…")
     case .quiet:
-      return "10 dakikadır olay yok"
+      return loc("No events for 10 minutes")
     case .idle:
       return nil
     default:
@@ -665,7 +665,7 @@ struct RichDetail: View {
           .foregroundStyle(theme.secondary)
           .lineLimit(1)
         Spacer(minLength: 4)
-        SmallButton(title: "Kartı göster", style: .secondary) { actions.selectCard(card.id) }
+        SmallButton(title: loc("Show card"), style: .secondary) { actions.selectCard(card.id) }
       }
     } else {
       switch session.status {
@@ -676,9 +676,9 @@ struct RichDetail: View {
           QuestionDetail(text: text, options: options) { actions.focus(session.id) }
         }
       case .planApproval(let summary):
-        TerminalAsk(title: "Plan onayı bekliyor", text: summary) { actions.focus(session.id) }
+        TerminalAsk(title: loc("Waiting for plan approval"), text: summary) { actions.focus(session.id) }
       case .waitingInput(let message):
-        TerminalAsk(title: "Girdi bekliyor", text: message) { actions.focus(session.id) }
+        TerminalAsk(title: loc("Waiting for input"), text: message) { actions.focus(session.id) }
       case .error(let message):
         Text(message)
           .font(.system(size: 11.5)).foregroundStyle(theme.secondary)
@@ -690,17 +690,17 @@ struct RichDetail: View {
       case .working(let tool):
         let agents = session.activeAgents.count
         HStack(spacing: 6) {
-          Text(session.activity ?? tool ?? "Düşünüyor…")
+          Text(session.activity ?? tool ?? loc("Thinking…"))
             .font(.system(size: 11.5)).foregroundStyle(theme.secondary).lineLimit(1)
           if agents > 0 {
-            Text("· \(agents) alt ajan").font(.system(size: 11)).foregroundStyle(theme.tertiary)
+            Text("· \(agents) subagents").font(.system(size: 11)).foregroundStyle(theme.tertiary)
           }
         }
       case .quiet:
-        Text("10 dakikadır olay gelmedi").font(.system(size: 11.5))
+        Text("No events came in for 10 minutes").font(.system(size: 11.5))
           .foregroundStyle(theme.tertiary)
       case .idle:
-        Text("Boşta")
+        Text("Idle")
           .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
       }
     }
@@ -741,10 +741,10 @@ struct QuestionDetail: View {
         }
       }
       HStack {
-        Text("Yanıt terminalde verilir")
+        Text("Answer in the terminal")
           .font(.system(size: 11)).foregroundStyle(theme.tertiary)
         Spacer()
-        SmallButton(title: "Terminale git", style: .primary, action: goToTerminal)
+        SmallButton(title: loc("Go to terminal"), style: .primary, action: goToTerminal)
       }
     }
   }
@@ -765,7 +765,7 @@ struct TerminalAsk: View {
         }
       }
       Spacer(minLength: 4)
-      SmallButton(title: "Terminale git", style: .primary, action: goToTerminal)
+      SmallButton(title: loc("Go to terminal"), style: .primary, action: goToTerminal)
     }
   }
 }
@@ -784,14 +784,14 @@ struct RowActions: View {
   var body: some View {
     HStack(spacing: 2) {
       if let message, !message.isEmpty {
-        RowIconButton(icon: "doc.on.doc", label: "Son mesajı kopyala") {
+        RowIconButton(icon: "doc.on.doc", label: loc("Copy the last message")) {
           actions.copyMessage(session.id)
         }
       }
       if session.unseen || session.status.kind == "waiting" {
-        RowIconButton(icon: "checkmark", label: "Okundu") { actions.markSeen(session.id) }
+        RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
       }
-      RowIconButton(icon: "arrow.up.forward.app", label: "Odakla") { actions.focus(session.id) }
+      RowIconButton(icon: "arrow.up.forward.app", label: loc("Focus")) { actions.focus(session.id) }
     }
   }
 }

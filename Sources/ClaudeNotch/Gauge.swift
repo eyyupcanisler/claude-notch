@@ -1,7 +1,7 @@
 import ClaudeNotchCore
 import SwiftUI
 
-// The "Gösterge" look: dot-matrix numerals, tick strips and a soft corner glow on black.
+// The "Gauge" look: dot-matrix numerals, tick strips and a soft corner glow on black.
 
 /// 5×7 dot-matrix numerals (digits and ':'). Unlit dots are drawn faintly, like an LED panel.
 struct DotMatrixText: View {
@@ -81,7 +81,7 @@ struct DotElapsed: View {
         reading(DotClock.reading(t), label: RelativeTime.short(t))
       }
     case .fixed(let d):
-      reading(DotClock.reading(d), label: "Süre \(DotClock.reading(d).digits)")
+      reading(DotClock.reading(d), label: loc("Duration \(DotClock.reading(d).digits)"))
     case .coarse(let since):
       TimelineView(.periodic(from: .now, by: 30)) { context in
         let t = context.date.timeIntervalSince(since)
@@ -137,9 +137,9 @@ struct RhythmStrip: View {
   }
 
   private var label: String {
-    guard let rhythm, rhythm.total > 0 else { return "İşlem yok" }
+    guard let rhythm, rhythm.total > 0 else { return loc("No actions") }
     let agents = rhythm.agentIDs.count
-    return "\(rhythm.total) işlem" + (agents > 0 ? " · \(agents) alt ajan" : "")
+    return loc("\(rhythm.total) actions") + (agents > 0 ? loc(" · \(agents) subagents") : "")
   }
 
   private func strip(at now: Date) -> some View {
@@ -194,7 +194,7 @@ struct CornerGlow: View {
   }
 }
 
-/// Semicircle of ticks that fill left to right while a risky "İzin ver" is held.
+/// Semicircle of ticks that fill left to right while a risky "Allow" is held.
 struct TickArc: Shape {
   var progress: Double
   var count = 9

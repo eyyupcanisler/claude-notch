@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import Observation
 
 /// Installs the Claude Code hooks from inside the app, so a downloaded copy needs no checkout:
@@ -49,7 +50,7 @@ final class HookInstaller {
       state = .installed
     } else {
       let path = text.components(separatedBy: "\"").first { $0.contains("claude-notch-hook.sh") }
-      state = .other(path?.components(separatedBy: " ").first ?? "başka bir kopya")
+      state = .other(path?.components(separatedBy: " ").first ?? loc("another copy"))
     }
   }
 
@@ -73,7 +74,7 @@ final class HookInstaller {
 
   private func run(uninstall: Bool) {
     guard let installer = Self.bundledInstaller, let hook = Self.bundledHook else {
-      message = "Uygulamanın içinde kurulum dosyaları bulunamadı."
+      message = loc("The setup files were not found inside the app.")
       return
     }
     if !uninstall { copyHook(from: hook) }
@@ -107,12 +108,12 @@ final class HookInstaller {
         self.check()
         if ok {
           self.message = uninstall
-            ? "Kancalar kaldırıldı. Açık Claude Code oturumları yeniden başlatılınca etkilenir."
-            : "Kancalar kuruldu. Açık Claude Code oturumlarında bir sonraki mesajdan itibaren çalışır."
+            ? loc("Hooks removed. Open Claude Code sessions are affected once restarted.")
+            : loc("Hooks installed. Open Claude Code sessions use them from their next message.")
         } else if result.contains("jq") {
-          self.message = "jq bulunamadı: macOS 14’te Terminal’de `brew install jq` çalıştır."
+          self.message = loc("jq not found: on macOS 14, run `brew install jq` in Terminal.")
         } else {
-          self.message = "Kurulamadı: \(result)"
+          self.message = loc("Could not install: \(result)")
         }
       }
     }

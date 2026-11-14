@@ -189,11 +189,12 @@ public enum FocusOutcome: Sendable, Equatable {
   public var hint: String? {
     switch self {
     case .notAuthorized(let app):
-      // Accusative suffix: "Terminal'i", "Ghostty'yi", "iTerm2'yi".
-      let object = app == "Terminal" ? "Terminal'i" : "\(app)'yi"
-      return "\(object) kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon"
+      // Two keys: Turkish puts an accusative suffix on the name ("Terminal'i", "Ghostty'yi").
+      return app == "Terminal"
+        ? loc("Terminal needs control permission — System Settings > Privacy & Security > Automation")
+        : loc("\(app) needs control permission — System Settings > Privacy & Security > Automation")
     case .failed:
-      return "Terminal öne getirilemedi"
+      return loc("Could not bring the terminal to the front")
     default:
       return nil
     }

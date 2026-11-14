@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   /// Debug: dry run returns the script and liveness, otherwise focuses and returns the outcome.
   private func debugFocus(sessionID: String, dryRun: Bool) async -> JSONValue {
-    guard let s = store.sessions[sessionID] else { return .object(["error": .string("yok")]) }
+    guard let s = store.sessions[sessionID] else { return .object(["error": .string("no such session")]) }
     if dryRun {
       let kind = TerminalKind(termProgram: s.termProgram)
       return .object([
@@ -113,9 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private func showStartupError(_ detail: String) {
     let alert = NSAlert()
     alert.alertStyle = .critical
-    alert.messageText = "ClaudeNotch soketi başlatılamadı"
+    alert.messageText = loc("The ClaudeNotch socket could not be started")
     alert.informativeText = detail
-    alert.addButton(withTitle: "Tamam")
+    alert.addButton(withTitle: loc("OK"))
     NSApp.activate()
     alert.runModal()
   }

@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import Carbon.HIToolbox
 import ServiceManagement
 import SwiftUI
@@ -6,7 +7,7 @@ import SwiftUI
 /// What the Settings window may do with the global shortcuts (the controller owns them).
 @MainActor
 struct ShortcutBridge {
-  /// Registers a recorded shortcut; returns a Turkish error (previous one kept) or nil.
+  /// Registers a recorded shortcut; returns a localized error (previous one kept) or nil.
   var set: @MainActor (HotKeyRole, KeyCombo) -> String?
   var reset: @MainActor () -> Void
   /// A recorder is listening: our hot keys step aside so the chord reaches it.
@@ -14,7 +15,7 @@ struct ShortcutBridge {
   var registered: @MainActor (HotKeyRole) -> Bool
 }
 
-/// Small Settings window (gear / right-click > Ayarlar…).
+/// Small Settings window (gear / right-click > Settings…).
 @MainActor
 final class SettingsWindowController {
   private var window: NSWindow?
@@ -40,7 +41,7 @@ final class SettingsWindowController {
       let view = SettingsView(settings: settings, shortcuts: shortcuts, modules: modules)
       let hosting = NSHostingController(rootView: view)
       let w = NSWindow(contentViewController: hosting)
-      w.title = "ClaudeNotch Ayarları"
+      w.title = loc("ClaudeNotch Settings")
       w.styleMask = [.titled, .closable]
       w.isReleasedWhenClosed = false
       w.setContentSize(NSSize(width: 480, height: 620))
@@ -58,7 +59,7 @@ struct SettingsView: View {
   @Bindable var settings: NotchSettings
   let shortcuts: ShortcutBridge
   let modules: ModuleCenter
-  /// Bumped after a change so the "kaydedilemedi" notes re-read the registration state.
+  /// Bumped after a change so the "could not be registered" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
   @State private var hooks = HookInstaller()
@@ -70,35 +71,35 @@ struct SettingsView: View {
   var body: some View {
     TabView {
       Form {
-        Section("Görünüm") {
-          Picker("Ekran", selection: $settings.displayMode) {
+        Section("Appearance") {
+          Picker("Screens", selection: $settings.displayMode) {
             ForEach(DisplayMode.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(displayHelp).font(.caption).foregroundStyle(.secondary)
-          Picker("Satırlar", selection: $settings.density) {
+          Picker("Rows", selection: $settings.density) {
             ForEach(Density.allCases, id: \.self) { Text($0.title).tag($0) }
           }
         }
-        Section("Claude Code bağlantısı") {
+        Section("Claude Code connection") {
           HStack {
             switch hooks.state {
             case .installed:
-              Label("Kancalar kurulu", systemImage: "checkmark.circle.fill")
+              Label("Hooks installed", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
             case .notInstalled:
-              Label("Kancalar kurulu değil", systemImage: "exclamationmark.triangle.fill")
+              Label("Hooks not installed", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             case .other:
-              Label("Kancalar başka bir kopyayı çağırıyor", systemImage: "info.circle")
+              Label("Hooks call another copy", systemImage: "info.circle")
                 .foregroundStyle(.secondary)
             }
             Spacer()
             if hooks.busy {
               ProgressView().controlSize(.small)
             } else if hooks.state == .installed {
-              Button("Kaldır") { hooks.uninstall() }
+              Button("Remove") { hooks.uninstall() }
             } else {
-              Button(hooks.state == .notInstalled ? "Kancaları kur" : "Bu uygulamaya bağla") {
+              Button(hooks.state == .notInstalled ? "Install hooks" : "Connect to this app") {
                 hooks.install()
               }
             }
@@ -108,8 +109,8 @@ struct SettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         }
-        Section("Başlangıç") {
-          Toggle("Oturum açılışında başlat", isOn: Binding(
+        Section("Startup") {
+          Toggle("Open at login", isOn: Binding(
             get: { loginEnabled }, set: { setLogin($0) }))
           if let loginError {
             Text(loginError).font(.caption).foregroundStyle(.orange)
@@ -117,133 +118,124 @@ struct SettingsView: View {
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Genel", systemImage: "gearshape") }
+      .tabItem { Label("General", systemImage: "gearshape") }
       Form {
-        Section("Takvim") {
+        Section("Calendar") {
           // The source comes first: choosing Google never triggers the macOS Calendar prompt.
-          Picker("Kaynak", selection: $settings.calendarGoogle) {
-            Text("macOS Takvim").tag(false)
-            Text("Google Takvim").tag(true)
+          Picker("Source", selection: $settings.calendarGoogle) {
+            Text("macOS Calendar").tag(false)
+            Text("Google Calendar").tag(true)
           }
           .pickerStyle(.segmented)
           if settings.calendarGoogle {
             GoogleCalendarSettings(google: modules.google)
           } else {
-            Text("macOS’taki Takvim uygulamasının takvimleri (İnternet Hesapları’nda ekli Google "
-              + "hesapları dahil). Açınca macOS bir kez takvim izni ister.")
+            Text("Calendars from the macOS Calendar app (including Google accounts added in Internet Accounts). macOS asks for calendar access once when you turn this on.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Toggle("Toplantıları hatırlat ve panelde göster", isOn: $settings.calendarEnabled)
+          Toggle("Remind me of meetings and show them in the panel", isOn: $settings.calendarEnabled)
         if settings.calendarEnabled {
-        Toggle("Takvimdeki hatırlatma sürelerini kullan", isOn: $settings.calendarOwnAlerts)
+        Toggle("Use the calendar’s own alert times", isOn: $settings.calendarOwnAlerts)
         Text(settings.calendarOwnAlerts
-          ? "Her toplantı, takviminde ayarlı sürelerde hatırlatılır (ör. 1 sa ve 10 dk önce); "
-            + "hatırlatması olmayan toplantı hatırlatılmaz."
-          : "Her toplantı 10 dk önce hatırlatılır.")
+          ? "Each meeting is announced at the alert times set in its calendar (e.g. 1 h and 10 min before); a meeting without alerts is not announced."
+          : "Each meeting is announced 10 min before.")
           .font(.caption).foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
         }
           if settings.calendarEnabled {
             switch modules.calendarAccess {
             case .asking:
-              Text("macOS takvim izni istiyor…").font(.caption).foregroundStyle(.secondary)
+              Text("macOS is asking for calendar access…").font(.caption).foregroundStyle(.secondary)
             case .denied:
               HStack {
-                Text("Takvim izni verilmedi.").font(.caption).foregroundStyle(.orange)
+                Text("Calendar access was not granted.").font(.caption).foregroundStyle(.orange)
                 Spacer()
-                Button("Sistem Ayarları’nı aç") { modules.openCalendar() }
+                Button("Open System Settings") { modules.openCalendar() }
               }
             default:
               EmptyView()
             }
           }
         }
-        Section("Zamanlayıcı ve Pomodoro") {
+        Section("Timer and Pomodoro") {
           Toggle(
-            "Zamanlayıcı (panelin üst bandındaki ⏲ ile kurulur)", isOn: $settings.timerEnabled)
+            "Timer (set with ⏲ in the panel’s top band)", isOn: $settings.timerEnabled)
           if settings.timerEnabled {
-            Picker("Pomodoro düzeni", selection: Binding(
+            Picker("Pomodoro layout", selection: Binding(
               get: { PomoPreset.match(settings) }, set: { $0.apply(to: settings) })
             ) {
               ForEach(PomoPreset.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             Stepper(
-              "Odak: \(settings.pomoFocus) dk", value: $settings.pomoFocus, in: 5...180, step: 5)
-            Stepper("Kısa mola: \(settings.pomoShort) dk", value: $settings.pomoShort, in: 1...60)
+              "Focus: \(settings.pomoFocus) min", value: $settings.pomoFocus, in: 5...180, step: 5)
+            Stepper("Short break: \(settings.pomoShort) min", value: $settings.pomoShort, in: 1...60)
             Stepper(
-              "Uzun mola: \(settings.pomoLong) dk", value: $settings.pomoLong, in: 1...90, step: 5)
+              "Long break: \(settings.pomoLong) min", value: $settings.pomoLong, in: 1...90, step: 5)
             Stepper(
-              "Uzun moladan önce: \(settings.pomoRounds) odak", value: $settings.pomoRounds,
+              "Focus rounds before a long break: \(settings.pomoRounds)", value: $settings.pomoRounds,
               in: 1...8)
-            Text("Ultradiyen döngü: beyin ~90 dk odak, ~20 dk dinlenme ritminde çalışır; uzun "
-              + "işler için 90 / 20 düzenini seç.")
+            Text("Ultradian cycle: the brain works in a rhythm of ~90 min focus and ~20 min rest; choose 90 / 20 for long tasks.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
         }
-        Section("Diğer modüller") {
-          Toggle("Şarj: kablo takılınca ve pil %10’a inince", isOn: $settings.batteryEnabled)
-          Toggle("Spotify: çalarken çentiğin yanında kapak", isOn: $settings.spotifyEnabled)
+        Section("Other modules") {
+          Toggle("Charging: when plugged in and when the battery drops to 10%", isOn: $settings.batteryEnabled)
+          Toggle("Spotify: album art beside the notch while playing", isOn: $settings.spotifyEnabled)
           if settings.spotifyEnabled {
-            Toggle("Uygulamadayken kulakları çentiğe gizle", isOn: $settings.tuckEars)
-            Text("Masaüstünde, tam ekranda ve şarkı değişince 3 sn kapak tam görünür; diğer "
-              + "zamanlarda kapak çentiğin arkasına kayar, yalnız ucu görünür.")
+            Toggle("Tuck the art into the notch while you work in an app", isOn: $settings.tuckEars)
+            Text("On the desktop, in full screen and for 3 s after a track change the art shows in full; otherwise it slides behind the notch and only its edge shows.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
           if settings.spotifyEnabled && modules.spotify.denied {
-            Text("Spotify’ı kontrol izni verilmedi: Sistem Ayarları > Gizlilik ve Güvenlik > "
-              + "Otomasyon > ClaudeNotch > Spotify.")
+            Text("Permission to control Spotify was not granted: System Settings > Privacy & Security > Automation > ClaudeNotch > Spotify.")
               .font(.caption).foregroundStyle(.orange)
               .fixedSize(horizontal: false, vertical: true)
           }
           Toggle(
-            "Hava durumu: panel bandında, yağmur yaklaşınca ada", isOn: $settings.weatherEnabled)
+            "Weather: in the panel band, an island when rain is near", isOn: $settings.weatherEnabled)
           if settings.weatherEnabled {
             HStack {
               TextField(
-                "Şehir", text: $city, prompt: Text(modules.weather.place?.name ?? "ör. İstanbul"))
+                "City", text: $city, prompt: Text(modules.weather.place?.name ?? loc("e.g. Istanbul")))
                 .onSubmit { modules.weather.search(city) }
-              Button("Bul") { modules.weather.search(city) }
+              Button("Find") { modules.weather.search(city) }
                 .disabled(city.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text(weatherHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Toggle("Claude planı: limit yüzdesi panel bandında", isOn: $settings.usageEnabled)
+          Toggle("Claude plan: usage limit percentage in the panel band", isOn: $settings.usageEnabled)
           if settings.usageEnabled && !modules.usage.hasData {
-            Text("Claude Code bu yüzdeleri yalnız durum satırına verir. Bir kez çalıştır: "
-              + "scripts/install-statusline.sh (durum satırı betiğine tek satır ekler, "
-              + "yedek alır).")
+            Text("Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup).")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
               .textSelection(.enabled)
           }
-          Toggle("Raf: son 6 kopyalanan (metin, görüntü, dosya)", isOn: $settings.shelfEnabled)
+          Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {
-            Text("Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. "
-              + "Raf geçici klasörde durur, kapatınca silinir.")
+            Text("The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf lives in a temporary folder and is deleted when you quit.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Text("Modül adaları Claude bildirimlerinin önüne geçmez; bir Claude adası açıksa "
-            + "sırasını bekler.")
+          Text("Module islands never get ahead of Claude notifications; while a Claude island is open they wait their turn.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Modüller", systemImage: "square.grid.2x2") }
+      .tabItem { Label("Modules", systemImage: "square.grid.2x2") }
       Form {
-        Section("Bildirim") {
-          Picker("İzin isteği görünür kalsın", selection: $settings.peekDuration) {
+        Section("Notification") {
+          Picker("Keep permission requests visible", selection: $settings.peekDuration) {
             ForEach(PeekDuration.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(peekHelp).font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
-        Section("Bildirim sesleri") {
+        Section("Notification sounds") {
           ForEach(SoundEvent.allCases, id: \.self) { e in
             HStack {
               Toggle(e.title, isOn: Binding(
@@ -263,30 +255,29 @@ struct SettingsView: View {
               .disabled(!settings.soundEnabled(e))
             }
           }
-          Toggle("Sessiz mod: yalnız izin istekleri ve sorular", isOn: $settings.silentMode)
-          Text("Panel bandındaki 🔔 ile de açılıp kapanır. “Bitti” ve modül adaları ile sesleri "
-            + "susar; panelde her şey yine görünür.")
+          Toggle("Silent mode: only permission requests and questions", isOn: $settings.silentMode)
+          Text("Also toggled with 🔔 in the panel band. “Done” and module islands and their sounds stay quiet; everything still shows in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-          Toggle("Sessiz saatler", isOn: $settings.quietHours)
+          Toggle("Quiet hours", isOn: $settings.quietHours)
           if settings.quietHours {
             HStack {
-              Picker("Başlangıç", selection: $settings.quietStart) {
+              Picker("From", selection: $settings.quietStart) {
                 ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
               }
-              Picker("Bitiş", selection: $settings.quietEnd) {
+              Picker("To", selection: $settings.quietEnd) {
                 ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
               }
             }
-            Text("Bu aralıkta hiçbir ClaudeNotch sesi çalmaz; adalar yine düşer.")
+            Text("No ClaudeNotch sound plays in this window; islands still drop.")
               .font(.caption).foregroundStyle(.secondary)
           }
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Bildirimler", systemImage: "bell") }
+      .tabItem { Label("Notifications", systemImage: "bell") }
       Form {
-        Section("Kısayollar") {
+        Section("Shortcuts") {
           ForEach(HotKeyRole.configurable, id: \.self) { role in
             ShortcutRecorder(
               role: role, active: $recordingRole, combo: settings.shortcut(role),
@@ -301,7 +292,7 @@ struct SettingsView: View {
             Text(shortcutHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button("Varsayılana dön") {
+            Button("Restore defaults") {
               shortcuts.reset()
               revision += 1
             }
@@ -309,13 +300,12 @@ struct SettingsView: View {
               settings.shortcut($0) == KeyCombo.defaultCombo($0)
             })
           }
-          Text("Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · "
-            + "↑/↓ oturumlar · ⏎ terminale git · Esc kapat")
+          Text("While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close")
             .font(.caption).foregroundStyle(.secondary)
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Kısayollar", systemImage: "keyboard") }
+      .tabItem { Label("Shortcuts", systemImage: "keyboard") }
     }
     .frame(width: 480, height: 620)
   }
@@ -323,47 +313,42 @@ struct SettingsView: View {
   private var hookHelp: String {
     switch hooks.state {
     case .installed:
-      return "Claude Code olayları ve izin istekleri bu uygulamaya geliyor."
+      return loc("Claude Code events and permission requests come to this app.")
     case .notInstalled:
-      return "Claude Code’un durumu ve izin istekleri çentiğe gelsin diye ~/.claude/settings.json "
-        + "dosyasına kancalar eklenir (önce yedek alınır, diğer ayarlarına dokunulmaz)."
+      return loc("To bring Claude Code’s status and permission requests to the notch, hooks are added to ~/.claude/settings.json (after a backup; your other settings stay untouched).")
     case .other(let path):
-      return "Şu an \(path) kullanılıyor (kaynak koddan kurulum). Çalışıyorsa böyle kalabilir."
+      return loc("\(path) is in use right now (an install from source). If it works, it can stay that way.")
     }
   }
 
   private var weatherHelp: String {
     switch modules.weather.searchNote {
-    case .some(""): return "Aranıyor…"
+    case .some(""): return loc("Searching…")
     case .some(let s): return s
     case .none:
       return modules.weather.place == nil
-        ? "Konum izni istenmez: şehrini yaz. Veri Open-Meteo’dan, 30 dk’da bir."
-        : "Veri Open-Meteo’dan, 30 dk’da bir."
+        ? loc("No location permission needed: type your city. Data from Open-Meteo, every 30 min.")
+        : loc("Data from Open-Meteo, every 30 min.")
     }
   }
 
   private var shortcutHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return "\(allow) ve \(deny) her uygulamadan çalışır, odağı almaz; yalnızca ekranda "
-      + "gösterilen isteğe uygulanır. Riskli komutta \(allow) basılı tutulur. "
-      + "“Her zaman” için kısayol yoktur."
+    return loc("\(allow) and \(deny) work from any app without taking focus; they apply only to the request on screen. For a risky command, hold \(allow). “Always” has no shortcut.")
   }
 
   private var peekHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return "Süre dolunca istek çentiğin altındaki amber çizgide bekler (hook zaman aşımı "
-      + "~10 dk). Üzerine gelmek açık tutar. Kapanmışken \(allow) / \(deny) önce isteği "
-      + "geri getirir; karar ikinci basışta verilir."
+    return loc("When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
   }
 
   private var displayHelp: String {
     switch settings.displayMode {
-    case .automatic: return "Çentikli ekran her zaman; çalıştığınız ekran başkaysa orada bir hap."
-    case .notchOnly: return "Yalnızca çentikli ekran (kapak kapalıyken ana ekran)."
-    case .all: return "Çentikli ekran ve diğer tüm ekranlarda birer hap."
+    case .automatic: return loc("The notched screen always; a pill on the screen you work on when that is another one.")
+    case .notchOnly: return loc("Only the notched screen (the main screen while the lid is closed).")
+    case .all: return loc("The notched screen, plus a pill on every other screen.")
     }
   }
 
@@ -375,8 +360,7 @@ struct SettingsView: View {
       UserDefaults.standard.set(on, forKey: "loginWanted")
       loginError = nil
     } catch {
-      loginError = "Değiştirilemedi: \(error.localizedDescription). "
-        + "Uygulamanın /Applications altında olması gerekebilir."
+      loginError = loc("Could not change it: \(error.localizedDescription). The app may need to be in /Applications.")
     }
     loginEnabled = service.status == .enabled
   }
@@ -399,17 +383,17 @@ struct ShortcutRecorder: View {
     VStack(alignment: .leading, spacing: 4) {
       LabeledContent(role.title) {
         Button(action: toggle) {
-          Text(recording ? "Kısayola basın…" : combo.display)
+          Text(recording ? loc("Press a shortcut…") : combo.display)
             .font(.system(.body, design: .rounded).weight(.semibold))
             .foregroundStyle(recording ? Color.accentColor : Color.primary)
             .frame(minWidth: 110)
         }
-        .help(recording ? "Yeni kısayola basın; Esc vazgeçer" : "Değiştirmek için tıklayın")
+        .help(recording ? "Press the new shortcut; Esc cancels" : "Click to change")
       }
       if let error {
         Text(error).font(.caption).foregroundStyle(.orange)
       } else if !registered && !recording {
-        Text("Kısayol kaydedilemedi; başka bir kısayol seçin.")
+        Text("The shortcut could not be registered; choose another one.")
           .font(.caption).foregroundStyle(.orange)
       }
     }
@@ -436,7 +420,7 @@ struct ShortcutRecorder: View {
           return
         }
         guard let combo = KeyCombo(event: event) else {
-          error = "En az bir değiştirici tuş kullanın: ⌃, ⌥ ya da ⌘."
+          error = loc("Use at least one modifier key: ⌃, ⌥ or ⌘.")
           return
         }
         error = record(combo)
@@ -456,7 +440,7 @@ struct ShortcutRecorder: View {
   }
 }
 
-/// Ready-made Pomodoro layouts; editing a value by hand shows "Özel".
+/// Ready-made Pomodoro layouts; editing a value by hand shows "Custom".
 enum PomoPreset: String, CaseIterable, Hashable {
   case classic
   case deep
@@ -465,10 +449,10 @@ enum PomoPreset: String, CaseIterable, Hashable {
 
   var title: String {
     switch self {
-    case .classic: return "Klasik · 25 / 5, uzun 15"
-    case .deep: return "Derin · 50 / 10, uzun 30"
-    case .ultradian: return "Ultradiyen · 90 / 20"
-    case .custom: return "Özel"
+    case .classic: return loc("Classic · 25 / 5, long 15")
+    case .deep: return loc("Deep · 50 / 10, long 30")
+    case .ultradian: return loc("Ultradian · 90 / 20")
+    case .custom: return loc("Custom")
     }
   }
 
@@ -505,17 +489,17 @@ struct GoogleCalendarSettings: View {
       HStack(spacing: 8) {
         switch google.status {
         case .noClient:
-          Button("İstemci dosyasını seç…") { google.chooseClientFile() }
+          Button("Choose client file…") { google.chooseClientFile() }
         case .signedOut, .failed:
-          Button("Google ile bağlan") { google.signIn() }
-          Button("İstemci dosyasını değiştir…") { google.chooseClientFile() }
+          Button("Connect with Google") { google.signIn() }
+          Button("Change client file…") { google.chooseClientFile() }
         case .signingIn:
           ProgressView().controlSize(.small)
-          Text("Tarayıcıda Google girişini tamamla…").font(.caption)
-          Button("Vazgeç") { google.disconnect() }
+          Text("Finish the Google sign-in in your browser…").font(.caption)
+          Button("Cancel") { google.disconnect() }
         case .connected:
-          Button("Şimdi eşitle") { Task { await google.fetch() } }
-          Button("Bağlantıyı kes") { google.disconnect() }
+          Button("Sync now") { Task { await google.fetch() } }
+          Button("Disconnect") { google.disconnect() }
         }
       }
       Text(statusLine).font(.caption).foregroundStyle(statusColor)
@@ -527,14 +511,13 @@ struct GoogleCalendarSettings: View {
   private var statusLine: String {
     switch google.status {
     case .noClient:
-      return "Google Cloud’da bir “Masaüstü uygulaması” OAuth istemcisi oluştur ve indirdiğin "
-        + "JSON dosyasını seç (adımlar README’de). Yalnız senin okuyabildiğin bir dosyada saklanır."
-    case .signedOut: return "İstemci hazır. Bağlan’a basınca tarayıcıda Google girişi açılır."
-    case .signingIn: return "Giriş tarayıcıda; bitince bu ekran kendiliğinden güncellenir."
+      return loc("Create a “Desktop app” OAuth client in Google Cloud and choose the JSON file you downloaded (steps in the README). It is kept in a file only you can read.")
+    case .signedOut: return loc("The client is ready. Press Connect to open the Google sign-in in your browser.")
+    case .signingIn: return loc("Sign-in is in your browser; this screen updates by itself when it is done.")
     case .connected:
-      let who = google.account.map { "\($0) bağlı" } ?? "Bağlı"
-      let when = google.lastSync.map { " · son eşitleme \(ModuleCenter.clock($0))" } ?? ""
-      return who + when + " · yalnız okuma"
+      let who = google.account.map { loc("\($0) connected") } ?? loc("Connected")
+      let when = google.lastSync.map { loc(" · last sync \(ModuleCenter.clock($0))") } ?? ""
+      return who + when + loc(" · read-only")
     case .failed(let m): return m
     }
   }

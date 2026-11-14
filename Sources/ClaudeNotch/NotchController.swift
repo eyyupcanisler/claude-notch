@@ -37,7 +37,7 @@ final class NotchController {
   private var keyGate = DecisionKeyGate()
   /// Session whose card was in the slot at the last check (see `syncSlotOrder`).
   private var lastSlotSessionID: String?
-  /// How long the ⋯ rule must be on screen before "Her zaman" is accepted.
+  /// How long the ⋯ rule must be on screen before "Always" is accepted.
   static let moreArmDelay: TimeInterval = 0.8
 
   private var peekTask: Task<Void, Never>?
@@ -84,11 +84,11 @@ final class NotchController {
     modules.onNote = { [weak self] note in self?.moduleNote(note) }
     modules.usage.onContextLow = { [weak self] sid, left in
       guard let self else { return }
-      let name = self.store.sessions[sid].map { self.store.displayName(for: $0) } ?? "Oturum"
+      let name = self.store.sessions[sid].map { self.store.displayName(for: $0) } ?? loc("Session")
       self.moduleNote(
         ModuleNote(
-          source: .claude, id: "ctx:\(sid)", title: "\(name): bağlam dolmak üzere",
-          subtitle: "Yakında otomatik sıkıştırma; gerekiyorsa /compact ile kendin başlat",
+          source: .claude, id: "ctx:\(sid)", title: loc("\(name): context almost full"),
+          subtitle: loc("Auto-compact soon; run /compact yourself if needed"),
           digits: "\(Int(left.rounded()))", unit: "%", validUntil: Date().addingTimeInterval(600)))
     }
     settingsWindow = SettingsWindowController(
@@ -317,7 +317,7 @@ final class NotchController {
 
   private func schedulePeekExpiry() {
     peekTask?.cancel()
-    // "Yanıtlanana kadar": nothing to schedule, the answer clears it.
+    // "Until answered": nothing to schedule, the answer clears it.
     guard let until = planner.current?.until, until != .distantFuture, !debugFreeze else {
       return
     }
@@ -420,7 +420,7 @@ final class NotchController {
 
   /// The card slot shows another session's card now: while the order is frozen, that session
   /// and the one that left the slot swap places in the list, so the rows under the pointer stay
-  /// where they were (no "Kartı göster" slides under a stationary pointer).
+  /// where they were (no "Show card" slides under a stationary pointer).
   private func syncSlotOrder() {
     let slot = RowKind.slotCard(store: store, ui: ui)?.sessionID
     defer { lastSlotSessionID = slot }
@@ -430,7 +430,7 @@ final class NotchController {
     if swapped != frozen { ui.frozenOrder = swapped }
   }
 
-  /// Opens / closes the ⋯ section of a card; opening arms "Her zaman" only after a moment.
+  /// Opens / closes the ⋯ section of a card; opening arms "Always" only after a moment.
   private func setMore(_ id: String?) {
     ui.moreCardID = id
     if id != nil {
@@ -662,14 +662,14 @@ final class NotchController {
     let t = modules.timer
     let title: String = {
       switch t.state {
-      case .paused: return "Zamanlayıcı duraklatıldı"
-      default: return modules.pomodoro?.phase.isBreak == true ? "Mola sürüyor" : "Odak başladı"
+      case .paused: return loc("Timer paused")
+      default: return modules.pomodoro?.phase.isBreak == true ? loc("Break in progress") : loc("Focus started")
       }
     }()
     moduleNote(
       ModuleNote(
         source: .timer, id: "timerkey:\(Date().timeIntervalSince1970)", title: title,
-        subtitle: "⌃⌥P ile duraklat / sürdür",
+        subtitle: loc("⌃⌥P pauses / resumes"),
         digits: DotClock.countdown(t.remaining(at: Date())),
         validUntil: Date().addingTimeInterval(5)))
   }
@@ -681,13 +681,13 @@ final class NotchController {
     let what: String
     switch item.kind {
     case .text(let s): what = TextShortener.oneLine(s, limit: 60)
-    case .image(_, _, let w, let h): what = "Görüntü · \(w)×\(h)"
+    case .image(_, _, let w, let h): what = loc("Image · \(String(w))×\(String(h))")
     case .file(let u): what = u.lastPathComponent
     }
     moduleNote(
       ModuleNote(
         source: .shelf, id: "shelfkey:\(item.id):\(Date().timeIntervalSince1970)",
-        title: "Panoya kopyalandı", subtitle: what, validUntil: Date().addingTimeInterval(5)))
+        title: loc("Copied to the clipboard"), subtitle: what, validUntil: Date().addingTimeInterval(5)))
   }
 
   /// The request the user sees right now: the open panel's card, or the permission peek's.
@@ -790,7 +790,7 @@ final class NotchController {
     }
   }
 
-  /// Risky request: the allow shortcut must stay down for the hold time (ring on İzin ver).
+  /// Risky request: the allow shortcut must stay down for the hold time (ring on Allow).
   private func startKeyHold(_ id: String) {
     cancelKeyHold(hint: false)
     ui.holdHintCardID = nil
@@ -819,7 +819,7 @@ final class NotchController {
     ui.keyHoldCardID = nil
     withAnimation(.easeOut(duration: 0.15)) { ui.holdProgress[hold.cardID] = nil }
     guard hint else { return }
-    // A tap on a risky request: the button says "Basılı tutun" for a moment (no motion: it is
+    // A tap on a risky request: the button says "Press and hold" for a moment (no motion: it is
     // a keyboard action).
     ui.holdHintCardID = hold.cardID
     holdHintTask?.cancel()
@@ -845,22 +845,22 @@ final class NotchController {
     if ui.denyKey != deny { ui.denyKey = deny }
     var hint: String?
     if !settings.shortcutHintSeen, let allow, let deny {
-      hint = "\(allow) izin ver · \(deny) reddet"
+      hint = loc("\(allow) allow · \(deny) deny")
     }
     if ui.shortcutHint != hint { ui.shortcutHint = hint }
   }
 
-  /// Settings recorder: validates and registers `combo` for `role`. Returns a Turkish error
+  /// Settings recorder: validates and registers `combo` for `role`. Returns a localized error
   /// (the previous shortcut stays) or nil.
   private func setShortcut(_ role: HotKeyRole, _ combo: KeyCombo) -> String? {
     if let other = HotKeyRole.configurable.first(where: {
       $0 != role && settings.shortcut($0) == combo
     }) {
-      return "Bu kısayol zaten “\(other.title)” için kullanılıyor."
+      return loc("This shortcut is already used for “\(other.title)”.")
     }
     if let error = combo.error(for: role) { return error }
     if combo.isSystemShortcut {
-      return "Bu kısayolu macOS kullanıyor; başka bir kısayol seçin."
+      return loc("macOS uses this shortcut; choose another one.")
     }
     let old = settings.shortcut(role)
     let status = hotKeys?.register(role, combo) ?? OSStatus(eventNotHandledErr)
@@ -868,8 +868,8 @@ final class NotchController {
       if shortcutPauses <= 1 { hotKeys?.register(role, old) }
       updateKeyHints()
       return status == OSStatus(eventHotKeyExistsErr)
-        ? "Bu kısayol zaten kayıtlı; önceki kısayol korunuyor."
-        : "Kısayol kaydedilemedi (hata \(status)); önceki kısayol korunuyor."
+        ? loc("This shortcut is already registered; the previous one stays.")
+        : loc("The shortcut could not be registered (error \(String(status))); the previous one stays.")
     }
     settings.setShortcut(role, combo)
     // Registered only to test it: another recorder still listens, so it stays off for now.
@@ -1033,7 +1033,7 @@ final class NotchController {
     }
     if source.isGlobal {
       // Global shortcuts: only the request on screen (peek or the panel's card), never
-      // "Her zaman".
+      // "Always".
       guard decision != .always, now >= ui.keysArmedAt,
         shownRequest(at: now)?.cardID == card.id
       else { return }
@@ -1055,7 +1055,7 @@ final class NotchController {
     if card.needsExpansion && !(ui.openedCards.contains(id) && ui.readToEnd.contains(id)) {
       return
     }
-    // "Her zaman" adds a permanent rule: only once that rule has been on screen a moment
+    // "Always" adds a permanent rule: only once that rule has been on screen a moment
     // (⌘⇧⏎ first opens it; a later, separate press saves it).
     if decision == .always && ui.moreCardID != card.id {
       if source == .key {
@@ -1069,7 +1069,7 @@ final class NotchController {
       return
     }
     // ... and only once that whole rule has been on screen, down to its end (a long rule
-    // scrolls). No rule shown means no "Her zaman".
+    // scrolls). No rule shown means no "Always".
     if decision == .always && (card.alwaysDescription == nil || !ui.ruleRead.contains(id)) {
       return
     }
@@ -1079,7 +1079,7 @@ final class NotchController {
     finish(card, decision, source: source)
   }
 
-  /// "Bu oturumdaki N isteğin tümünü reddet": every card of the session, in one step.
+  /// "Deny all N requests in this session": every card of the session, in one step.
   private func denyAll(sessionID: String) {
     let cards = store.cards(for: sessionID)
     guard let first = cards.first, store.isArmed(first), Date() >= ui.pagerArmedAt else { return }
@@ -1307,12 +1307,12 @@ final class NotchController {
     }
     if kind == "quiet" {
       // Working but silent for 10 min: a module-level note (never over a Claude peek).
-      let name = store.sessions[sessionID].map { store.displayName(for: $0) } ?? "Oturum"
+      let name = store.sessions[sessionID].map { store.displayName(for: $0) } ?? loc("Session")
       moduleNote(
         ModuleNote(
           source: .claude, id: "quiet:\(sessionID):\(Int(Date().timeIntervalSince1970))",
-          title: "\(name) 10 dk’dır sessiz",
-          subtitle: "Uzun bir komut çalışıyor ya da takılmış olabilir", digits: "10", unit: "dk",
+          title: loc("\(name) has been quiet for 10 min"),
+          subtitle: loc("A long command is running, or it may be stuck"), digits: "10", unit: loc("min"),
           validUntil: Date().addingTimeInterval(600)))
       return
     }
@@ -1455,7 +1455,7 @@ final class NotchController {
     case .done(let m), .error(let m):
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(m, forType: .string)
-      showHint("Son mesaj panoya kopyalandı", seconds: 2.5)
+      showHint(loc("Last message copied to the clipboard"), seconds: 2.5)
     default:
       break
     }
@@ -1525,7 +1525,7 @@ final class NotchController {
     }
   }
 
-  /// "Ghostty iznini ver" (band icon / menu). A dry run only reports what a click would do.
+  /// "Grant Ghostty permission" (band icon / menu). A dry run only reports what a click would do.
   @discardableResult
   func ghosttyConsent(dryRun: Bool) -> ConsentAction {
     let action = consentAction()
@@ -1542,17 +1542,17 @@ final class NotchController {
         self.ui.consentAsking = false
         if status != -600 { self.ui.ghosttyAutomation = status }
         switch status {
-        case 0: self.showHint("Ghostty izni verildi", seconds: 2.5)
+        case 0: self.showHint(loc("Ghostty permission granted"), seconds: 2.5)
         case -1743:
-          self.showHint("Ghostty izni reddedildi: Sistem Ayarları > Gizlilik ve Güvenlik > "
-            + "Otomasyon'dan açabilirsiniz (kilit simgesi)")
+          self.showHint(loc(
+            "Ghostty permission was denied: you can turn it on in System Settings > Privacy & Security > Automation (lock icon)"))
         default: break
         }
       }
     case .openSettings:
       if let url = URL(string: GhosttyConsent.settingsURL) { NSWorkspace.shared.open(url) }
     case .unavailable:
-      showHint("İzin için önce Ghostty'yi açın")
+      showHint(loc("Open Ghostty first to grant the permission"))
     case .none:
       break
     }
@@ -1762,7 +1762,7 @@ final class NotchController {
         refreshConsent()
       }
     }
-    // {"consent": "dry_run"}: what clicking "Ghostty iznini ver" would do, without doing it.
+    // {"consent": "dry_run"}: what clicking "Grant Ghostty permission" would do, without doing it.
     if json["consent"]?.stringValue == "dry_run" { ghosttyConsent(dryRun: true) }
     if let d = json["density"]?.stringValue, let v = Density(rawValue: d) { settings.density = v }
     if let d = json["display_mode"]?.stringValue, let v = DisplayMode(rawValue: d) {

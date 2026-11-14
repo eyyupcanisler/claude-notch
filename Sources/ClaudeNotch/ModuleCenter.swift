@@ -33,7 +33,7 @@ final class ModuleCenter {
 
   // MARK: Timer state
   private(set) var timer: FocusTimer
-  /// Minutes being chosen in the tile ("Özel süre…"), nil when not choosing.
+  /// Minutes being chosen in the tile ("Custom duration…"), nil when not choosing.
   private(set) var timerDraft: Int?
   /// Set while the timer runs a Pomodoro cycle (focus / breaks), nil for a plain timer.
   private(set) var pomodoro: Pomodoro?
@@ -204,7 +204,7 @@ final class ModuleCenter {
       store.events(matching: predicate).prefix(60).map { e in
         CalendarItem(
           id: "\(e.calendarItemIdentifier)@\(Int(e.startDate.timeIntervalSince1970))",
-          title: e.title?.isEmpty == false ? e.title : "Etkinlik", start: e.startDate,
+          title: e.title?.isEmpty == false ? e.title : loc("Event"), start: e.startDate,
           end: e.endDate, isAllDay: e.isAllDay, location: e.location,
           joinURL: e.url.flatMap { $0.scheme == "https" ? $0 : nil },
           alerts: e.hasAlarms
@@ -292,7 +292,7 @@ final class ModuleCenter {
 
   static let draftRange = 1...180
 
-  /// "Özel süre…": the tile opens with a − / + chooser at the last duration.
+  /// "Custom duration…": the tile opens with a − / + chooser at the last duration.
   func beginTimerDraft() {
     timerDraft = settings.timerMinutes
   }
@@ -370,8 +370,8 @@ final class ModuleCenter {
       guard var p = self.pomodoro else {
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Zamanlayıcı bitti",
-            subtitle: "\(minutes) dk tamamlandı", digits: "00:00",
+            source: .timer, id: id, title: loc("Timer done"),
+            subtitle: loc("\(minutes) min completed"), digits: "00:00",
             validUntil: Date().addingTimeInterval(600)))
         return
       }
@@ -381,16 +381,18 @@ final class ModuleCenter {
         // A break starts by itself; the next focus waits for the user.
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Odak bitti · mola",
-            subtitle: "\(p.minutes(next)) dk \(next == .longBreak ? "uzun " : "")mola başladı",
+            source: .timer, id: id, title: loc("Focus done · break"),
+            subtitle: next == .longBreak
+              ? loc("\(p.minutes(next)) min long break started")
+              : loc("\(p.minutes(next)) min break started"),
             digits: String(format: "%02d:00", p.minutes(next)),
             validUntil: Date().addingTimeInterval(600)))
         self.run(minutes: p.minutes(next))
       } else {
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Mola bitti",
-            subtitle: "Odak \(p.round)/\(p.roundsBeforeLong) hazır: başlatmak için çentiği aç",
+            source: .timer, id: id, title: loc("Break done"),
+            subtitle: loc("Focus \(p.round)/\(p.roundsBeforeLong) is ready: open the notch to start it"),
             digits: "00:00", validUntil: Date().addingTimeInterval(600)))
       }
     }
@@ -402,8 +404,8 @@ final class ModuleCenter {
     guard case .image(_, _, let w, let h) = item.kind else { return }
     onNote?(
       ModuleNote(
-        source: .shelf, id: "shelf:\(item.id)", title: "Rafa eklendi",
-        subtitle: "Görüntü · \(w)×\(h)", validUntil: Date().addingTimeInterval(10)))
+        source: .shelf, id: "shelf:\(item.id)", title: loc("Added to the shelf"),
+        subtitle: loc("Image · \(String(w))×\(String(h))"), validUntil: Date().addingTimeInterval(10)))
   }
 
   // MARK: - Battery
@@ -412,22 +414,23 @@ final class ModuleCenter {
     let now = Date()
     switch event {
     case .pluggedIn(let p):
-      var sub = "%\(p)"
+      var sub = loc("\(p)%")
       if p >= 100 {
-        sub += " · dolu"
+        sub += loc(" · full")
       } else if let m = toFull {
-        sub += " · tam dolum " + (m >= 60 ? "\(m / 60) sa \(m % 60) dk" : "\(m) dk")
+        let left = m >= 60 ? loc("\(m / 60) h \(m % 60) min") : loc("\(m) min")
+        sub += loc(" · full in \(left)")
       }
       onNote?(
         ModuleNote(
           source: .battery, id: "ac:\(Int(now.timeIntervalSince1970))",
-          title: reading.charging || p < 100 ? "Şarj oluyor" : "Güç bağlandı", subtitle: sub,
+          title: reading.charging || p < 100 ? loc("Charging") : loc("Power connected"), subtitle: sub,
           level: Double(p) / 100, validUntil: now.addingTimeInterval(10)))
     case .low(let p):
       onNote?(
         ModuleNote(
-          source: .battery, id: "low:\(Int(now.timeIntervalSince1970))", title: "Pil azaldı",
-          subtitle: "%\(p) · şarj aletini tak", level: Double(p) / 100,
+          source: .battery, id: "low:\(Int(now.timeIntervalSince1970))", title: loc("Battery low"),
+          subtitle: loc("\(p)% · plug in the charger"), level: Double(p) / 100,
           validUntil: now.addingTimeInterval(120)))
     }
   }

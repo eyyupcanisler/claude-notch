@@ -61,8 +61,8 @@ final class UsageModule {
       onNote?(
         ModuleNote(
           source: .usage, id: "usage:\(mark.key)",
-          title: mark.mark >= 95 ? "5 saatlik limit dolmak üzere" : "5 saatlik limitin %80’i doldu",
-          subtitle: "\(ModuleCenter.clock(w.resetsAt))’de sıfırlanır",
+          title: mark.mark >= 95 ? loc("5-hour limit almost reached") : loc("5-hour limit at 80%"),
+          subtitle: loc("Resets at \(ModuleCenter.clock(w.resetsAt))"),
           digits: "\(Int(w.percent.rounded()))", unit: "%", validUntil: w.resetsAt))
     }
   }

@@ -19,25 +19,25 @@ while [ $# -gt 0 ]; do
     --print) ACTION="print" ;;
     --settings)
       shift
-      if [ $# -eq 0 ]; then echo "--settings bir yol bekliyor" >&2; exit 2; fi
+      if [ $# -eq 0 ]; then echo "--settings needs a path" >&2; exit 2; fi
       SETTINGS="$1"
       ;;
     --hook)
       shift
-      if [ $# -eq 0 ]; then echo "--hook bir yol bekliyor" >&2; exit 2; fi
+      if [ $# -eq 0 ]; then echo "--hook needs a path" >&2; exit 2; fi
       HOOK="$1"
       ;;
     -h | --help)
-      echo "Kullanım: install-hooks.sh [--uninstall] [--print] [--settings <yol>] [--hook <yol>]"
+      echo "Usage: install-hooks.sh [--uninstall] [--print] [--settings <path>] [--hook <path>]"
       exit 0
       ;;
-    *) echo "Bilinmeyen argüman: $1" >&2; exit 2 ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "jq bulunamadı" >&2
+  echo "jq not found" >&2
   exit 1
 fi
 
@@ -95,7 +95,7 @@ ADD='
 if [ -L "$SETTINGS" ]; then
   RESOLVED="$(realpath "$SETTINGS" 2>/dev/null)" || RESOLVED=""
   if [ -z "$RESOLVED" ]; then
-    echo "Sembolik bağ çözülemedi: $SETTINGS" >&2
+    echo "Could not resolve the symbolic link: $SETTINGS" >&2
     exit 1
   fi
   SETTINGS="$RESOLVED"
@@ -103,13 +103,13 @@ fi
 
 if [ -e "$SETTINGS" ]; then
   if ! jq -e 'type == "object"' "$SETTINGS" >/dev/null 2>&1; then
-    echo "Geçersiz JSON (nesne bekleniyor): $SETTINGS" >&2
+    echo "Invalid JSON (an object is expected): $SETTINGS" >&2
     exit 1
   fi
   CURRENT="$(cat "$SETTINGS")"
 else
   if [ "$ACTION" = "uninstall" ]; then
-    echo "Dosya yok, yapılacak bir şey yok: $SETTINGS"
+    echo "No file, nothing to do: $SETTINGS"
     exit 0
   fi
   CURRENT="{}"
@@ -117,33 +117,33 @@ fi
 
 if [ "$ACTION" = "uninstall" ]; then
   RESULT="$(printf '%s' "$CURRENT" | jq --arg name "$NAME" --argjson add null \
-    "$STRIP $ADD")" || { echo "jq başarısız, dosyaya dokunulmadı" >&2; exit 1; }
+    "$STRIP $ADD")" || { echo "jq failed, the file was not touched" >&2; exit 1; }
 else
   FRAGMENT="$(hooks_json)" || exit 1
   RESULT="$(printf '%s' "$CURRENT" | jq --arg name "$NAME" --argjson add "$FRAGMENT" \
-    "$STRIP $ADD")" || { echo "jq başarısız, dosyaya dokunulmadı" >&2; exit 1; }
+    "$STRIP $ADD")" || { echo "jq failed, the file was not touched" >&2; exit 1; }
 fi
 
 # Never write anything that is not a JSON object.
 if ! printf '%s' "$RESULT" | jq -e 'type == "object"' >/dev/null 2>&1; then
-  echo "Sonuç geçerli bir JSON nesnesi değil, dosyaya dokunulmadı" >&2
+  echo "The result is not a valid JSON object, the file was not touched" >&2
   exit 1
 fi
 
 DIR="$(dirname "$SETTINGS")"
 if [ -e "$SETTINGS" ]; then
   BACKUP="$(mktemp "$SETTINGS.bak.$(date +%Y%m%d-%H%M%S).XXXXXX")" \
-    || { echo "Yedek alınamadı" >&2; exit 1; }
-  cp -p "$SETTINGS" "$BACKUP" || { echo "Yedek alınamadı" >&2; exit 1; }
-  echo "Yedek: $BACKUP"
+    || { echo "Could not make a backup" >&2; exit 1; }
+  cp -p "$SETTINGS" "$BACKUP" || { echo "Could not make a backup" >&2; exit 1; }
+  echo "Backup: $BACKUP"
 else
   mkdir -p "$DIR" || exit 1
 fi
 
-TMP="$(mktemp "$DIR/.settings.XXXXXX")" || { echo "Geçici dosya oluşturulamadı" >&2; exit 1; }
+TMP="$(mktemp "$DIR/.settings.XXXXXX")" || { echo "Could not create a temporary file" >&2; exit 1; }
 if ! printf '%s\n' "$RESULT" > "$TMP"; then
   rm -f "$TMP"
-  echo "Yazılamadı: $SETTINGS" >&2
+  echo "Could not write: $SETTINGS" >&2
   exit 1
 fi
 # Keep the original permissions (mktemp creates 0600).
@@ -152,11 +152,11 @@ if [ -e "$SETTINGS" ]; then
 fi
 if ! mv -f "$TMP" "$SETTINGS"; then
   rm -f "$TMP"
-  echo "Yazılamadı: $SETTINGS" >&2
+  echo "Could not write: $SETTINGS" >&2
   exit 1
 fi
 if [ "$ACTION" = "uninstall" ]; then
-  echo "ClaudeNotch hook'ları kaldırıldı: $SETTINGS"
+  echo "ClaudeNotch hooks removed: $SETTINGS"
 else
-  echo "ClaudeNotch hook'ları kuruldu: $SETTINGS"
+  echo "ClaudeNotch hooks installed: $SETTINGS"
 fi
