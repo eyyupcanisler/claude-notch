@@ -75,6 +75,8 @@ final class ModuleCenter {
       _ = settings.batteryEnabled
       _ = settings.spotifyEnabled
       _ = settings.shelfEnabled
+      _ = settings.shelfExpiry
+      _ = settings.shelfDeletePinsWhenOff
       _ = settings.weatherEnabled
       _ = settings.usageEnabled
     } onChange: { [weak self] in
@@ -87,6 +89,8 @@ final class ModuleCenter {
 
   private func apply() {
     spotify.setEnabled(settings.spotifyEnabled)
+    shelf.configure(
+      expiry: settings.shelfExpiry, deletePinsWhenOff: settings.shelfDeletePinsWhenOff)
     shelf.setEnabled(settings.shelfEnabled)
     weather.setEnabled(settings.weatherEnabled)
     usage.setEnabled(settings.usageEnabled)

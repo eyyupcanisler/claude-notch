@@ -11,7 +11,9 @@ extension Color {
 }
 
 /// Dark Matte tokens (the only theme). The band at notch height is pure black (it reads as the
-/// hardware notch growing), so anything drawn in it uses `band*` ink.
+/// hardware notch growing), so anything drawn in it uses `band*` ink. The four status colors
+/// come from the chosen `StatusColorScheme` (Settings): the environment's `notchTheme` carries
+/// them, so views read `theme.working` / `theme.needs` / `theme.done` / `theme.error`.
 struct NotchTheme: Sendable {
   let surface: Color
   let raised: Color
@@ -33,30 +35,38 @@ struct NotchTheme: Sendable {
   static let band = Color.black
   static let bandInk = Color.white
   static let bandSecondary = Color.white.opacity(0.62)
-  // Status colors: colorblind-friendly (see `StatusPalette`). The status line pairs each with
-  // a shape sign too: moving shine = working, slow fade = needs you, solid = done,
-  // broken = error, faint = idle.
-  static let bandWorking = Color(hex: StatusPalette.working)
-  static let bandNeeds = Color(hex: StatusPalette.needs)
-  static let bandDone = Color(hex: StatusPalette.done)
-  static let bandError = Color(hex: StatusPalette.error)
-  /// Text or a glyph on a solid status fill (chips, capsules, the picked option number). Black
-  /// reaches at least 4.5:1 on every status color (`StatusPalette.ink(on:)`, checked in
-  /// `StatusPaletteTests`); white would not on any of them.
+  /// Text or a glyph on a solid status fill (chips, capsules, the picked option number): black,
+  /// as it always was. It reaches at least 4.5:1 on every status color of both palettes
+  /// (`StatusPalette.ink(on:)`, checked in `StatusPaletteTests`).
   static let onStatus = Color.black
 
-  static let dark = NotchTheme(
-    surface: Color(hex: 0x000000), raised: Color(hex: 0x0E0E10),
-    hairline: .white.opacity(0.07), ink: Color(hex: 0xF5F5F4),
-    secondary: Color(hex: 0xF5F5F4, opacity: 0.72), tertiary: Color(hex: 0xF5F5F4, opacity: 0.56),
-    faint: .white.opacity(0.06), working: Color(hex: StatusPalette.working),
-    needs: Color(hex: StatusPalette.needs), done: Color(hex: StatusPalette.done),
-    error: Color(hex: StatusPalette.error), idle: .white.opacity(0.35),
-    primaryFill: Color(hex: 0xF5F5F4), primaryText: Color(hex: 0x0B0B0C), grainOpacity: 1)
+  private static func make(_ colors: StatusPalette.Colors) -> NotchTheme {
+    NotchTheme(
+      surface: Color(hex: 0x000000), raised: Color(hex: 0x0E0E10),
+      hairline: .white.opacity(0.07), ink: Color(hex: 0xF5F5F4),
+      secondary: Color(hex: 0xF5F5F4, opacity: 0.72),
+      tertiary: Color(hex: 0xF5F5F4, opacity: 0.56),
+      faint: .white.opacity(0.06), working: Color(hex: colors.working),
+      needs: Color(hex: colors.needs), done: Color(hex: colors.done),
+      error: Color(hex: colors.error), idle: .white.opacity(0.35),
+      primaryFill: Color(hex: 0xF5F5F4), primaryText: Color(hex: 0x0B0B0C), grainOpacity: 1)
+  }
+
+  /// The original look (orange / amber / green / red).
+  static let classic = make(StatusPalette.classic)
+  /// Colorblind-friendly status colors (cyan / yellow / blue / pink-red).
+  static let colorblind = make(StatusPalette.colorblind)
+
+  static func scheme(_ scheme: StatusColorScheme) -> NotchTheme {
+    switch scheme {
+    case .classic: return classic
+    case .colorblind: return colorblind
+    }
+  }
 }
 
 private struct ThemeKey: EnvironmentKey {
-  static let defaultValue = NotchTheme.dark
+  static let defaultValue = NotchTheme.classic
 }
 
 extension EnvironmentValues {

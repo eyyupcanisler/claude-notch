@@ -1,4 +1,6 @@
-/* Turkish Info.plist texts (the English ones are written into Info.plist by scripts/build-app.sh). */
+/* Turkish Info.plist texts. Info.plist itself carries the same Turkish texts (scripts/build-app.sh),
+   and there is no en.lproj/InfoPlist.strings on purpose: the permission prompts read the same,
+   original Turkish text on every Mac. */
 
 "NSAppleEventsUsageDescription" = "ClaudeNotch, bir oturuma tıkladığınızda o oturumun terminal sekmesini (Ghostty, Terminal, iTerm2) öne getirmek ve odaktaki sekmeyi okumak için terminalinizi kontrol eder. Spotify modülü açıksa çalan şarkının kapağını almak ve oynat / duraklat / sonraki / önceki komutlarını vermek için Spotify'ı kontrol eder.";
 "NSCalendarsFullAccessUsageDescription" = "ClaudeNotch, Takvim modülü açıkken yaklaşan toplantıyı çentikte göstermek ve 10 dakika önce hatırlatmak için önümüzdeki 12 saatin etkinliklerini okur; hiçbir şeyi değiştirmez ya da dışarı göndermez.";

@@ -156,7 +156,7 @@ public enum ToolSummary {
     switch toolName {
     case "Write":
       guard let content = field("content") else { return nil }
-      return sanitize(loc("content (\(content.count) characters): \(content)"), limit: 4000)
+      return sanitize(locPlainDigits("content (\(content.count) characters): \(content)"), limit: 4000)
     case "Edit":
       guard let old = field("old_string"), let new = field("new_string") else { return nil }
       return sanitize(loc("old: \(old)\nnew: \(new)"), limit: 4000)
@@ -194,7 +194,7 @@ public enum ToolSummary {
     let tail = 70
     guard chars.count > head + tail else { return String(chars.prefix(fitLimit)) + "…" }
     let hidden = chars.count - head - tail
-    return String(chars.prefix(head)) + loc(" … [\(hidden) characters hidden] … ")
+    return String(chars.prefix(head)) + locPlainDigits(" … [\(hidden) characters hidden] … ")
       + String(chars.suffix(tail))
   }
 

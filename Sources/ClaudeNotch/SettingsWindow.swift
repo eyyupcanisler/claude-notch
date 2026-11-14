@@ -84,6 +84,27 @@ struct SettingsView: View {
           Picker("Rows", selection: $settings.density) {
             ForEach(Density.allCases, id: \.self) { Text($0.title).tag($0) }
           }
+          Picker("Status colors", selection: $settings.statusColors) {
+            ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Section("Language") {
+          Picker("App language", selection: $settings.language) {
+            ForEach(LanguageChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          if settings.language != settings.launchLanguage {
+            HStack {
+              Text("The new language applies after a restart.")
+                .font(.caption).foregroundStyle(.secondary)
+              Spacer()
+              if AppRelaunch.available {
+                Button("Restart to apply") { AppRelaunch.now() }
+              }
+            }
+          }
         }
         Section("Claude Code connection") {
           HStack {
@@ -221,8 +242,13 @@ struct SettingsView: View {
           }
           Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {
-            Text("The clipboard is checked once a second; concealed copies from password managers are skipped. Unpinned items are removed after 3 days and when the app restarts. Turning the shelf off deletes everything, pinned items too.")
-              .font(.caption).foregroundStyle(.secondary)
+            Picker("Remove unpinned items after", selection: $settings.shelfExpiry) {
+              ForEach(ShelfExpiry.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            Toggle(
+              "Delete pinned items when the shelf is turned off",
+              isOn: $settings.shelfDeletePinsWhenOff)
+            Text(shelfHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
           Text("Module islands never get ahead of Claude notifications; while a Claude island is open they wait their turn.")
@@ -238,6 +264,12 @@ struct SettingsView: View {
             ForEach(PeekDuration.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(peekHelp).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Answer Claude's questions in the notch", isOn: $settings.answerQuestionsInNotch)
+          Text(settings.answerQuestionsInNotch
+            ? "Claude waits while a question is in the island: pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
+            : "The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab.")
+            .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
         Section("Notification sounds") {
@@ -348,6 +380,11 @@ struct SettingsView: View {
     }
   }
 
+  private var shelfHelp: String {
+    ShelfExpiry.settingsHelp(
+      expiry: settings.shelfExpiry, deletePinsWhenOff: settings.shelfDeletePinsWhenOff)
+  }
+
   /// Every shortcut is the preset's (default key + the preset's modifiers).
   private func usesPreset(_ preset: ShortcutPreset) -> Bool {
     HotKeyRole.configurable.allSatisfy {
@@ -364,7 +401,13 @@ struct SettingsView: View {
   private var peekHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return loc("When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+    // Names the line's color, so it follows the chosen palette (classic: the original text).
+    switch settings.statusColors {
+    case .classic:
+      return loc("When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+    case .colorblind:
+      return loc("When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+    }
   }
 
   private var displayHelp: String {

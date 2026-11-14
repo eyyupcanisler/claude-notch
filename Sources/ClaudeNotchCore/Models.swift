@@ -26,7 +26,7 @@ public enum SessionStatus: Sendable, Equatable {
     }
   }
 
-  /// The status itself asks for the user (yellow, "needs you"). `done` is not attention (see `Session.unseen`);
+  /// The status itself asks for the user ("needs you" color). `done` is not attention (see `Session.unseen`);
   /// an `error` only counts while unseen (`Session.needsAttention`).
   public var needsAttention: Bool {
     switch self {
@@ -162,7 +162,7 @@ public struct Session: Sendable, Identifiable, Equatable {
     return false
   }
 
-  /// "Needs you" (yellow) attention from the status alone (cards are counted by the store).
+  /// "Needs you" attention from the status alone (cards are counted by the store).
   public var needsAttention: Bool {
     if case .error = status { return unseen }
     return status.needsAttention

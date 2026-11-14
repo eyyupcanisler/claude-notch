@@ -32,6 +32,57 @@ enum Density: String, CaseIterable, Sendable {
   }
 }
 
+extension StatusColorScheme {
+  var title: String {
+    switch self {
+    case .classic: return loc("Classic")
+    case .colorblind: return loc("Colorblind-friendly")
+    }
+  }
+}
+
+extension LanguageChoice {
+  /// Each language in its own name; "System" in the current UI language.
+  var title: String {
+    switch self {
+    case .turkish: return "Türkçe"
+    case .english: return "English"
+    case .system: return loc("System (Mac language)")
+    }
+  }
+}
+
+/// Quits and opens the app again (a language change applies at launch).
+@MainActor
+enum AppRelaunch {
+  /// Only a real .app bundle can be opened again (not a `swift run` binary).
+  static var available: Bool { Bundle.main.bundlePath.hasSuffix(".app") }
+
+  /// A detached shell waits (up to ~10 s) for this process to exit, then `open`s the bundle;
+  /// the app allows one copy, so the new one must not start before this one is gone.
+  static func now() {
+    guard available else { return }
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/sh")
+    let demo = NotchSettings.isDemo ? "--env CLAUDE_NOTCH_DEMO=1 " : ""
+    p.arguments = [
+      "-c",
+      "i=0; while kill -0 \"$0\" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.2; i=$((i+1)); done; "
+        + "exec /usr/bin/open \(demo)\"$1\"",
+      String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundlePath,
+    ]
+    p.standardInput = FileHandle.nullDevice
+    p.standardOutput = FileHandle.nullDevice
+    p.standardError = FileHandle.nullDevice
+    do {
+      try p.run()
+    } catch {
+      return
+    }
+    NSApp.terminate(nil)
+  }
+}
+
 /// Sound categories of the attention kinds.
 enum SoundEvent: String, CaseIterable, Sendable {
   case permission
@@ -106,6 +157,16 @@ final class NotchSettings {
   var density: Density {
     didSet { defaults.set(density.rawValue, forKey: "density") }
   }
+  /// Status colors; applies at once (the notch theme is built from it). Fresh install: classic.
+  var statusColors: StatusColorScheme {
+    didSet { defaults.set(statusColors.rawValue, forKey: StatusColorScheme.defaultsKey) }
+  }
+  /// UI language; takes effect at the next launch (see `main.swift`). Fresh install: Turkish.
+  var language: LanguageChoice {
+    didSet { defaults.set(language.rawValue, forKey: LanguageChoice.defaultsKey) }
+  }
+  /// The language this run started with: a different `language` needs a restart.
+  @ObservationIgnored let launchLanguage: LanguageChoice
   private(set) var sounds: [SoundEvent: Bool]
   /// Chosen macOS sound per event (missing: the event's default).
   private(set) var soundNames: [SoundEvent: String]
@@ -131,6 +192,12 @@ final class NotchSettings {
   var peekDuration: PeekDuration {
     didSet { defaults.set(peekDuration.rawValue, forKey: "peekDuration") }
   }
+  /// Claude's questions are held and answered in the notch (the original, default on), or
+  /// only told about and answered in the terminal (off). See `QuestionMode`.
+  var answerQuestionsInNotch: Bool {
+    didSet { defaults.set(answerQuestionsInNotch, forKey: QuestionMode.defaultsKey) }
+  }
+  var questionMode: QuestionMode { QuestionMode(answerInNotch: answerQuestionsInNotch) }
   /// Global shortcuts (missing role: the default).
   private(set) var shortcuts: [HotKeyRole: KeyCombo]
   /// The one-time "⌃⌥Y allow · ⌃⌥N deny" line under the peek was used / dismissed.
@@ -175,6 +242,14 @@ final class NotchSettings {
   var shelfEnabled: Bool {
     didSet { defaults.set(shelfEnabled, forKey: "module.shelf") }
   }
+  /// Unpinned shelf items leave this long after they were added (default never, the original).
+  var shelfExpiry: ShelfExpiry {
+    didSet { defaults.set(shelfExpiry.rawValue, forKey: ShelfExpiry.defaultsKey) }
+  }
+  /// Turning the shelf off also deletes the pinned items (default off, the original: pins stay).
+  var shelfDeletePinsWhenOff: Bool {
+    didSet { defaults.set(shelfDeletePinsWhenOff, forKey: ShelfPinsOnOff.defaultsKey) }
+  }
   /// With an app in front (its menu might reach the notch), the ears tuck behind the notch.
   var tuckEars: Bool {
     didSet { defaults.set(tuckEars, forKey: "module.spotifyTuck") }
@@ -207,6 +282,10 @@ final class NotchSettings {
     displayMode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "")
       ?? .automatic
     density = Density(rawValue: defaults.string(forKey: "density") ?? "") ?? .compact
+    statusColors = StatusColorScheme(stored: defaults.string(forKey: StatusColorScheme.defaultsKey))
+    let lang = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
+    language = lang
+    launchLanguage = lang
     // v1 had a single switch: it seeds every category.
     let legacy = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
     var map: [SoundEvent: Bool] = [:]
@@ -227,6 +306,8 @@ final class NotchSettings {
     quietEnd = defaults.object(forKey: "quietEnd") as? Int ?? 8
     peekDuration = PeekDuration(rawValue: defaults.string(forKey: "peekDuration") ?? "")
       ?? .normal
+    answerQuestionsInNotch =
+      QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)).answersInNotch
     var keys: [HotKeyRole: KeyCombo] = [:]
     for role in HotKeyRole.allCases {
       keys[role] = KeyCombo(stored: defaults.array(forKey: role.defaultsKey))
@@ -252,6 +333,9 @@ final class NotchSettings {
     spotifyEnabled = defaults.bool(forKey: "module.spotify")
     tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true
     shelfEnabled = defaults.bool(forKey: "module.shelf")
+    shelfExpiry = ShelfExpiry(stored: defaults.object(forKey: ShelfExpiry.defaultsKey))
+    shelfDeletePinsWhenOff =
+      ShelfPinsOnOff.deletesPins(stored: defaults.object(forKey: ShelfPinsOnOff.defaultsKey))
     weatherEnabled = defaults.bool(forKey: "module.weather")
     usageEnabled = defaults.object(forKey: "module.usage") as? Bool ?? true
   }
@@ -305,5 +389,5 @@ final class NotchSettings {
     defaults.set(on, forKey: "sound.\(e.rawValue)")
   }
 
-  var tokens: NotchTheme { .dark }
+  var tokens: NotchTheme { .scheme(statusColors) }
 }

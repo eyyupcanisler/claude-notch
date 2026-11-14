@@ -83,13 +83,15 @@ final class HookInstaller {
     busy = true
     message = nil
     let args = [installer.path, "--hook", Self.hookCopy.path] + (uninstall ? ["--uninstall"] : [])
+    // The installer's messages (shown below when it fails) follow the app's language.
+    let lang = AppLanguage.code
     Task.detached {
       let p = Process()
       p.executableURL = URL(fileURLWithPath: "/bin/bash")
       p.arguments = args
       // jq: /usr/bin on macOS 15+, Homebrew elsewhere.
       p.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin",
-        "HOME": NSHomeDirectory()]
+        "HOME": NSHomeDirectory(), "CLAUDE_NOTCH_LANG": lang]
       let out = Pipe()
       p.standardOutput = out
       p.standardError = out

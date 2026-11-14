@@ -14,6 +14,7 @@ struct ExpandedToolbar: View {
   let actions: NotchActions
   let notchWidth: CGFloat
   let sideWidth: CGFloat
+  @Environment(\.notchTheme) private var theme
 
   var body: some View {
     HStack(spacing: 0) {
@@ -29,14 +30,14 @@ struct ExpandedToolbar: View {
           label: settings.silentMode
             ? loc("Silent mode is on: only permission requests and questions") : loc("Turn on silent mode"),
           active: settings.silentMode,
-          tint: settings.silentMode ? NotchTheme.bandNeeds : nil
+          tint: settings.silentMode ? theme.needs : nil
         ) { settings.silentMode.toggle() }
         if settings.timerEnabled, case .idle = modules.timer.state, modules.timerDraft == nil {
           TimerStartMenu(modules: modules, settings: settings)
         }
         if ui.ghosttyConsent.missing {
           BandIconButton(
-            icon: "lock.shield", label: consentLabel, active: false, tint: NotchTheme.bandNeeds,
+            icon: "lock.shield", label: consentLabel, active: false, tint: theme.needs,
             action: actions.ghosttyConsent)
         }
         Spacer(minLength: 0)
@@ -71,20 +72,21 @@ struct ExpandedToolbar: View {
 struct BandChips: View {
   let store: SessionStore
   let actions: NotchActions
+  @Environment(\.notchTheme) private var theme
 
   var body: some View {
     HStack(spacing: 5) {
       Spacer(minLength: 0)
       if !store.pending.isEmpty {
         Button(action: actions.showCards) {
-          BandChip(text: loc("\(store.pending.count) permissions"), color: NotchTheme.bandNeeds, solid: true)
+          BandChip(text: loc("\(store.pending.count) permissions"), color: theme.needs, solid: true)
         }
         .buttonStyle(.plain)
         .help("Show the oldest request")
       }
       if store.activeWorkingCount > 0 {
         BandChip(
-          text: loc("\(store.activeWorkingCount) working"), color: NotchTheme.bandWorking,
+          text: loc("\(store.activeWorkingCount) working"), color: theme.working,
           solid: false)
       }
     }
@@ -641,7 +643,7 @@ struct SessionRow: View {
         PermissionCardView(card: card, store: store, ui: ui, actions: actions)
       }
     default:
-      RichDetail(session: session, store: store, actions: actions)
+      RichDetail(session: session, store: store, ui: ui, actions: actions)
     }
   }
 }
@@ -650,6 +652,7 @@ struct SessionRow: View {
 struct RichDetail: View {
   let session: Session
   let store: SessionStore
+  let ui: NotchUIState
   let actions: NotchActions
   @Environment(\.notchTheme) private var theme
 
@@ -667,7 +670,11 @@ struct RichDetail: View {
     } else {
       switch session.status {
       case .question(let text, let options):
-        QuestionDetail(text: text, options: options) { actions.focus(session.id) }
+        if let held = store.question(for: session.id) {
+          QuestionAnswerView(question: held, ui: ui, actions: actions)
+        } else {
+          QuestionDetail(text: text, options: options) { actions.focus(session.id) }
+        }
       case .planApproval(let summary):
         TerminalAsk(title: loc("Waiting for plan approval"), text: summary) { actions.focus(session.id) }
       case .waitingInput(let message):

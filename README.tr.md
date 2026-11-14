@@ -7,7 +7,8 @@
 MacBook çentiğinde (notch) yaşayan, menü çubuğunda ikonu olmayan (`LSUIElement`) bir macOS
 uygulaması. Claude Code oturumlarının durumunu gösterir (çalışıyor / bitti / girdi bekliyor /
 hata) ve terminalde olmasanız bile izin isteklerini çentikten **İzin ver / Her zaman / Reddet**
-ile yanıtlamanızı sağlar.
+ile yanıtlamanızı sağlar. Arayüz varsayılan olarak Türkçedir; Ayarlar > Genel > Dil'den İngilizce
+ya da Mac'in dili seçilebilir (yeniden başlatınca geçerli olur).
 
 ## Nasıl çalışır
 
@@ -113,18 +114,20 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
 - **Kapalı:** oturum yoksa yalnızca donanım çentiği görünür, hiçbir şey çizilmez. Oturum varsa
   çentiğin hemen altında (2 pt boşluk) ortalı, 3 pt'lik bir **durum çizgisi** belirir: çentik
   genişliğinin iki yanından 24 pt içeride, oturum başına bir parça (en çok 6, sabit sırada).
-  Camgöbeği, üzerinde kayan ışıltı: çalışıyor; sarı, yavaş nefes: sizi bekliyor (izin / soru /
-  plan / girdi); düz mavi: görülmemiş "bitti" (gelişte bir kez parlar); kesik (üç kısa çizgi)
-  pembe-kırmızı: hata; soluk beyaz: boşta. Renkler renk körlüğünde de ayrışacak biçimde
-  seçildi; biçimler (kayan ışıltı, nefes, düz, kesik, soluk) durumları gri tonlamada bile
-  ayırır. Hareketi azalt açıkken ışıltı ve nefes durur; o zaman çalışıyor, sizi bekliyor ve
-  bitti yalnızca renk ve parlaklıkla ayırt edilir. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
+  Turuncu ışıltı: çalışıyor; amber nefes: sizi bekliyor (izin / soru / plan / girdi); yeşil:
+  görülmemiş "bitti" (gelişte bir kez parlar); kırmızı: hata; soluk beyaz: boşta. Hareketi
+  azalt açıkken renkler durağandır. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
   dışındaki kısmında tıklamalar her zaman arkadaki menülere gider.
+  Ayarlar > Genel > Görünüm > Durum renkleri > **Renk körlüğüne uygun** seçilirse renkler hemen
+  kırmızı-yeşil renk körlüğünde de ayrışanlara döner ve her duruma bir biçim işareti eklenir:
+  camgöbeği `#22D3EE` kayan ışıltı = çalışıyor, sarı `#F0E442` yavaş nefes = sizi bekliyor, düz
+  mavi `#388BFD` = bitti, kesik (üç kısa çizgi) pembe-kırmızı `#FB7185` = hata, soluk beyaz =
+  boşta.
 - **Göz atma (peek):** izin, soru, bitti ve hata olayları çentikten aşağı doğru düz siyah bir
   ada olarak düşer: bant içinde tam çentik genişliğinde, bandın hemen altında küçük iç bükey
   kavislerle genişler (bitti / hata ~300 pt tek satır, izin ~380 pt iki satır + küçük
   düğmeler). "Bitti" 2,5 sn kalır; izin isteği aşağıdaki [izin akışına](#izin-akışı-ve-kısayollar)
-  göre kalır. Üzerindeyken kapanmaz, sonra çizgiye geri döner (sarı parça nefes almaya devam
+  göre kalır. Üzerindeyken kapanmaz, sonra çizgiye geri döner (amber parça nefes almaya devam
   eder). Metin tek satıra sığmıyorsa İzin ver yerine **Tümünü gör** çıkar. 1,5 sn içindeki
   "bitti"ler birleştirilir ("2 oturum bitti").
 - **Panel:** yalnızca siz açtığınızda: çentik ya da çizgi üzerinde ~300 ms beklemek (hızlı
@@ -171,7 +174,7 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   diğer terminallerde yalnızca uygulama). Satır üzerindeki düğmeler: Odakla, Okundu, Son mesajı
   kopyala. İlk odaklamada macOS Otomasyon izni ister.
 - **Ghostty iznini ver:** Otomasyon izni henüz sorulmadıysa ya da reddedildiyse panel bandında
-  sarı kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
+  amber kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
   penceresini açar (arka planda; çentik donmaz). Daha önce reddedildiyse Sistem Ayarları >
   Gizlilik ve Güvenlik > Otomasyon açılır.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
@@ -193,7 +196,7 @@ kez işe yarayınca kaybolur.
 
 **Ne kadar kalır:** yanıtlanmayan istek Ayarlar > Bildirim > "İzin isteği görünür kalsın"
 kadar kalır: **8 sn / 15 sn (varsayılan) / 30 sn / Yanıtlanana kadar**. İmleç üzerindeyken
-kapanmaz. Süre dolunca ada çizgiye geri çekilir, istek **bekler**: çizgideki parçası sarı
+kapanmaz. Süre dolunca ada çizgiye geri çekilir, istek **bekler**: çizgideki parçası amber
 nefes alır, panelde kartı durur. İstek, siz çentikten ya da terminalden yanıtlayana veya
 hook'un ~590 sn'lik süresi dolana kadar yaşar (süre dolarsa terminaldeki pencere geçerli
 kalır; köprü hiçbir zaman kendiliğinden izin vermez). "Yanıtlanana kadar" seçiliyken açık bir
@@ -207,6 +210,7 @@ uygulamadan çalışır, odağı almaz, ClaudeNotch'u öne getirmez.
 | Paneli aç | ⌃⌥Space | Paneli klavye kipinde açar / kapatır (aşağıdaki ⌘ tuşları) |
 | İzin ver | ⌃⌥Y | Ekranda gösterilen isteğe izin verir |
 | Reddet | ⌃⌥N | Ekranda gösterilen isteği reddeder |
+| Sizi bekleyen oturuma git | ⌃⌥J | Sizi en çok bekleyen oturumun terminal sekmesini öne getirir: önce izin isteği, sonra soru, plan onayı ya da girdi bekleyen, sonra görülmemiş hata, sonra görülmemiş "bitti"; bekleyen yoksa bir şey yapmaz |
 
 Kurallar (tıklamalarla aynı tek karar yolunda uygulanır, yalnızca görünümde değil):
 
@@ -248,6 +252,12 @@ kullandığını bildirmez; o durumda kısayolu değiştirin. **Varsayılana dö
 Değişiklikler UserDefaults'a yazılır ve hemen yeniden kaydedilir. Varsayılan Y / N tuşları
 geçerli klavye düzenine göre bulunur.
 
+Aynı sekmede **Caps Lock kullan (Hyper tuşu)** düğmesi tüm kısayolları ⌃⌥⇧⌘ + aynı tuşa taşır
+(Caps Lock + Y izin verir, Caps Lock + J oturuma gider…); **Varsayılana dön** yeniden ⌃⌥'ye
+döndürür. Soru seçeneği tuşları (⌃⌥1…4) her durumda aynı kalır. Bu düğmelerden birine
+basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ yapan bir araç gerekir: Raycast
+(Settings > Advanced > Hyper Key), Hyperkey ya da Karabiner-Elements.
+
 ## Notlar ve sınırlar
 
 - `auto` izin modunda `PermissionRequest` nadiren tetiklenir; bu yüzden onay kartları çoğunlukla
@@ -263,6 +273,9 @@ geçerli klavye düzenine göre bulunur.
   o oturumun Ghostty sekmesine geçmek, uygulamanın kapanması ya da 10 dk zaman aşımı soruyu
   terminale bırakır (boş yanıt). Serbest metin ("Diğer") terminalde kalır. Bu kanca
   `scripts/install-hooks.sh` yeniden çalıştırılınca eklenir.
+  Ayarlar > Bildirimler > **Claude’un sorularını çentikte yanıtla** kapatılırsa soru hiç
+  bekletilmez: terminal hemen sorar, çentik yalnızca "Claude size bir soru soruyor" adasıyla
+  haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür.
 - `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
 - İzni terminalde **reddederseniz** `PostToolUse` gelmez; kart, aynı oturumdaki (ve aynı
   alt ajandaki) farklı bir `PreToolUse` (1,5 sn'den sonra), `UserPromptSubmit`, `Stop`,
@@ -286,6 +299,14 @@ geçerli klavye düzenine göre bulunur.
 - Çentiksiz ekranda ve gösterecek bir şey yokken panel görünmezdir ve fareyi yakalamaz.
 - "Oturum açılışında başlat" ad-hoc imzalı uygulamalarda hata verebilir; uygulamayı
   `/Applications` altına taşıyın.
+- **Raf** (Ayarlar > Modüller): sabitlenmemiş öğeler geçici klasörde durur, raf kapatılınca ya
+  da uygulama yeniden başlayınca silinir; sabitlenenler diskte kalır. İsteğe bağlı iki ayar:
+  **Sabitlenmemiş öğeleri sil** 1 / 3 / 7 gün sonra (varsayılan: Hiçbir zaman) ve **Raf
+  kapatılınca sabitlenenleri de sil** (varsayılan: kapalı).
+- **Claude planı** (`scripts/install-statusline.sh`): halka 5 saatlik ve haftalık pencereden
+  dolu olanı gösterir, %80 ve %95 uyarıları 5 saatlik pencere içindir. Durum satırı yalnız
+  haftalık pencereyi (`rate_limits.seven_day`) gönderiyorsa (yeni Claude Code sürümleri) halka
+  ve uyarılar haftalık limiti izler.
 
 ## Hata ayıklama
 

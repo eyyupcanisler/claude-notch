@@ -4,6 +4,9 @@
 # sent the way the hooks send them. The installed app is quit for ~45 s and restarted after.
 # Needs ffmpeg. Usage: scripts/demo/record.sh
 set -eu
+# Messages are Turkish (the original) unless CLAUDE_NOTCH_LANG=en; the app passes its own
+# language when it runs install-hooks.sh. Usage: say "<Turkish>" "<English>".
+say() { if [ "${CLAUDE_NOTCH_LANG:-tr}" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 APP="$ROOT/build.noindex/ClaudeNotch.app"
@@ -74,9 +77,16 @@ curl -s --unix-socket "$SOCK" -H 'Content-Type: application/json' -H 'X-Term-Pro
 sleep 3.5
 key allow
 sleep 2
-# A question: the island says Claude is asking (it is answered in the terminal).
+# A question: ⌃⌥2 picks, ⌃⌥Y sends.
+curl -s --unix-socket "$SOCK" -H 'Content-Type: application/json' -H 'X-Term-Program: ghostty' \
+  --data-binary "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"s-web\",\"cwd\":\"$W\",\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"Ödeme sayfasında hangi düzen?\",\"header\":\"Düzen\",\"multiSelect\":false,\"options\":[{\"label\":\"Tek adım\",\"description\":\"\"},{\"label\":\"İki adım\",\"description\":\"\"},{\"label\":\"Sihirbaz\",\"description\":\"\"}]}]}}" \
+  http://localhost/question >/dev/null &
 ev PreToolUse s-web "$W" AskUserQuestion '"tool_input":{"questions":[{"question":"Ödeme sayfasında hangi düzen?","header":"Düzen","options":[{"label":"Tek adım"},{"label":"İki adım"}]}]}'
-sleep 4
+sleep 3
+key option2
+sleep 0.8
+key allow
+sleep 1.5
 ev PostToolUse s-web "$W" AskUserQuestion
 ev Stop s-docs "$D" "" '"last_assistant_message":"Kurulum rehberi güncellendi."'
 sleep 3.5
@@ -89,7 +99,8 @@ wait "$REC" || true
 kill "$BACK" 2>/dev/null || true
 
 mkdir -p "$OUT"
-echo "recording: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$TMP/demo.mov") s"
+LEN="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$TMP/demo.mov")"
+say "kayıt: $LEN sn" "recording: $LEN s"
 ffmpeg -loglevel error -y -i "$TMP/demo.mov" \
   -vf "fps=18,scale=680:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle" \
   "$OUT/demo.gif"

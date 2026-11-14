@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     controller.onAttention = { [weak monitor] _, _ in monitor?.noteAttention() }
     controller.onExpand = { [weak monitor] in monitor?.refreshTabTitles() }
     router.discoverProvider = { [weak monitor] in await monitor?.discover() }
+    router.questionMode = { [weak self] in self?.controller?.settings.questionMode ?? .fallback }
     router.snapshotProvider = { [weak self] in self?.controller?.snapshotPNG() }
     router.uiCommandProvider = { [weak self] route, json in
       self?.controller?.debugCommand(route, json) ?? .null
@@ -83,7 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   /// Debug: dry run returns the script and liveness, otherwise focuses and returns the outcome.
   private func debugFocus(sessionID: String, dryRun: Bool) async -> JSONValue {
-    guard let s = store.sessions[sessionID] else { return .object(["error": .string("no such session")]) }
+    // "yok" in Turkish (the original reply), "no such session" in English.
+    guard let s = store.sessions[sessionID] else {
+      return .object(["error": .string(loc("no such session"))])
+    }
     if dryRun {
       let kind = TerminalKind(termProgram: s.termProgram)
       return .object([

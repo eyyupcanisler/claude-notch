@@ -15,6 +15,8 @@ public final class RequestRouter {
   public var uiCommandProvider: (@MainActor (String, JSONValue) -> JSONValue)?
   /// Debug: POST /debug/discover runs one process scan now.
   public var discoverProvider: (@MainActor () async -> Void)?
+  /// Where questions are answered (the user's setting); read on every /question request.
+  public var questionMode: @MainActor () -> QuestionMode = { QuestionMode.fallback }
 
   /// `/debug/*` routes can approve requests and expose commands: off unless opted in
   /// (`CLAUDE_NOTCH_DEBUG=1` at launch).
@@ -52,10 +54,29 @@ public final class RequestRouter {
         Task { @MainActor in store.connectionDropped(id: id) }
       }
     case ("POST", "/question"):
-      // Questions are never held: an old settings entry that still calls this route gets an
-      // empty reply at once, so the terminal asks as usual. The async PreToolUse event tells
-      // the notch that Claude is asking.
-      responder.respond(status: 200)
+      let event = HookEvent.parse(req.body)
+      switch QuestionRoute.decide(event, mode: questionMode()) {
+      case .badRequest:
+        responder.respond(status: 400)
+      case .replyEmpty:
+        // Terminal-only mode: the terminal asks at once; the async PreToolUse event tells the
+        // notch that Claude is asking.
+        responder.respond(status: 200)
+      case .hold:
+        guard let event else {
+          responder.respond(status: 400)
+          return
+        }
+        let held = store.addQuestion(event) { body in
+          responder.respond(status: 200, body: body ?? Data())
+        }
+        if let id = held?.id {
+          let store = self.store
+          responder.onPeerClosed {
+            Task { @MainActor in store.connectionDropped(id: id) }
+          }
+        }
+      }
     case ("GET", "/debug/state"):
       var snapshot = store.debugSnapshot().objectValue ?? [:]
       if let ui = uiStateProvider?() { snapshot["ui"] = ui }

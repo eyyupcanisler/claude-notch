@@ -44,6 +44,15 @@ struct NotchActions {
   var bodyHeight: @MainActor (CGDirectDisplayID, NotchMode, CGFloat) -> Void = { _, _, _ in }
   /// Ghostty Automation: ask (macOS prompt) or open System Settings when denied.
   var ghosttyConsent: @MainActor () -> Void = {}
+  /// A held question answered in the notch (question id, labels by question text).
+  var answerQuestion: @MainActor (String, [String: [String]]) -> Void = { _, _ in }
+  /// Hand a held question to the terminal and focus it.
+  var releaseQuestion: @MainActor (String) -> Void = { _ in }
+  /// Picks / un-picks option `index` of the question on screen (same path as ⌃⌥1…4).
+  var pickOption: @MainActor (String, Int) -> Void = { _, _ in }
+  /// "Next" / "Send" (same as ⌃⌥Y), and "Back".
+  var questionNext: @MainActor (String) -> Void = { _ in }
+  var questionBack: @MainActor (String) -> Void = { _ in }
   /// A shelf chip dropped on a session row: copy it and focus that session's tab.
   /// Returns false when nothing from the shelf was being dragged.
   var dropShelf: @MainActor (String) -> Bool = { _ in false }
@@ -202,7 +211,7 @@ struct NotchRootView: View {
       }
       .frame(width: windowW, height: NotchMetrics.windowHeight, alignment: .top)
       .clipShape(shape)
-      StatusLineView(segments: segments)
+      StatusLineView(segments: segments, colors: settings.statusColors.colors)
         .frame(width: NotchMetrics.lineWidth(notch: g.notchWidth), height: NotchMetrics.lineHeight)
         .padding(.top, NotchMetrics.lineTop(g, pill: pillShown))
         .opacity(mode == .collapsed && surface.visible && !segments.isEmpty ? 1 : 0)
@@ -360,19 +369,22 @@ struct NotchSignals {
 // MARK: - Status line
 
 /// The only persistent visual: a 3 pt line under the notch, one segment per session (creation
-/// order), each colored by its state and marked by a shape sign that reads without color:
-/// moving shine = working, slow fade = needs you, solid = done, broken (3 dashes) = error,
-/// faint = idle. With Reduce Motion on, the shine and the fade stop, so working, needs you and
-/// done differ by color and brightness only. Core Animation runs the shimmer / breathing / flash in the render server, so
-/// an always-on line costs the app no frames.
+/// order), each colored by its state from the chosen palette (`StatusColorScheme`): moving
+/// shine = working, slow fade = needs you, solid = done, faint = idle. Error is a solid bar in
+/// the classic palette (the original look) and a broken bar (3 dashes) in the colorblind one,
+/// where every state then reads without color. With Reduce Motion on, the shine and the fade
+/// stop, so working, needs you and done differ by color and brightness only. Core Animation
+/// runs the shimmer / breathing / flash in the render server, so an always-on line costs the
+/// app no frames.
 struct StatusLineView: NSViewRepresentable {
   let segments: [LineSegment]
+  let colors: StatusPalette.Colors
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func makeNSView(context: Context) -> StatusLineLayerView { StatusLineLayerView() }
 
   func updateNSView(_ view: StatusLineLayerView, context: Context) {
-    view.update(segments, reduceMotion: reduceMotion)
+    view.update(segments, colors: colors, reduceMotion: reduceMotion)
   }
 }
 
@@ -382,7 +394,8 @@ final class StatusLineLayerView: NSView {
     let glow = CALayer()
     let bar = CALayer()
     let shine = CAGradientLayer()
-    /// Masks the bar into dashes while the state is `.error` (nil otherwise).
+    /// Masks the bar into dashes while the state is `.error` and the palette draws error broken
+    /// (nil otherwise).
     var dashMask: CAShapeLayer?
     var state: LineState?
   }
@@ -390,6 +403,7 @@ final class StatusLineLayerView: NSView {
   private var segments: [String: Segment] = [:]
   private var order: [LineSegment] = []
   private var reduceMotion = false
+  private var colors = StatusPalette.classic
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -407,9 +421,11 @@ final class StatusLineLayerView: NSView {
     place()
   }
 
-  func update(_ list: [LineSegment], reduceMotion: Bool) {
-    let motionChanged = reduceMotion != self.reduceMotion
+  func update(_ list: [LineSegment], colors: StatusPalette.Colors, reduceMotion: Bool) {
+    // A palette switch (Settings) restyles every segment in place, without an arrival flash.
+    let restyle = reduceMotion != self.reduceMotion || colors != self.colors
     self.reduceMotion = reduceMotion
+    self.colors = colors
     order = list
     let ids = Set(list.map(\.sessionID))
     for (id, seg) in segments where !ids.contains(id) {
@@ -419,7 +435,7 @@ final class StatusLineLayerView: NSView {
     }
     for item in list {
       let seg = segments[item.sessionID] ?? makeSegment(item.sessionID)
-      if seg.state != item.state || motionChanged {
+      if seg.state != item.state || restyle {
         let arrived = seg.state != nil && seg.state != item.state
         style(seg, item.state, arrived: arrived || seg.state == nil)
       }
@@ -451,18 +467,22 @@ final class StatusLineLayerView: NSView {
       return NSColor(srgbRed: c.red, green: c.green, blue: c.blue, alpha: 1)
     }
     switch state {
-    case .working: return rgb(StatusPalette.working)
-    case .needs: return rgb(StatusPalette.needs)
-    case .done: return rgb(StatusPalette.done)
-    case .error: return rgb(StatusPalette.error)
+    case .working: return rgb(colors.working)
+    case .needs: return rgb(colors.needs)
+    case .done: return rgb(colors.done)
+    case .error: return rgb(colors.error)
     case .idle: return NSColor.white.withAlphaComponent(0.22)
     }
   }
 
-  /// The error sign: the bar masked into short dashes and the glow cast from the same dashes
-  /// (a plain glow would light the gaps), static. Any other state removes both.
+  /// The colorblind palette's error sign: the bar masked into short dashes and the glow cast
+  /// from the same dashes (a plain glow would light the gaps), static. Any other state, and
+  /// the classic palette (a solid error bar, as originally), removes both.
   private func applyDashes(_ seg: Segment, _ state: LineState) {
-    guard state == .error else {
+    let bounds = seg.bar.bounds
+    guard state == .error,
+      let pieces = StatusPalette.errorPieces(colors, width: bounds.width, height: bounds.height)
+    else {
       seg.bar.mask = nil
       seg.dashMask = nil
       seg.glow.shadowPath = nil
@@ -471,9 +491,8 @@ final class StatusLineLayerView: NSView {
     let mask = seg.dashMask ?? CAShapeLayer()
     seg.dashMask = mask
     seg.bar.mask = mask
-    let bounds = seg.bar.bounds
     let path = CGMutablePath()
-    for r in StatusPalette.dashes(width: bounds.width, height: bounds.height) {
+    for r in pieces {
       let radius = min(r.height, r.width) / 2
       path.addRoundedRect(in: r, cornerWidth: radius, cornerHeight: radius)
     }
@@ -559,7 +578,7 @@ final class StatusLineLayerView: NSView {
       seg.bar.frame = frame
       seg.glow.frame = frame
       seg.shine.frame = CGRect(x: 0, y: 0, width: w, height: h)
-      if seg.state == .error { applyDashes(seg, .error) }
+      if seg.state == .error, colors.errorDashed { applyDashes(seg, .error) }
       if seg.state == .working, !reduceMotion,
         (seg.shine.value(forKey: "sweepWidth") as? CGFloat) != w
       {

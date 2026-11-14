@@ -11,9 +11,33 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
   case shelf = 5
   /// Focuses the terminal tab of the session that needs the user most (see `JumpTarget`).
   case jump = 6
+  /// ⌃⌥1…⌃⌥4: pick an option of the question on screen. Registered only while one is shown
+  /// (never in Settings), so the chords stay free for other apps the rest of the time. Fixed
+  /// keys: a shortcut preset does not move them.
+  case option1 = 11
+  case option2 = 12
+  case option3 = 13
+  case option4 = 14
 
   /// The roles the user sets in Settings and that are always registered (Settings order).
   static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .jump, .timer, .shelf]
+
+  /// The order the always-on roles are registered in at launch: the original roles first, the
+  /// added `jump` last. Two roles cannot hold the same combo (the second RegisterEventHotKey
+  /// fails with eventHotKeyExistsErr), and an install from before `jump` existed may have saved
+  /// ⌃⌥J for another role; that saved shortcut must keep working, so `jump` loses the clash.
+  static let registrationOrder: [HotKeyRole] = [.panel, .allow, .deny, .timer, .shelf, .jump]
+
+  /// 0-based option index of an `optionN` role.
+  var optionIndex: Int? {
+    switch self {
+    case .option1: return 0
+    case .option2: return 1
+    case .option3: return 2
+    case .option4: return 3
+    default: return nil
+    }
+  }
 
   var title: String {
     switch self {
@@ -23,6 +47,7 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
     case .jump: return loc("Jump to the session that needs you")
     case .timer: return loc("Start / pause Pomodoro")
     case .shelf: return loc("Copy the latest shelf item")
+    case .option1, .option2, .option3, .option4: return loc("Question option \((optionIndex ?? 0) + 1)")
     }
   }
 
@@ -45,8 +70,10 @@ struct KeyCombo: Equatable, Hashable, Sendable {
   }
 
   /// `role`'s default key with the preset's modifiers (⌃⌥ + key, or ⌃⌥⇧⌘ + key for Hyper).
+  /// The question option keys are fixed at ⌃⌥1…⌃⌥4 whatever the preset.
   static func presetCombo(_ role: HotKeyRole, _ preset: ShortcutPreset) -> KeyCombo {
     let mods = carbonModifiers(preset.modifiers)
+    let fixed = carbonModifiers(ShortcutPreset.standard.modifiers)
     func letter(_ c: String, _ fallback: Int) -> KeyCombo {
       KeyCombo(keyCode: KeyLayout.keyCode(for: c) ?? UInt32(fallback), modifiers: mods)
     }
@@ -57,6 +84,10 @@ struct KeyCombo: Equatable, Hashable, Sendable {
     case .jump: return letter("j", kVK_ANSI_J)
     case .timer: return letter("p", kVK_ANSI_P)
     case .shelf: return letter("v", kVK_ANSI_V)
+    case .option1: return KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: fixed)
+    case .option2: return KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: fixed)
+    case .option3: return KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: fixed)
+    case .option4: return KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: fixed)
     }
   }
 

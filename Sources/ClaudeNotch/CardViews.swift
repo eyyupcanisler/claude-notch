@@ -45,7 +45,7 @@ struct PermissionCardView: View {
   private var detailTitle: String {
     if gate.opened { return loc("Collapse") }
     return card.needsExpansion
-      ? loc("Show all (\(fullBody.count) characters)") : loc("Show details")
+      ? locPlainDigits("Show all (\(fullBody.count) characters)") : loc("Show details")
   }
 
   private var fullBody: String {

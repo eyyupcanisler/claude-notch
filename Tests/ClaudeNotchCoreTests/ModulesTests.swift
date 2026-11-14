@@ -221,25 +221,60 @@ final class ShelfTests: XCTestCase {
     XCTAssertEqual(Shelf.keepText("\n selam \n"), "selam")
   }
 
-  func testExpiryBoundaryIsThreeDays() {
+  func testFreshInstallNeverExpiresAndKeepsPins() {
+    XCTAssertEqual(ShelfExpiry(stored: nil), .never, "nothing saved: the original behavior")
+    XCTAssertEqual(ShelfExpiry.fallback, .never)
+    XCTAssertNil(ShelfExpiry.never.lifetime, "no expiry check runs at all")
+    XCTAssertEqual(ShelfExpiry(stored: 3), .threeDays)
+    XCTAssertEqual(ShelfExpiry(stored: NSNumber(value: 7)), .sevenDays)
+    XCTAssertEqual(ShelfExpiry(stored: 2), .never, "an unknown day count falls back")
+    XCTAssertEqual(ShelfExpiry(stored: "3"), .never)
+    XCTAssertEqual(ShelfExpiry.oneDay.lifetime, 24 * 60 * 60)
+    XCTAssertEqual(ShelfExpiry.sevenDays.lifetime, 7 * 24 * 60 * 60)
+    XCTAssertEqual(ShelfExpiry.defaultsKey, "shelf.removeUnpinnedAfterDays")
+
+    XCTAssertFalse(ShelfPinsOnOff.deletesPins(stored: nil), "nothing saved: pins stay")
+    XCTAssertFalse(ShelfPinsOnOff.deletesPins(stored: "yes"))
+    XCTAssertTrue(ShelfPinsOnOff.deletesPins(stored: true))
+    XCTAssertEqual(ShelfPinsOnOff.defaultsKey, "shelf.deletePinsWhenOff")
+  }
+
+  /// The Settings caption tells the truth for every choice (tests read the English keys).
+  func testSettingsHelpFollowsTheOptions() {
+    let base =
+      "The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf stays in a temporary folder and is deleted when turned off."
+    XCTAssertEqual(
+      ShelfExpiry.settingsHelp(expiry: .never, deletePinsWhenOff: false),
+      base + " Pinned items stay on disk; turning the shelf off does not delete them.")
+    XCTAssertEqual(
+      ShelfExpiry.settingsHelp(expiry: .threeDays, deletePinsWhenOff: true),
+      base + " Unpinned items are also removed 3 days after they were added."
+        + " Turning the shelf off also deletes pinned items.")
+  }
+
+  func testExpiryBoundaryIsTheLifetime() {
     let item = text("a", "bir")
-    let threeDays: TimeInterval = 3 * 24 * 60 * 60
-    XCTAssertEqual(Shelf.lifetime, threeDays)
-    XCTAssertFalse(Shelf.isExpired(item, at: t0))
-    XCTAssertFalse(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays - 1)))
-    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays)))
-    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays + 3600)))
+    let threeDays = ShelfExpiry.threeDays.lifetime!
+    XCTAssertEqual(threeDays, 3 * 24 * 60 * 60)
+    XCTAssertFalse(Shelf.isExpired(item, at: t0, lifetime: threeDays))
+    XCTAssertFalse(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays - 1), lifetime: threeDays))
+    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays), lifetime: threeDays))
+    XCTAssertTrue(
+      Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays + 3600), lifetime: threeDays))
+    let oneDay = ShelfExpiry.oneDay.lifetime!
+    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(oneDay), lifetime: oneDay))
   }
 
   func testRemoveExpiredKeepsNewerItems() {
     var s = Shelf()
     let day: TimeInterval = 24 * 60 * 60
+    let lifetime = ShelfExpiry.threeDays.lifetime!
     s.add(text("old", "eski"))
     s.add(image("oldImage", key: "k"))
     s.add(ShelfItem(id: "new", kind: .text("yeni"), addedAt: t0.addingTimeInterval(2 * day)))
-    XCTAssertTrue(s.removeExpired(at: t0.addingTimeInterval(3 * day - 1)).isEmpty)
+    XCTAssertTrue(s.removeExpired(at: t0.addingTimeInterval(3 * day - 1), lifetime: lifetime).isEmpty)
     XCTAssertEqual(s.items.count, 3)
-    let gone = s.removeExpired(at: t0.addingTimeInterval(3 * day))
+    let gone = s.removeExpired(at: t0.addingTimeInterval(3 * day), lifetime: lifetime)
     XCTAssertEqual(Set(gone.map(\.id)), ["old", "oldImage"])
     XCTAssertEqual(gone.compactMap(\.ownedFile).count, 1, "the image's temp file can go")
     XCTAssertEqual(s.items.map(\.id), ["new"])
@@ -305,25 +340,67 @@ final class PlanUsageTests: XCTestCase {
     XCTAssertEqual(u?.sevenDay?.percent, 38)
     XCTAssertEqual(u?.sevenDay?.resetsAt, Date(timeIntervalSince1970: 1_795_068_000))
     XCTAssertNil(u?.fiveHour, "five_hour is absent")
+    XCTAssertEqual(u?.primaryKind, .sevenDay, "only seven_day: the weekly window is the main one")
     XCTAssertEqual(u?.primary, u?.sevenDay)
+    XCTAssertEqual(u?.fuller?.kind, .sevenDay)
     XCTAssertNil(u?.newMark(shown: []), "38% warns for nothing")
     XCTAssertNil(ContextLeft.statusLine(Data(weeklyOnly.utf8)), "no session, no context")
   }
 
-  func testUnknownKeysAreIgnoredAndWeeklyIsPrimary() {
+  /// Both windows sent (the original input): the 5-hour window is the main one, its alert
+  /// carries the original texts, and the ring shows the fuller window.
+  func testBothWindowsFiveHourIsPrimaryWithOriginalAlert() {
     let json = """
       {"rate_limits":{"seven_day":{"used_percentage":12,"resets_at":1795068000,"extra":1},
        "five_hour":{"used_percentage":90,"resets_at":1738425600},"seven_day_opus":{}},
        "something_new":{"a":[1,2]}}
       """
-    let u = PlanUsage.statusLine(Data(json.utf8), at: t0)
-    XCTAssertEqual(u?.primary?.percent, 12, "the weekly window is the main number")
-    XCTAssertEqual(u?.fiveHour?.percent, 90, "an older 5-hour window stays as a second value")
-    XCTAssertNil(u?.newMark(shown: []), "the 5-hour window never warns")
+    let u = PlanUsage.statusLine(Data(json.utf8), at: t0)!
+    XCTAssertEqual(u.primaryKind, .fiveHour)
+    XCTAssertEqual(u.primary?.percent, 90)
+    XCTAssertEqual(u.sevenDay?.percent, 12)
+    XCTAssertEqual(u.fuller?.kind, .fiveHour, "the ring shows the fuller window")
+    let a = u.alert(shown: [], at: t0)
+    XCTAssertEqual(a?.kind, .fiveHour)
+    XCTAssertEqual(a?.mark, 80)
+    XCTAssertEqual(a?.key, "1738425600:80")
+    XCTAssertEqual(a?.title, "5-hour limit at 80%")
+    var full = u
+    full.fiveHour?.percent = 96
+    XCTAssertEqual(full.alert(shown: [], at: t0)?.title, "5-hour limit almost used up")
+    XCTAssertNil(u.alert(shown: ["1738425600:80"], at: t0), "warned once per window")
+
+    var weeklyFuller = u
+    weeklyFuller.fiveHour?.percent = 5
+    weeklyFuller.sevenDay?.percent = 85
+    XCTAssertEqual(weeklyFuller.fuller?.kind, .sevenDay, "the ring: the fuller window")
+    XCTAssertNil(
+      weeklyFuller.alert(shown: [], at: t0), "the 5-hour window is the main one: 5% warns not")
+  }
+
+  func testWeeklyOnlyAlertUsesWeeklyTexts() {
+    let r = Date(timeIntervalSince1970: 1_795_068_000)
+    var u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 81, resetsAt: r), readAt: t0)
+    XCTAssertEqual(u.alert(shown: [], at: t0)?.kind, .sevenDay)
+    XCTAssertEqual(u.alert(shown: [], at: t0)?.title, "Weekly limit at 80%")
+    u.sevenDay?.percent = 95
+    XCTAssertEqual(u.alert(shown: [], at: t0)?.title, "Weekly limit almost used up")
     let fiveOnly = PlanUsage(
       fiveHour: .init(percent: 40, resetsAt: Date(timeIntervalSince1970: 1_738_425_600)),
       sevenDay: nil, readAt: t0)
     XCTAssertEqual(fiveOnly.primary?.percent, 40)
+    XCTAssertEqual(fiveOnly.primaryKind, .fiveHour)
+  }
+
+  /// A file older than the 5-hour reset: no note, and the weekly window does not take over.
+  func testStaleFiveHourWindowDoesNotHandOverToWeekly() {
+    let five = Date(timeIntervalSince1970: 1_738_425_600)
+    let week = Date(timeIntervalSince1970: 1_795_068_000)
+    let u = PlanUsage(
+      fiveHour: .init(percent: 90, resetsAt: five), sevenDay: .init(percent: 90, resetsAt: week),
+      readAt: t0)
+    XCTAssertEqual(u.alert(shown: [], at: five.addingTimeInterval(-1))?.kind, .fiveHour)
+    XCTAssertNil(u.alert(shown: [], at: five), "the 5-hour reset has passed")
   }
 
   func testWeeklyWarningMarksOncePerWindow() {
@@ -350,6 +427,8 @@ final class PlanUsageTests: XCTestCase {
     let u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 85, resetsAt: r), readAt: t0)
     XCTAssertEqual(u.live(at: r.addingTimeInterval(-1)).newMark(shown: [])?.mark, 80)
     XCTAssertNil(u.live(at: r).newMark(shown: []), "the reset has passed")
+    XCTAssertEqual(u.alert(shown: [], at: r.addingTimeInterval(-1))?.mark, 80)
+    XCTAssertNil(u.alert(shown: [], at: r), "the reset has passed")
   }
 
   func testLiveWarningsDropPassedResets() {

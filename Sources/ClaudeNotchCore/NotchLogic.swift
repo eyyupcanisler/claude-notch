@@ -297,7 +297,8 @@ extension ToolSummary {
 public enum PeekKind: String, Sendable {
   /// A new permission card (the user's setting, default 15 s; hover keeps it).
   case permission
-  /// Question / plan approval / waiting for input (4 s; a question stays like a permission).
+  /// Question / plan approval / waiting for input (4 s; in terminal-only question mode a
+  /// question stays like a permission).
   case attention
   /// Done / error, coalesced (2.5 s).
   case finished
@@ -368,8 +369,8 @@ public struct PeekItem: Sendable, Equatable {
   public var until: Date
   /// Payload of a module peek.
   public var module: ModuleNote? = nil
-  /// An attention peek for a question Claude asks in the terminal: it stays as long as a
-  /// permission peek, and goes once that session stops asking.
+  /// Terminal-only question mode: an attention peek for a question Claude asks in the
+  /// terminal. It stays as long as a permission peek, and goes once that session stops asking.
   public var asking: Bool = false
 }
 
@@ -385,9 +386,14 @@ public struct PeekPlanner: Sendable {
   public private(set) var current: PeekItem?
   /// A module note that arrived while a Claude peek was up: shown once that one is gone.
   public private(set) var pendingModule: ModuleNote?
-  /// How long an unanswered permission peek (and a question peek) stays; nil keeps it until
-  /// the card is answered (the question is answered or the turn moves on).
+  /// How long an unanswered permission peek (and, in terminal-only question mode, a question
+  /// peek) stays; nil keeps it until the card is answered (the question is answered or the
+  /// turn moves on).
   public var permissionHold: TimeInterval?
+  /// The user's question setting. `.answerInNotch` (the original) keeps the 4 s attention peek
+  /// for a question event (a held question is kept up by the app itself); `.terminalOnly`
+  /// makes it an `asking` peek.
+  public var questionMode: QuestionMode = .fallback
 
   public init(permissionHold: TimeInterval? = PeekPlanner.permissionDuration) {
     self.permissionHold = permissionHold
@@ -449,7 +455,7 @@ public struct PeekPlanner: Sendable {
         return true
       }
     }
-    let asking = attention == "question"
+    let asking = attention == "question" && questionMode == .terminalOnly
     let seconds = asking ? permissionHold : duration(kind)
     current = PeekItem(
       kind: kind, sessionIDs: [sessionID],
@@ -497,8 +503,8 @@ public struct PeekPlanner: Sendable {
     current = nil
   }
 
-  /// Drops a question peek whose session no longer asks (answered, or the turn moved on).
-  /// Returns true when the peek changed.
+  /// Terminal-only question mode: drops a question peek whose session no longer asks
+  /// (answered, or the turn moved on). Returns true when the peek changed.
   @discardableResult
   public mutating func dropAnswered(isAsking: (String) -> Bool) -> Bool {
     guard let cur = current, cur.asking, let sid = cur.sessionIDs.first, !isAsking(sid) else {
@@ -597,13 +603,16 @@ public struct HoverIntent: Sendable {
 
 /// Color role of one status-line segment (collapsed notch).
 public enum LineState: String, Sendable {
-  /// Running and not blocked on the user: cyan with a moving shine.
+  /// Running and not blocked on the user: Claude orange (colorblind palette: cyan) with a
+  /// moving shine.
   case working
-  /// Card pending, question, plan approval or input request: yellow, a slow fade (breathing).
+  /// Card pending, question, plan approval or input request: amber (colorblind: yellow), a
+  /// slow fade (breathing).
   case needs
-  /// Finished and not seen yet: blue, a solid steady bar.
+  /// Finished and not seen yet: green (colorblind: blue), a solid steady bar.
   case done
-  /// Failed and not seen yet: pink-red, a broken bar (three short dashes), static.
+  /// Failed and not seen yet: red, a solid bar (colorblind: pink-red, a broken bar of three
+  /// short dashes), static.
   case error
   /// Idle, quiet or already seen: faint white.
   case idle

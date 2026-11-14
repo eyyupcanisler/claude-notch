@@ -117,6 +117,24 @@ final class LocalizationTests: XCTestCase {
     XCTAssertEqual(tr["Allow"], "İzin ver")
   }
 
+  /// The plan usage alert, the shelf caption and the debug focus error keep the original
+  /// (b82423e) Turkish wording.
+  func testRestoredOriginalTurkishTexts() throws {
+    let tr = try table("tr")
+    XCTAssertEqual(tr["5-hour limit at 80%"], "5 saatlik limitin %80’i doldu")
+    XCTAssertEqual(tr["5-hour limit almost used up"], "5 saatlik limit dolmak üzere")
+    XCTAssertEqual(
+      String(format: try XCTUnwrap(tr["Resets at %@"]), "14:30"), "14:30’de sıfırlanır")
+    // The debug focus route's error for an unknown session.
+    XCTAssertEqual(tr["no such session"], "yok")
+    let caption = ShelfExpiry.settingsHelp(expiry: .never, deletePinsWhenOff: false)
+      .replacingOccurrences(
+        of: " Pinned items stay on disk; turning the shelf off does not delete them.", with: "")
+    XCTAssertEqual(
+      tr[caption],
+      "Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. Raf geçici klasörde durur, kapatınca silinir.")
+  }
+
   /// The sanitizer's long-space marker is localized ("⟨6 spaces⟩" / "⟨6 boşluk⟩"); the risk
   /// check undoes either one, so a command shown in either language is classified the same.
   func testSpaceMarkerIsUndoneInBothLanguages() {
@@ -148,5 +166,37 @@ final class LocalizationTests: XCTestCase {
     let error = try XCTUnwrap(
       tr["The shortcut could not be registered (error %@); the previous one stays."])
     XCTAssertTrue(String(format: error, String(-9878)).contains("(hata -9878)"))
+  }
+
+  /// A fresh install (nothing saved) is Turkish, the original UI: main.swift writes
+  /// AppleLanguages = ["tr"] into the app domain. English writes ["en"]; System removes it.
+  func testFreshInstallResolvesToTurkish() throws {
+    let suite = "test.claudenotch.language.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(LanguageChoice.defaultsKey, "language")
+    let fresh = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
+    XCTAssertEqual(fresh, .turkish)
+    fresh.apply(to: defaults)
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["tr"])
+    XCTAssertEqual(LanguageChoice(stored: "klingon"), .turkish)
+
+    defaults.set("en", forKey: LanguageChoice.defaultsKey)
+    let english = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
+    XCTAssertEqual(english, .english)
+    english.apply(to: defaults)
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
+
+    LanguageChoice(stored: "system").apply(to: defaults)
+    XCTAssertNil(defaults.persistentDomain(forName: suite)?["AppleLanguages"])
+  }
+
+  /// Character counts print plain digits ("12345"), as the original interpolation did; a
+  /// plain `loc` would group them for the locale.
+  func testCharacterCountsArePlainDigits() {
+    XCTAssertEqual(
+      locPlainDigits("Show all (\(12345) characters)"), "Show all (12345 characters)")
+    let collapsed = ToolSummary.collapsed(String(repeating: "a", count: 1500))
+    XCTAssertTrue(collapsed.contains("[1280 characters hidden]"), collapsed)
   }
 }

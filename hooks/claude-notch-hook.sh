@@ -3,17 +3,10 @@
 # Usage: claude-notch-hook.sh <event|permission>
 #   event      fire-and-forget: forwards the hook JSON from stdin to the app.
 #   permission blocking: waits for the user's decision in the notch and prints it.
-#   question   (old installs only) exits at once: questions are never held, the terminal asks.
 # Never prints a decision on failure/timeout; the terminal dialog stays authoritative.
 set -u
 
 MODE="${1:-event}"
-# A PreToolUse(AskUserQuestion) entry from an older install: answer nothing, right away, so
-# Claude Code shows the question in the terminal. The async PreToolUse event still tells the
-# notch that Claude is asking.
-if [ "$MODE" = "question" ]; then
-  exit 0
-fi
 SOCK="${CLAUDE_NOTCH_SOCK:-$HOME/Library/Application Support/ClaudeNotch/notch.sock}"
 TERM_NAME="${TERM_PROGRAM:-}"
 if [ -n "${CURSOR_TRACE_ID:-}" ]; then TERM_NAME="cursor"; fi
@@ -118,7 +111,7 @@ send_event() {
     "${HEADERS[@]}" --data-binary @- http://localhost/event >/dev/null 2>&1
 }
 
-if [ "$MODE" != "permission" ]; then
+if [ "$MODE" != "permission" ] && [ "$MODE" != "question" ]; then
   send_event
   exit 0
 fi
@@ -128,6 +121,14 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)"
+ROUTE=permission
+if [ "$MODE" = "question" ]; then
+  # PreToolUse(AskUserQuestion): held until answered in the notch; an empty reply lets the
+  # terminal ask as usual.
+  [ "$TOOL" = "AskUserQuestion" ] || exit 0
+  ROUTE=question
+  TOOL=""
+fi
 case "$TOOL" in
   AskUserQuestion | ExitPlanMode)
     # Needs terminal interaction: only tell the notch, never decide.
@@ -135,7 +136,7 @@ case "$TOOL" in
     exit 0
     ;;
   "")
-    exit 0
+    [ "$ROUTE" = "question" ] || exit 0
     ;;
 esac
 
@@ -149,7 +150,7 @@ trap cleanup EXIT
 trap 'exit 0' HUP INT TERM
 
 curl -s -f --unix-socket "$SOCK" --connect-timeout 1 --max-time "$PERMISSION_MAX_TIME" \
-  "${HEADERS[@]}" --data-binary @- -o "$OUT" "http://localhost/permission" <<<"$INPUT" \
+  "${HEADERS[@]}" --data-binary @- -o "$OUT" "http://localhost/$ROUTE" <<<"$INPUT" \
   >/dev/null 2>&1 &
 PID=$!
 wait "$PID"

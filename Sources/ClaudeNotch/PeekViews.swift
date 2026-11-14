@@ -1,9 +1,10 @@
 import ClaudeNotchCore
 import SwiftUI
 
-/// The island under the notch: a permission card (two lines and compact buttons), a question
-/// Claude asks in the terminal, or one "done / error" line. Clicking its background opens the
-/// panel; on a question it goes to that session's terminal tab instead.
+/// The island under the notch: a permission card (two lines and compact buttons), a question,
+/// or one "done / error" line. Clicking its background opens the panel. A held question is
+/// answered right here (the original mode); in terminal-only question mode the island only
+/// tells that Claude is asking, and a click on it goes to that session's terminal tab.
 struct PeekBody: View {
   let store: SessionStore
   let ui: NotchUIState
@@ -42,7 +43,8 @@ struct PeekBody: View {
     )
   }
 
-  /// The session whose question this peek tells about (nil for every other peek).
+  /// Terminal-only question mode: the session whose question this peek tells about (nil for
+  /// every other peek, and always nil in the original answer-in-notch mode).
   private var askingSessionID: String? {
     guard peek.asking, let sid = peek.sessionIDs.first,
       store.sessions[sid]?.status.kind == "question"
@@ -152,15 +154,32 @@ struct PeekBody: View {
 
   @ViewBuilder
   private var attention: some View {
-    if let sid = askingSessionID, case .question(let text, _)? = store.sessions[sid]?.status {
+    if let sid = peek.sessionIDs.first, let held = store.question(for: sid) {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
+          Image(systemName: "questionmark.bubble.fill")
+            .font(.system(size: 11, weight: .bold)).foregroundStyle(theme.needs)
+          Text("Claude asks")
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink).fixedSize()
+          Text(project(sid))
+            .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
+            .lineLimit(1).truncationMode(.middle)
+          Spacer(minLength: 0)
+        }
+        .notchEnter(0)
+        QuestionAnswerView(question: held, ui: ui, actions: actions).notchEnter(1)
+      }
+    } else if let sid = askingSessionID,
+      case .question(let text, _)? = store.sessions[sid]?.status
+    {
       asking(sid, text: text)
     } else {
       attentionText
     }
   }
 
-  /// Claude asks a question in the terminal: what it asks, read-only (it is answered there).
-  /// A click anywhere on the island goes to that session's tab.
+  /// Terminal-only question mode: Claude asks a question in the terminal, shown read-only (it
+  /// is answered there). A click anywhere on the island goes to that session's tab.
   private func asking(_ sid: String, text: String) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {

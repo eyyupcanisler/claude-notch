@@ -1,23 +1,66 @@
 import CoreGraphics
 import Foundation
 
-/// The status colors (sRGB hex) and the pure math behind them. Picked to stay apart for the
-/// common color-vision deficiencies; every state also carries a non-color sign on the status
-/// line (moving shine = working, slow fade = needs you, solid = done, broken = error,
-/// faint = idle), so the states read even in grayscale. Exception: with Reduce Motion on, the
-/// shine and the fade stop, so working, needs you and done differ by color and brightness only.
-public enum StatusPalette {
-  /// Working: cyan.
-  public static let working: UInt32 = 0x22D3EE
-  /// Needs you: yellow.
-  public static let needs: UInt32 = 0xF0E442
-  /// Done (unseen): blue.
-  public static let done: UInt32 = 0x388BFD
-  /// Error (unseen): pink-red.
-  public static let error: UInt32 = 0xFB7185
+/// Which status colors the app draws (Settings > General > Appearance > Status colors).
+/// Stored under `defaultsKey`; a fresh install (nothing saved) is `classic`, the original look.
+public enum StatusColorScheme: String, CaseIterable, Sendable {
+  /// The original colors: Claude orange, amber, green, red; the error segment a solid bar.
+  case classic
+  /// Colors that stay apart for the common color-vision deficiencies, plus a shape sign per
+  /// state (the error segment drawn as a broken bar).
+  case colorblind
 
-  /// The four status colors, for checks that must hold for each of them.
-  public static let all: [UInt32] = [working, needs, done, error]
+  /// UserDefaults key (app domain).
+  public static let defaultsKey = "statusColors"
+  /// What an install without a saved choice uses: the original look.
+  public static let fallback: StatusColorScheme = .classic
+
+  /// The stored raw value, or the fallback when nothing (or something unknown) is stored.
+  public init(stored: String?) {
+    self = stored.flatMap(Self.init(rawValue:)) ?? Self.fallback
+  }
+
+  public var colors: StatusPalette.Colors {
+    switch self {
+    case .classic: return StatusPalette.classic
+    case .colorblind: return StatusPalette.colorblind
+    }
+  }
+}
+
+/// The status colors (sRGB hex) and the pure math behind them.
+///
+/// Two palettes (`StatusColorScheme`). `classic` is the original one. `colorblind` is picked to
+/// stay apart for the common color-vision deficiencies, and on the status line every state
+/// also carries a non-color sign (moving shine = working, slow fade = needs you, solid = done,
+/// broken = error, faint = idle), so the states read even in grayscale. Exception: with Reduce
+/// Motion on, the shine and the fade stop, so working, needs you and done differ by color and
+/// brightness only.
+public enum StatusPalette {
+  /// One palette: the four status colors and how the error segment is drawn.
+  public struct Colors: Sendable, Equatable {
+    /// Working (shimmer).
+    public let working: UInt32
+    /// Needs you (breathing).
+    public let needs: UInt32
+    /// Done, unseen (solid, flashes once on arrival).
+    public let done: UInt32
+    /// Error, unseen (static).
+    public let error: UInt32
+    /// The error segment is drawn as a broken bar (`StatusPalette.dashes`), not a solid one.
+    public let errorDashed: Bool
+
+    /// The four status colors, for checks that must hold for each of them.
+    public var all: [UInt32] { [working, needs, done, error] }
+  }
+
+  /// The original palette: Claude orange, amber, green, red; error is a solid bar.
+  public static let classic = Colors(
+    working: 0xD97757, needs: 0xFFB020, done: 0x34C759, error: 0xFF453A, errorDashed: false)
+
+  /// Colorblind-friendly: cyan, yellow, blue, pink-red; error is a broken bar.
+  public static let colorblind = Colors(
+    working: 0x22D3EE, needs: 0xF0E442, done: 0x388BFD, error: 0xFB7185, errorDashed: true)
 
   /// The 0...1 sRGB components of a 0xRRGGBB value.
   public static func components(_ hex: UInt32) -> (red: Double, green: Double, blue: Double) {
@@ -54,6 +97,12 @@ public enum StatusPalette {
   /// Black or white text on a solid `fill`, whichever gives the higher contrast.
   public static func ink(on fill: UInt32) -> Ink {
     contrast(fill, Ink.black.hex) >= contrast(fill, Ink.white.hex) ? .black : .white
+  }
+
+  /// How the error segment is cut: nil when the palette draws it as one solid bar (no mask,
+  /// the original look), else the dashes of the broken bar.
+  public static func errorPieces(_ colors: Colors, width: CGFloat, height: CGFloat) -> [CGRect]? {
+    colors.errorDashed ? dashes(width: width, height: height) : nil
   }
 
   /// The error sign: the segment drawn as `count` short dashes split by `gap` points, filling
