@@ -13,8 +13,12 @@ import Observation
 final class UsageModule {
   private(set) var usage: PlanUsage?
   /// Context window left per session id (each status line refresh writes one session's; empty
-  /// when the status line passes only `rate_limits`).
+  /// when the status line passes only `rate_limits`). Holds the `contextKept` sessions that
+  /// wrote last, so it does not gain an entry per session for as long as the app runs.
   private(set) var contextLeft: [String: Double] = [:]
+  /// Session ids of `contextLeft`, the one that wrote last at the end.
+  @ObservationIgnored private var contextOrder: [String] = []
+  static let contextKept = 32
   /// A session's context fell under the alert mark (session id, percent left).
   @ObservationIgnored var onContextLow: (@MainActor (String, Double) -> Void)?
 
@@ -64,6 +68,15 @@ final class UsageModule {
     if let c = ContextLeft.statusLine(data) {
       let previous = contextLeft[c.sessionID]
       if previous != c.percent { contextLeft[c.sessionID] = c.percent }
+      if contextOrder.last != c.sessionID {
+        contextOrder.removeAll { $0 == c.sessionID }
+        contextOrder.append(c.sessionID)
+        let extra = contextOrder.count - Self.contextKept
+        if extra > 0 {
+          for id in contextOrder.prefix(extra) { contextLeft[id] = nil }
+          contextOrder.removeFirst(extra)
+        }
+      }
       if c.crossesAlert(from: previous) { onContextLow?(c.sessionID, c.percent) }
     }
     let now = Date()

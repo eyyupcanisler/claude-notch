@@ -110,7 +110,7 @@ final class SpotifyModule {
       & linefeed & (id of t)
       end tell
       """
-    let r = await AppleScriptRunner.run(script)
+    let r = await AppleScriptRunner.run(script, reuse: true)
     if r.errorCode == -1743 { denied = true }
     guard let out = r.output else { return }
     update(NowPlaying.spotifyScript(out, at: Date()))
@@ -119,7 +119,7 @@ final class SpotifyModule {
   private func loadArtwork(for trackID: String) async {
     guard spotifyRunning else { return }
     let r = await AppleScriptRunner.run(
-      "tell application \"Spotify\" to return artwork url of current track")
+      "tell application \"Spotify\" to return artwork url of current track", reuse: true)
     if r.errorCode == -1743 { denied = true }
     guard let s = r.output, let url = URL(string: s), url.scheme == "https",
       let (data, _) = try? await URLSession.shared.data(from: url),
@@ -144,9 +144,9 @@ final class SpotifyModule {
 
   // MARK: Controls
 
-  func playPause() { command("playpause") }
-  func next() { command("next track") }
-  func previous() { command("previous track") }
+  func playPause() { command("playpause", reuse: true) }
+  func next() { command("next track", reuse: true) }
+  func previous() { command("previous track", reuse: true) }
 
   /// Jumps to `seconds` in the current track.
   func seek(to seconds: TimeInterval) {
@@ -160,10 +160,11 @@ final class SpotifyModule {
     command("set player position to \(s)")
   }
 
-  private func command(_ verb: String) {
+  /// `reuse`: a fixed verb (not the seek position), compiled once.
+  private func command(_ verb: String, reuse: Bool = false) {
     guard spotifyRunning else { return }
     Task {
-      let r = await AppleScriptRunner.run("tell application \"Spotify\" to \(verb)")
+      let r = await AppleScriptRunner.run("tell application \"Spotify\" to \(verb)", reuse: reuse)
       if r.errorCode == -1743 { denied = true }
     }
   }

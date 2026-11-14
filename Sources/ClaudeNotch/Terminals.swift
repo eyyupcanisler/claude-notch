@@ -88,7 +88,7 @@ enum Terminals {
   /// otherwise this would raise the consent prompt without a user action.
   static func focusedGhosttyTTY() async -> String? {
     guard isRunning(ghosttyBundleID) else { return nil }
-    let r = await AppleScriptRunner.run(TerminalScript.ghosttyFocusedTTY)
+    let r = await AppleScriptRunner.run(TerminalScript.ghosttyFocusedTTY, reuse: true)
     return HookContext.validTTY(r.output)
   }
 
@@ -97,7 +97,7 @@ enum Terminals {
   /// would raise the consent prompt without a user action.
   static func ghosttyTitles() async -> (titles: [String: String], order: [String: Int])? {
     guard isRunning(ghosttyBundleID),
-      let lists = await AppleScriptRunner.runLists(TerminalScript.ghosttyTitles),
+      let lists = await AppleScriptRunner.runLists(TerminalScript.ghosttyTitles, reuse: true),
       lists.count == 2
     else { return nil }
     return (TabTitle.map(ttys: lists[0], names: lists[1]), TabTitle.order(ttys: lists[0]))
@@ -127,11 +127,34 @@ enum AppleScriptRunner {
   private static let queue = DispatchQueue(
     label: "com.eyyupcan.claudenotch.applescript", qos: .userInitiated)
 
-  static func run(_ source: String) async -> ScriptResult {
+  /// Compiled scripts of fixed sources (`reuse: true`), only touched on `queue`. macOS scans
+  /// every script it compiles (XProtect: ~14 MB of short-lived heap and 15-50 ms each time);
+  /// a compiled script runs again in about a millisecond. Only fixed sources come here, so the
+  /// cache stays as small as the list of those scripts.
+  nonisolated(unsafe) private static var compiled: [String: NSAppleScript] = [:]
+
+  /// The script for `source`, compiled once when `reuse` is set; nil with the error code when
+  /// it does not compile. Call on `queue` only.
+  private static func script(_ source: String, reuse: Bool) -> (NSAppleScript?, Int?) {
+    if reuse, let cached = compiled[source] { return (cached, nil) }
+    guard let script = NSAppleScript(source: source) else { return (nil, -1) }
+    guard reuse else { return (script, nil) }
+    var error: NSDictionary?
+    guard script.compileAndReturnError(&error) else {
+      return (nil, (error?[NSAppleScript.errorNumber] as? NSNumber)?.intValue ?? -1)
+    }
+    compiled[source] = script
+    return (script, nil)
+  }
+
+  /// `reuse`: the source never changes (no tty, path or number in it), so it is compiled once
+  /// and kept for the next runs.
+  static func run(_ source: String, reuse: Bool = false) async -> ScriptResult {
     await withCheckedContinuation { cont in
       queue.async {
-        guard let script = NSAppleScript(source: source) else {
-          cont.resume(returning: ScriptResult(output: nil, errorCode: -1))
+        let (script, failure) = Self.script(source, reuse: reuse)
+        guard let script else {
+          cont.resume(returning: ScriptResult(output: nil, errorCode: failure ?? -1))
           return
         }
         var error: NSDictionary?
@@ -148,11 +171,11 @@ enum AppleScriptRunner {
 
   /// Runs a script that returns a list of lists of text (e.g. `{tty of every terminal, name of
   /// every terminal}`); nil on any error. Items that are not text become "". Nested lists
-  /// (`... of every tab of every window`) are flattened depth first.
-  static func runLists(_ source: String) async -> [[String]]? {
+  /// (`... of every tab of every window`) are flattened depth first. `reuse` as in `run`.
+  static func runLists(_ source: String, reuse: Bool = false) async -> [[String]]? {
     await withCheckedContinuation { cont in
       queue.async {
-        guard let script = NSAppleScript(source: source) else {
+        guard let script = Self.script(source, reuse: reuse).0 else {
           cont.resume(returning: nil)
           return
         }

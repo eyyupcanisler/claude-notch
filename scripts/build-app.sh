@@ -22,6 +22,11 @@ AE_USAGE+=" play / pause / next / previous."
 CAL_USAGE="With the Calendar module on, ClaudeNotch reads the next 12 hours of events to show the"
 CAL_USAGE+=" upcoming meeting in the notch and remind you 10 minutes before; it never changes or"
 CAL_USAGE+=" sends anything."
+# MallocSpaceEfficient=1 (LSEnvironment: every launch through LaunchServices, i.e. Finder, open,
+# the login item): malloc hands freed pages back to macOS soon instead of keeping them dirty.
+# Short bursts (the first AppleScript compile runs an XProtect scan with ~14 MB of throwaway
+# heap; opening the panel builds and drops a SwiftUI tree) otherwise stay in the footprint.
+# Measured with scripts/measure-memory.sh: about half the idle footprint, same CPU.
 
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/ClaudeNotch"
@@ -64,6 +69,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSAppleEventsUsageDescription</key><string>$AE_USAGE</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>$CAL_USAGE</string>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 eyyupcan. All rights reserved.</string>
+  <key>LSEnvironment</key><dict><key>MallocSpaceEfficient</key><string>1</string></dict>
 </dict>
 </plist>
 PLIST
