@@ -82,7 +82,7 @@ struct PeekBody: View {
         if store.pending.count > 1 {
           Text("+\(store.pending.count - 1)")
             .font(.system(size: 10.5, weight: .bold, design: .rounded))
-            .foregroundStyle(.black)
+            .foregroundStyle(NotchTheme.onStatus)
             .padding(.horizontal, 5)
             .frame(height: 15)
             .background(Capsule().fill(theme.needs))

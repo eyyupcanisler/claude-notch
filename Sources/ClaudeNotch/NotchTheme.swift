@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import SwiftUI
 
 extension Color {
@@ -32,17 +33,25 @@ struct NotchTheme: Sendable {
   static let band = Color.black
   static let bandInk = Color.white
   static let bandSecondary = Color.white.opacity(0.62)
-  static let bandWorking = Color(hex: 0xD97757)
-  static let bandNeeds = Color(hex: 0xFFB020)
-  static let bandDone = Color(hex: 0x34C759)
-  static let bandError = Color(hex: 0xFF453A)
+  // Status colors: colorblind-friendly (see `StatusPalette`). The status line pairs each with
+  // a shape sign too: moving shine = working, slow fade = needs you, solid = done,
+  // broken = error, faint = idle.
+  static let bandWorking = Color(hex: StatusPalette.working)
+  static let bandNeeds = Color(hex: StatusPalette.needs)
+  static let bandDone = Color(hex: StatusPalette.done)
+  static let bandError = Color(hex: StatusPalette.error)
+  /// Text or a glyph on a solid status fill (chips, capsules, the picked option number). Black
+  /// reaches at least 4.5:1 on every status color (`StatusPalette.ink(on:)`, checked in
+  /// `StatusPaletteTests`); white would not on any of them.
+  static let onStatus = Color.black
 
   static let dark = NotchTheme(
     surface: Color(hex: 0x000000), raised: Color(hex: 0x0E0E10),
     hairline: .white.opacity(0.07), ink: Color(hex: 0xF5F5F4),
     secondary: Color(hex: 0xF5F5F4, opacity: 0.72), tertiary: Color(hex: 0xF5F5F4, opacity: 0.56),
-    faint: .white.opacity(0.06), working: Color(hex: 0xD97757), needs: Color(hex: 0xFFB020),
-    done: Color(hex: 0x34C759), error: Color(hex: 0xFF453A), idle: .white.opacity(0.35),
+    faint: .white.opacity(0.06), working: Color(hex: StatusPalette.working),
+    needs: Color(hex: StatusPalette.needs), done: Color(hex: StatusPalette.done),
+    error: Color(hex: StatusPalette.error), idle: .white.opacity(0.35),
     primaryFill: Color(hex: 0xF5F5F4), primaryText: Color(hex: 0x0B0B0C), grainOpacity: 1)
 }
 

@@ -368,7 +368,7 @@
 "Weather: in the panel band, an island when rain is near" = "Hava durumu: panel bandında, yağmur yaklaşınca ada";
 "Week" = "Hafta";
 "Weekly: %lld%% · resets %@" = "Haftalık: %%%lld · %@’de sıfırlanır";
-"When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "Süre dolunca istek çentiğin altındaki amber çizgide bekler (hook zaman aşımı ~10 dk). Üzerine gelmek açık tutar. Kapanmışken %@ / %@ önce isteği geri getirir; karar ikinci basışta verilir.";
+"When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "Süre dolunca istek çentiğin altındaki sarı çizgide bekler (hook zaman aşımı ~10 dk). Üzerine gelmek açık tutar. Kapanmışken %@ / %@ önce isteği geri getirir; karar ikinci basışta verilir.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · ↑/↓ oturumlar · ⏎ terminale git · Esc kapat";
 "Working" = "Çalışıyor";
 "⌃⌥P pauses / resumes" = "⌃⌥P ile duraklat / sürdür";

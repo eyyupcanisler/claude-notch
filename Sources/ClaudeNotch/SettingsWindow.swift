@@ -341,7 +341,7 @@ struct SettingsView: View {
   private var peekHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return loc("When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+    return loc("When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
   }
 
   private var displayHelp: String {

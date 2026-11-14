@@ -113,15 +113,18 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
 - **Kapalı:** oturum yoksa yalnızca donanım çentiği görünür, hiçbir şey çizilmez. Oturum varsa
   çentiğin hemen altında (2 pt boşluk) ortalı, 3 pt'lik bir **durum çizgisi** belirir: çentik
   genişliğinin iki yanından 24 pt içeride, oturum başına bir parça (en çok 6, sabit sırada).
-  Turuncu ışıltı: çalışıyor; amber nefes: sizi bekliyor (izin / soru / plan / girdi); yeşil:
-  görülmemiş "bitti" (gelişte bir kez parlar); kırmızı: hata; soluk beyaz: boşta. Hareketi
-  azalt açıkken renkler durağandır. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
+  Camgöbeği, üzerinde kayan ışıltı: çalışıyor; sarı, yavaş nefes: sizi bekliyor (izin / soru /
+  plan / girdi); düz mavi: görülmemiş "bitti" (gelişte bir kez parlar); kesik (üç kısa çizgi)
+  pembe-kırmızı: hata; soluk beyaz: boşta. Renkler renk körlüğünde de ayrışacak biçimde
+  seçildi; biçimler (kayan ışıltı, nefes, düz, kesik, soluk) durumları gri tonlamada bile
+  ayırır. Hareketi azalt açıkken ışıltı ve nefes durur; o zaman çalışıyor, sizi bekliyor ve
+  bitti yalnızca renk ve parlaklıkla ayırt edilir. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
   dışındaki kısmında tıklamalar her zaman arkadaki menülere gider.
 - **Göz atma (peek):** izin, soru, bitti ve hata olayları çentikten aşağı doğru düz siyah bir
   ada olarak düşer: bant içinde tam çentik genişliğinde, bandın hemen altında küçük iç bükey
   kavislerle genişler (bitti / hata ~300 pt tek satır, izin ~380 pt iki satır + küçük
   düğmeler). "Bitti" 2,5 sn kalır; izin isteği aşağıdaki [izin akışına](#izin-akışı-ve-kısayollar)
-  göre kalır. Üzerindeyken kapanmaz, sonra çizgiye geri döner (amber parça nefes almaya devam
+  göre kalır. Üzerindeyken kapanmaz, sonra çizgiye geri döner (sarı parça nefes almaya devam
   eder). Metin tek satıra sığmıyorsa İzin ver yerine **Tümünü gör** çıkar. 1,5 sn içindeki
   "bitti"ler birleştirilir ("2 oturum bitti").
 - **Panel:** yalnızca siz açtığınızda: çentik ya da çizgi üzerinde ~300 ms beklemek (hızlı
@@ -168,7 +171,7 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   diğer terminallerde yalnızca uygulama). Satır üzerindeki düğmeler: Odakla, Okundu, Son mesajı
   kopyala. İlk odaklamada macOS Otomasyon izni ister.
 - **Ghostty iznini ver:** Otomasyon izni henüz sorulmadıysa ya da reddedildiyse panel bandında
-  amber kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
+  sarı kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
   penceresini açar (arka planda; çentik donmaz). Daha önce reddedildiyse Sistem Ayarları >
   Gizlilik ve Güvenlik > Otomasyon açılır.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
@@ -190,7 +193,7 @@ kez işe yarayınca kaybolur.
 
 **Ne kadar kalır:** yanıtlanmayan istek Ayarlar > Bildirim > "İzin isteği görünür kalsın"
 kadar kalır: **8 sn / 15 sn (varsayılan) / 30 sn / Yanıtlanana kadar**. İmleç üzerindeyken
-kapanmaz. Süre dolunca ada çizgiye geri çekilir, istek **bekler**: çizgideki parçası amber
+kapanmaz. Süre dolunca ada çizgiye geri çekilir, istek **bekler**: çizgideki parçası sarı
 nefes alır, panelde kartı durur. İstek, siz çentikten ya da terminalden yanıtlayana veya
 hook'un ~590 sn'lik süresi dolana kadar yaşar (süre dolarsa terminaldeki pencere geçerli
 kalır; köprü hiçbir zaman kendiliğinden izin vermez). "Yanıtlanana kadar" seçiliyken açık bir

@@ -104,7 +104,7 @@ struct QuestionAnswerView: View {
       HStack(spacing: 6) {
         Text("\(i + 1)")
           .font(.system(size: 10, weight: .bold)).monospacedDigit()
-          .foregroundStyle(on ? Color.black : theme.tertiary)
+          .foregroundStyle(on ? NotchTheme.onStatus : theme.tertiary)
           .frame(width: 16, height: 16)
           .background(Circle().fill(on ? theme.needs : Color.white.opacity(0.08)))
         Text(option.label)

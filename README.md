@@ -23,8 +23,13 @@ terminal, and keep a few handy tools one glance away.
 
 ## What it does
 
-- **Live status under the notch.** One thin segment per Claude Code session: orange while it
-  works, amber when it needs you, green when it finished and you have not looked yet.
+- **Live status under the notch.** One thin segment per Claude Code session: cyan with a moving
+  shine while it works, yellow with a slow fade when it needs you, solid blue when it finished
+  and you have not looked yet, a broken pink-red bar on an error, faint white when idle. The
+  colors are picked to stay apart for color-blind eyes, and the shapes (moving shine, slow fade,
+  solid, broken, faint) tell the states apart even in grayscale. With Reduce Motion on, the
+  shine and the fade stop, so working, needs you and done are told apart by color and
+  brightness only.
 - **Permission requests in the notch.** An island drops down with the command; allow or deny
   with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.

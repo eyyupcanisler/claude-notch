@@ -336,7 +336,7 @@ final class V2Tests: XCTestCase {
     store.handleEvent(ev("Notification", ntype: "idle_prompt"), context: ctx(nil, nil))
     XCTAssertEqual(status(), .done("Completed"))
     XCTAssertTrue(store.sessions["s1"]?.unseen == true)
-    XCTAssertEqual(store.attentionCount, 0, "done-unseen is not amber attention")
+    XCTAssertEqual(store.attentionCount, 0, "done-unseen is not needs-you attention")
     XCTAssertEqual(store.doneUnseenCount, 1)
     XCTAssertTrue(store.anyDone)
     XCTAssertFalse(store.markSeen(tty: "/dev/ttys099"))

@@ -580,13 +580,13 @@ public struct HoverIntent: Sendable {
 
 /// Color role of one status-line segment (collapsed notch).
 public enum LineState: String, Sendable {
-  /// Running and not blocked on the user: Claude orange with a shimmer.
+  /// Running and not blocked on the user: cyan with a moving shine.
   case working
-  /// Card pending, question, plan approval or input request: amber, breathing.
+  /// Card pending, question, plan approval or input request: yellow, a slow fade (breathing).
   case needs
-  /// Finished and not seen yet: green.
+  /// Finished and not seen yet: blue, a solid steady bar.
   case done
-  /// Failed and not seen yet: red.
+  /// Failed and not seen yet: pink-red, a broken bar (three short dashes), static.
   case error
   /// Idle, quiet or already seen: faint white.
   case idle

@@ -22,8 +22,8 @@ import Observation
 //
 // Attention
 //   needsAttention(_:)               Card pending, or question / plan / waiting / unseen error.
-//   attentionCount                   Distinct sessions needing the user (amber badge).
-//   doneUnseenSessions / doneUnseenCount   Separate green signal, not in the amber badge.
+//   attentionCount                   Distinct sessions needing the user (yellow badge).
+//   doneUnseenSessions / doneUnseenCount   Separate blue signal, not in the yellow badge.
 //   anyWorking, workingCount, anyWaiting, anyError, anyDone (= any done-unseen).
 //   activeWorkingCount / anyActiveWorking   Working and not blocked on a card / question
 //                                    (what the ears, chips and header spark show).

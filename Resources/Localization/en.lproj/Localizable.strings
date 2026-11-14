@@ -368,7 +368,7 @@
 "Weather: in the panel band, an island when rain is near" = "Weather: in the panel band, an island when rain is near";
 "Week" = "Week";
 "Weekly: %lld%% · resets %@" = "Weekly: %lld%% · resets %@";
-"When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides.";
+"When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close";
 "Working" = "Working";
 "⌃⌥P pauses / resumes" = "⌃⌥P pauses / resumes";
