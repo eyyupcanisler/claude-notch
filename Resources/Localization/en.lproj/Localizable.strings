@@ -11,6 +11,7 @@
 "%@ has been quiet for 10 min" = "%@ has been quiet for 10 min";
 "%@ is in use right now (an install from source). If it works, it can stay that way." = "%@ is in use right now (an install from source). If it works, it can stay that way.";
 "%@ needs control permission — System Settings > Privacy & Security > Automation" = "%@ needs control permission — System Settings > Privacy & Security > Automation";
+"%@ pauses / resumes" = "%@ pauses / resumes";
 "%@ to go" = "%@ to go";
 "%@ · around %@, %lld%%" = "%@ · around %@, %lld%%";
 "%@, press and hold" = "%@, press and hold";
@@ -65,7 +66,6 @@
 "Always allow" = "Always allow";
 "An error occurred" = "An error occurred";
 "another copy" = "another copy";
-"Answer in terminal" = "Answer in terminal";
 "Answer in the terminal" = "Answer in the terminal";
 "Appearance" = "Appearance";
 "Asking a question" = "Asking a question";
@@ -73,7 +73,6 @@
 "asks for permission" = "asks for permission";
 "Auto-compact soon; run /compact yourself if needed" = "Auto-compact soon; run /compact yourself if needed";
 "Automatic" = "Automatic";
-"Back" = "Back";
 "Battery low" = "Battery low";
 "Break done" = "Break done";
 "Break in progress" = "Break in progress";
@@ -90,13 +89,13 @@
 "Choose the client file you downloaded from Google Cloud (client_secret_….json)" = "Choose the client file you downloaded from Google Cloud (client_secret_….json)";
 "City" = "City";
 "Classic · 25 / 5, long 15" = "Classic · 25 / 5, long 15";
-"Claude asks" = "Claude asks";
 "Claude asks for permission" = "Claude asks for permission";
 "Claude Code connection" = "Claude Code connection";
 "Claude Code events and permission requests come to this app." = "Claude Code events and permission requests come to this app.";
 "Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup)." = "Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup).";
 "Claude Code hooks…" = "Claude Code hooks…";
 "Claude is asking a question" = "Claude is asking a question";
+"Claude is asking you" = "Claude is asking you";
 "Claude is waiting for a reply" = "Claude is waiting for a reply";
 "Claude plan" = "Claude plan";
 "Claude plan, %@: %lld percent" = "Claude plan, %@: %lld percent";
@@ -104,7 +103,6 @@
 "Claude: no active sessions" = "Claude: no active sessions";
 "ClaudeNotch is connected to Google Calendar. You can close this tab." = "ClaudeNotch is connected to Google Calendar. You can close this tab.";
 "ClaudeNotch Settings" = "ClaudeNotch Settings";
-"ClaudeNotch: answered from the notch" = "ClaudeNotch: answered from the notch";
 "Clear" = "Clear";
 "Clear sky" = "Clear sky";
 "Click to change" = "Click to change";
@@ -194,6 +192,7 @@
 "Image · %@×%@" = "Image · %@×%@";
 "Install hooks" = "Install hooks";
 "Join" = "Join";
+"Jump to the session that needs you" = "Jump to the session that needs you";
 "jq not found: on macOS 14, run `brew install jq` in Terminal." = "jq not found: on macOS 14, run `brew install jq` in Terminal.";
 "Keep permission requests visible" = "Keep permission requests visible";
 "Last message copied to the clipboard" = "Last message copied to the clipboard";
@@ -214,7 +213,7 @@
 "Needed to switch to the right Ghostty tab when you click a session row." = "Needed to switch to the right Ghostty tab when you click a session row.";
 "network connection (%@)" = "network connection (%@)";
 "new source: %@" = "new source: %@";
-"Next" = "Next";
+"Needs a tool that turns Caps Lock into ⌃⌥⇧⌘: Raycast (Settings > Advanced > Hyper Key), Hyperkey or Karabiner-Elements." = "Needs a tool that turns Caps Lock into ⌃⌥⇧⌘: Raycast (Settings > Advanced > Hyper Key), Hyperkey or Karabiner-Elements.";
 "Next request" = "Next request";
 "Next track" = "Next track";
 "No access" = "No access";
@@ -260,7 +259,6 @@
 "Press the new shortcut; Esc cancels" = "Press the new shortcut; Esc cancels";
 "Previous request" = "Previous request";
 "Previous track" = "Previous track";
-"Question option %lld" = "Question option %lld";
 "Question or waiting for input" = "Question or waiting for input";
 "Question: %@" = "Question: %@";
 "Quiet" = "Quiet";
@@ -273,8 +271,8 @@
 "Remove" = "Remove";
 "Remove from shelf" = "Remove from shelf";
 "Request %lld of %lld" = "Request %lld of %lld";
+"Reset to defaults" = "Reset to defaults";
 "Resets at %@" = "Resets at %@";
-"Restore defaults" = "Restore defaults";
 "Rich" = "Rich";
 "Risky command: %@" = "Risky command: %@";
 "Rows" = "Rows";
@@ -287,8 +285,6 @@
 "Searching…" = "Searching…";
 "secret file transfer" = "secret file transfer";
 "See all" = "See all";
-"select one or more" = "select one or more";
-"Send" = "Send";
 "Session" = "Session";
 "Set a timer" = "Set a timer";
 "Settings" = "Settings";
@@ -358,6 +354,7 @@
 "until %@" = "until %@";
 "Until answered" = "Until answered";
 "Use at least one modifier key: ⌃, ⌥ or ⌘." = "Use at least one modifier key: ⌃, ⌥ or ⌘.";
+"Use Caps Lock (Hyper key)" = "Use Caps Lock (Hyper key)";
 "Use the calendar’s own alert times" = "Use the calendar’s own alert times";
 "very long command" = "very long command";
 "Waiting for a reply" = "Waiting for a reply";
@@ -371,4 +368,3 @@
 "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close";
 "Working" = "Working";
-"⌃⌥P pauses / resumes" = "⌃⌥P pauses / resumes";

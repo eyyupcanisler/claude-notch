@@ -5,8 +5,8 @@
 # ClaudeNotch
 
 **Your MacBook notch, watching your Claude Code sessions.**
-Know when a run finishes, answer permission prompts and questions without going back to the
-terminal, and keep a few handy tools one glance away.
+Know when a run finishes or Claude asks you something, answer permission prompts without going
+back to the terminal, and keep a few handy tools one glance away.
 
 **English** · [Türkçe](README.tr.md)
 
@@ -33,8 +33,13 @@ terminal, and keep a few handy tools one glance away.
 - **Permission requests in the notch.** An island drops down with the command; allow or deny
   with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
-- **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
-  or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
+- **Know when Claude asks.** Questions (`AskUserQuestion`) and plan approval stay in the
+  terminal, where you answer them. The notch tells you: the session's segment fades slowly in
+  yellow, and for a question an island drops down with "Claude is asking you" and the question
+  text. Click it to jump to that session's terminal tab.
+- **Jump to what needs you.** **⌃⌥J** brings forward the terminal tab of the session that needs
+  you most: a permission request first, then a question, plan approval or input wait, then an
+  unseen error, then an unseen finished run.
 - **The panel.** Hover the notch: every session with its status, the turn's elapsed time in
   dot-matrix digits, a rhythm strip of its tool calls, subagents, and context left. Click a row
   to jump to its Ghostty / Terminal / iTerm2 tab.
@@ -98,20 +103,25 @@ Claude Code ── hook ──▶ hooks/claude-notch-hook.sh ── curl ──�
 - `PermissionRequest` waits for your answer (up to ~10 min) side by side with the terminal
   prompt; answering in either place wins. If the app is not running the hook exits silently and
   Claude Code asks in the terminal as usual.
-- A `PreToolUse` hook on `AskUserQuestion` holds the question until you answer it in the notch;
-  switching to that session's terminal tab hands it back to the terminal.
+- Questions are never held: Claude Code asks them in the terminal as usual, and the
+  fire-and-forget `PreToolUse` / `PermissionRequest` events only tell the notch that Claude is
+  asking. Reinstalling the hooks removes the `PreToolUse(AskUserQuestion)` entry older versions
+  added (until then it exits at once and changes nothing).
 
 ## Shortcuts
 
 | Keys | Action |
 | --- | --- |
 | ⌃⌥Space | Open the panel with the keyboard |
-| ⌃⌥Y / ⌃⌥N | Allow / deny the request on screen (questions: send / answer in terminal) |
-| ⌃⌥1 … ⌃⌥4 | Pick an option of the question on screen (only while one is shown) |
+| ⌃⌥Y / ⌃⌥N | Allow / deny the permission request on screen |
+| ⌃⌥J | Jump to the terminal tab of the session that needs you |
 | ⌃⌥P | Start / pause a Pomodoro |
 | ⌃⌥V | Copy the newest shelf item back to the clipboard |
 
-All of them can be changed in Settings → *Shortcuts*.
+All of them can be changed in Settings → *Shortcuts*. **Use Caps Lock (Hyper key)** there
+switches every shortcut to ⌃⌥⇧⌘ + the same key (Caps Lock + Y allows, Caps Lock + J jumps...),
+and **Reset to defaults** goes back to ⌃⌥. The Hyper preset needs a tool that turns Caps Lock
+into ⌃⌥⇧⌘: Raycast (Settings → Advanced → Hyper Key), Hyperkey or Karabiner-Elements.
 
 ## Google Calendar (optional)
 

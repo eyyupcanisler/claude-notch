@@ -11,6 +11,7 @@
 "%@ has been quiet for 10 min" = "%@ 10 dk’dır sessiz";
 "%@ is in use right now (an install from source). If it works, it can stay that way." = "Şu an %@ kullanılıyor (kaynak koddan kurulum). Çalışıyorsa böyle kalabilir.";
 "%@ needs control permission — System Settings > Privacy & Security > Automation" = "%@'yi kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon";
+"%@ pauses / resumes" = "%@ ile duraklat / sürdür";
 "%@ to go" = "%@ sonra";
 "%@ · around %@, %lld%%" = "%@ · %@ civarı %%%lld";
 "%@, press and hold" = "%@, basılı tutun";
@@ -65,7 +66,6 @@
 "Always allow" = "Her zaman izin ver";
 "An error occurred" = "Bir hata oluştu";
 "another copy" = "başka bir kopya";
-"Answer in terminal" = "Terminalde yanıtla";
 "Answer in the terminal" = "Yanıt terminalde verilir";
 "Appearance" = "Görünüm";
 "Asking a question" = "Soru soruyor";
@@ -73,7 +73,6 @@
 "asks for permission" = "izin istiyor";
 "Auto-compact soon; run /compact yourself if needed" = "Yakında otomatik sıkıştırma; gerekiyorsa /compact ile kendin başlat";
 "Automatic" = "Otomatik";
-"Back" = "Geri";
 "Battery low" = "Pil azaldı";
 "Break done" = "Mola bitti";
 "Break in progress" = "Mola sürüyor";
@@ -90,13 +89,13 @@
 "Choose the client file you downloaded from Google Cloud (client_secret_….json)" = "Google Cloud’dan indirdiğin istemci dosyasını (client_secret_….json) seç";
 "City" = "Şehir";
 "Classic · 25 / 5, long 15" = "Klasik · 25 / 5, uzun 15";
-"Claude asks" = "Claude soruyor";
 "Claude asks for permission" = "Claude izin istiyor";
 "Claude Code connection" = "Claude Code bağlantısı";
 "Claude Code events and permission requests come to this app." = "Claude Code olayları ve izin istekleri bu uygulamaya geliyor.";
 "Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup)." = "Claude Code bu yüzdeleri yalnız durum satırına verir. Bir kez çalıştır: scripts/install-statusline.sh (durum satırı betiğine tek satır ekler, yedek alır).";
 "Claude Code hooks…" = "Claude Code kancaları…";
 "Claude is asking a question" = "Claude bir soru soruyor";
+"Claude is asking you" = "Claude size bir soru soruyor";
 "Claude is waiting for a reply" = "Claude yanıt bekliyor";
 "Claude plan" = "Claude planı";
 "Claude plan, %@: %lld percent" = "Claude planı, %@: yüzde %lld";
@@ -104,7 +103,6 @@
 "Claude: no active sessions" = "Claude: etkin oturum yok";
 "ClaudeNotch is connected to Google Calendar. You can close this tab." = "ClaudeNotch Google Takvim’e bağlandı. Bu sekmeyi kapatabilirsin.";
 "ClaudeNotch Settings" = "ClaudeNotch Ayarları";
-"ClaudeNotch: answered from the notch" = "ClaudeNotch: yanıt çentikten verildi";
 "Clear" = "Temizle";
 "Clear sky" = "Açık";
 "Click to change" = "Değiştirmek için tıklayın";
@@ -194,6 +192,7 @@
 "Image · %@×%@" = "Görüntü · %@×%@";
 "Install hooks" = "Kancaları kur";
 "Join" = "Katıl";
+"Jump to the session that needs you" = "Sizi bekleyen oturuma git";
 "jq not found: on macOS 14, run `brew install jq` in Terminal." = "jq bulunamadı: macOS 14’te Terminal’de `brew install jq` çalıştır.";
 "Keep permission requests visible" = "İzin isteği görünür kalsın";
 "Last message copied to the clipboard" = "Son mesaj panoya kopyalandı";
@@ -214,7 +213,7 @@
 "Needed to switch to the right Ghostty tab when you click a session row." = "Oturum satırına tıklayınca Ghostty'de doğru sekmeye geçmek için gerekir.";
 "network connection (%@)" = "ağ bağlantısı (%@)";
 "new source: %@" = "yeni kaynak: %@";
-"Next" = "Sonraki";
+"Needs a tool that turns Caps Lock into ⌃⌥⇧⌘: Raycast (Settings > Advanced > Hyper Key), Hyperkey or Karabiner-Elements." = "Caps Lock’u ⌃⌥⇧⌘ yapan bir araç gerekir: Raycast (Settings > Advanced > Hyper Key), Hyperkey ya da Karabiner-Elements.";
 "Next request" = "Sonraki istek";
 "Next track" = "Sonraki şarkı";
 "No access" = "İzin yok";
@@ -260,7 +259,6 @@
 "Press the new shortcut; Esc cancels" = "Yeni kısayola basın; Esc vazgeçer";
 "Previous request" = "Önceki istek";
 "Previous track" = "Önceki şarkı";
-"Question option %lld" = "Soru seçeneği %lld";
 "Question or waiting for input" = "Soru ve girdi bekleme";
 "Question: %@" = "Soru: %@";
 "Quiet" = "Sessiz";
@@ -273,8 +271,8 @@
 "Remove" = "Kaldır";
 "Remove from shelf" = "Raftan kaldır";
 "Request %lld of %lld" = "İstek %lld / %lld";
+"Reset to defaults" = "Varsayılanlara dön";
 "Resets at %@" = "%@’de sıfırlanır";
-"Restore defaults" = "Varsayılana dön";
 "Rich" = "Zengin";
 "Risky command: %@" = "Riskli komut: %@";
 "Rows" = "Satırlar";
@@ -287,8 +285,6 @@
 "Searching…" = "Aranıyor…";
 "secret file transfer" = "gizli dosya aktarımı";
 "See all" = "Tümünü gör";
-"select one or more" = "birden çok seçilebilir";
-"Send" = "Gönder";
 "Session" = "Oturum";
 "Set a timer" = "Zamanlayıcı kur";
 "Settings" = "Ayarlar";
@@ -358,6 +354,7 @@
 "until %@" = "%@’e kadar";
 "Until answered" = "Yanıtlanana kadar";
 "Use at least one modifier key: ⌃, ⌥ or ⌘." = "En az bir değiştirici tuş kullanın: ⌃, ⌥ ya da ⌘.";
+"Use Caps Lock (Hyper key)" = "Caps Lock kullan (Hyper tuşu)";
 "Use the calendar’s own alert times" = "Takvimdeki hatırlatma sürelerini kullan";
 "very long command" = "çok uzun komut";
 "Waiting for a reply" = "Yanıt bekliyor";
@@ -371,4 +368,3 @@
 "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "Süre dolunca istek çentiğin altındaki sarı çizgide bekler (hook zaman aşımı ~10 dk). Üzerine gelmek açık tutar. Kapanmışken %@ / %@ önce isteği geri getirir; karar ikinci basışta verilir.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · ↑/↓ oturumlar · ⏎ terminale git · Esc kapat";
 "Working" = "Çalışıyor";
-"⌃⌥P pauses / resumes" = "⌃⌥P ile duraklat / sürdür";

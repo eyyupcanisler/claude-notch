@@ -52,19 +52,10 @@ public final class RequestRouter {
         Task { @MainActor in store.connectionDropped(id: id) }
       }
     case ("POST", "/question"):
-      guard let event = HookEvent.parse(req.body), event.toolName == "AskUserQuestion" else {
-        responder.respond(status: 400)
-        return
-      }
-      let held = store.addQuestion(event) { body in
-        responder.respond(status: 200, body: body ?? Data())
-      }
-      if let id = held?.id {
-        let store = self.store
-        responder.onPeerClosed {
-          Task { @MainActor in store.connectionDropped(id: id) }
-        }
-      }
+      // Questions are never held: an old settings entry that still calls this route gets an
+      // empty reply at once, so the terminal asks as usual. The async PreToolUse event tells
+      // the notch that Claude is asking.
+      responder.respond(status: 200)
     case ("GET", "/debug/state"):
       var snapshot = store.debugSnapshot().objectValue ?? [:]
       if let ui = uiStateProvider?() { snapshot["ui"] = ui }

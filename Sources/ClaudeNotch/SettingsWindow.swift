@@ -10,6 +10,9 @@ struct ShortcutBridge {
   /// Registers a recorded shortcut; returns a localized error (previous one kept) or nil.
   var set: @MainActor (HotKeyRole, KeyCombo) -> String?
   var reset: @MainActor () -> Void
+  /// Gives every role its default key with the preset's modifiers; returns, per role, why it
+  /// kept its previous shortcut.
+  var applyPreset: @MainActor (ShortcutPreset) -> [HotKeyRole: String]
   /// A recorder is listening: our hot keys step aside so the chord reaches it.
   var pause: @MainActor (Bool) -> Void
   var registered: @MainActor (HotKeyRole) -> Bool
@@ -67,6 +70,8 @@ struct SettingsView: View {
   @State private var loginError: String?
   /// The one recorder listening (starting another stops it).
   @State private var recordingRole: HotKeyRole?
+  /// Roles the last preset could not change, with the reason (shown under each row).
+  @State private var presetErrors: [HotKeyRole: String] = [:]
 
   var body: some View {
     TabView {
@@ -282,24 +287,35 @@ struct SettingsView: View {
             ShortcutRecorder(
               role: role, active: $recordingRole, combo: settings.shortcut(role),
               registered: revision >= 0 && shortcuts.registered(role),
+              presetError: presetErrors[role],
               record: { combo in
                 defer { revision += 1 }
+                presetErrors[role] = nil
                 return shortcuts.set(role, combo)
               },
               pause: shortcuts.pause)
           }
+          Text(shortcutHelp).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
           HStack {
-            Text(shortcutHelp).font(.caption).foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button("Restore defaults") {
-              shortcuts.reset()
+            Button("Use Caps Lock (Hyper key)") {
+              recordingRole = nil
+              presetErrors = shortcuts.applyPreset(.hyper)
               revision += 1
             }
-            .disabled(HotKeyRole.configurable.allSatisfy {
-              settings.shortcut($0) == KeyCombo.defaultCombo($0)
-            })
+            .disabled(usesPreset(.hyper))
+            Spacer(minLength: 8)
+            Button("Reset to defaults") {
+              recordingRole = nil
+              shortcuts.reset()
+              presetErrors = [:]
+              revision += 1
+            }
+            .disabled(usesPreset(.standard))
           }
+          Text("Needs a tool that turns Caps Lock into ⌃⌥⇧⌘: Raycast (Settings > Advanced > Hyper Key), Hyperkey or Karabiner-Elements.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
           Text("While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close")
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -329,6 +345,13 @@ struct SettingsView: View {
       return modules.weather.place == nil
         ? loc("No location permission needed: type your city. Data from Open-Meteo, every 30 min.")
         : loc("Data from Open-Meteo, every 30 min.")
+    }
+  }
+
+  /// Every shortcut is the preset's (default key + the preset's modifiers).
+  private func usesPreset(_ preset: ShortcutPreset) -> Bool {
+    HotKeyRole.configurable.allSatisfy {
+      settings.shortcut($0) == KeyCombo.presetCombo($0, preset)
     }
   }
 
@@ -373,6 +396,8 @@ struct ShortcutRecorder: View {
   @Binding var active: HotKeyRole?
   let combo: KeyCombo
   let registered: Bool
+  /// Why the last preset left this role unchanged (nil: it applied, or no preset was used).
+  var presetError: String?
   let record: (KeyCombo) -> String?
   let pause: (Bool) -> Void
   @State private var recording = false
@@ -390,7 +415,7 @@ struct ShortcutRecorder: View {
         }
         .help(recording ? "Press the new shortcut; Esc cancels" : "Click to change")
       }
-      if let error {
+      if let error = error ?? presetError {
         Text(error).font(.caption).foregroundStyle(.orange)
       } else if !registered && !recording {
         Text("The shortcut could not be registered; choose another one.")

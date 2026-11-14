@@ -2,42 +2,27 @@ import AppKit
 import Carbon.HIToolbox
 import ClaudeNotchCore
 
-/// The three global shortcuts.
+/// The global shortcuts.
 enum HotKeyRole: UInt32, CaseIterable, Sendable {
   case panel = 1
   case allow = 2
   case deny = 3
   case timer = 4
   case shelf = 5
-  /// ⌃⌥1…⌃⌥4: pick an option of the question on screen. Registered only while one is shown
-  /// (never in Settings), so the chords stay free for other apps the rest of the time.
-  case option1 = 11
-  case option2 = 12
-  case option3 = 13
-  case option4 = 14
+  /// Focuses the terminal tab of the session that needs the user most (see `JumpTarget`).
+  case jump = 6
 
-  /// The roles the user sets in Settings and that are always registered.
-  static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .timer, .shelf]
-
-  /// 0-based option index of an `optionN` role.
-  var optionIndex: Int? {
-    switch self {
-    case .option1: return 0
-    case .option2: return 1
-    case .option3: return 2
-    case .option4: return 3
-    default: return nil
-    }
-  }
+  /// The roles the user sets in Settings and that are always registered (Settings order).
+  static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .jump, .timer, .shelf]
 
   var title: String {
     switch self {
     case .panel: return loc("Open the panel")
     case .allow: return loc("Allow")
     case .deny: return loc("Deny")
+    case .jump: return loc("Jump to the session that needs you")
     case .timer: return loc("Start / pause Pomodoro")
     case .shelf: return loc("Copy the latest shelf item")
-    case .option1, .option2, .option3, .option4: return loc("Question option \((optionIndex ?? 0) + 1)")
     }
   }
 
@@ -54,24 +39,43 @@ struct KeyCombo: Equatable, Hashable, Sendable {
 
   static let modifierMask = UInt32(controlKey | optionKey | shiftKey | cmdKey)
 
-  /// ⌃⌥Space, ⌃⌥Y, ⌃⌥N (Y / N resolved through the current keyboard layout).
+  /// ⌃⌥Space, ⌃⌥Y, ⌃⌥N ... (letters resolved through the current keyboard layout).
   static func defaultCombo(_ role: HotKeyRole) -> KeyCombo {
-    let mods = UInt32(controlKey | optionKey)
+    presetCombo(role, .standard)
+  }
+
+  /// `role`'s default key with the preset's modifiers (⌃⌥ + key, or ⌃⌥⇧⌘ + key for Hyper).
+  static func presetCombo(_ role: HotKeyRole, _ preset: ShortcutPreset) -> KeyCombo {
+    let mods = carbonModifiers(preset.modifiers)
+    func letter(_ c: String, _ fallback: Int) -> KeyCombo {
+      KeyCombo(keyCode: KeyLayout.keyCode(for: c) ?? UInt32(fallback), modifiers: mods)
+    }
     switch role {
     case .panel: return KeyCombo(keyCode: UInt32(kVK_Space), modifiers: mods)
-    case .allow:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "y") ?? UInt32(kVK_ANSI_Y), modifiers: mods)
-    case .deny:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "n") ?? UInt32(kVK_ANSI_N), modifiers: mods)
-    case .timer:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "p") ?? UInt32(kVK_ANSI_P), modifiers: mods)
-    case .shelf:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "v") ?? UInt32(kVK_ANSI_V), modifiers: mods)
-    case .option1: return KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: mods)
-    case .option2: return KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: mods)
-    case .option3: return KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: mods)
-    case .option4: return KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: mods)
+    case .allow: return letter("y", kVK_ANSI_Y)
+    case .deny: return letter("n", kVK_ANSI_N)
+    case .jump: return letter("j", kVK_ANSI_J)
+    case .timer: return letter("p", kVK_ANSI_P)
+    case .shelf: return letter("v", kVK_ANSI_V)
     }
+  }
+
+  static func carbonModifiers(_ m: ChordModifiers) -> UInt32 {
+    var mods: UInt32 = 0
+    if m.contains(.control) { mods |= UInt32(controlKey) }
+    if m.contains(.option) { mods |= UInt32(optionKey) }
+    if m.contains(.shift) { mods |= UInt32(shiftKey) }
+    if m.contains(.command) { mods |= UInt32(cmdKey) }
+    return mods
+  }
+
+  var chordModifiers: ChordModifiers {
+    var m: ChordModifiers = []
+    if modifiers & UInt32(controlKey) != 0 { m.insert(.control) }
+    if modifiers & UInt32(optionKey) != 0 { m.insert(.option) }
+    if modifiers & UInt32(shiftKey) != 0 { m.insert(.shift) }
+    if modifiers & UInt32(cmdKey) != 0 { m.insert(.command) }
+    return m
   }
 
   /// From a key-down in the recorder; nil without ⌃, ⌥ or ⌘ (a bare key or ⇧ + key would
@@ -96,20 +100,12 @@ struct KeyCombo: Equatable, Hashable, Sendable {
   /// from every app, so it must not be a chord people type or use for app shortcuts.
   func error(for role: HotKeyRole) -> String? {
     guard role.isDecision else { return nil }
-    let ok = DecisionChord.isAllowed(
-      control: modifiers & UInt32(controlKey) != 0, option: modifiers & UInt32(optionKey) != 0,
-      shift: modifiers & UInt32(shiftKey) != 0, command: modifiers & UInt32(cmdKey) != 0)
-    return ok ? nil : DecisionChord.error
+    return DecisionChord.isAllowed(chordModifiers) ? nil : DecisionChord.error
   }
 
   /// "⌃⌥Y" (Apple's modifier order: ⌃ ⌥ ⇧ ⌘).
   var display: String {
-    var s = ""
-    if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
-    if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
-    if modifiers & UInt32(shiftKey) != 0 { s += "⇧" }
-    if modifiers & UInt32(cmdKey) != 0 { s += "⌘" }
-    return s + KeyLayout.label(keyCode: keyCode)
+    chordModifiers.symbols + KeyLayout.label(keyCode: keyCode)
   }
 
   /// Stored as [keyCode, modifiers].

@@ -74,16 +74,9 @@ curl -s --unix-socket "$SOCK" -H 'Content-Type: application/json' -H 'X-Term-Pro
 sleep 3.5
 key allow
 sleep 2
-# A question: ⌃⌥2 picks, ⌃⌥Y sends.
-curl -s --unix-socket "$SOCK" -H 'Content-Type: application/json' -H 'X-Term-Program: ghostty' \
-  --data-binary "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"s-web\",\"cwd\":\"$W\",\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"Ödeme sayfasında hangi düzen?\",\"header\":\"Düzen\",\"multiSelect\":false,\"options\":[{\"label\":\"Tek adım\",\"description\":\"\"},{\"label\":\"İki adım\",\"description\":\"\"},{\"label\":\"Sihirbaz\",\"description\":\"\"}]}]}}" \
-  http://localhost/question >/dev/null &
+# A question: the island says Claude is asking (it is answered in the terminal).
 ev PreToolUse s-web "$W" AskUserQuestion '"tool_input":{"questions":[{"question":"Ödeme sayfasında hangi düzen?","header":"Düzen","options":[{"label":"Tek adım"},{"label":"İki adım"}]}]}'
-sleep 3
-key option2
-sleep 0.8
-key allow
-sleep 1.5
+sleep 4
 ev PostToolUse s-web "$W" AskUserQuestion
 ev Stop s-docs "$D" "" '"last_assistant_message":"Kurulum rehberi güncellendi."'
 sleep 3.5

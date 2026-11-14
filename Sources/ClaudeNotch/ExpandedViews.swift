@@ -643,7 +643,7 @@ struct SessionRow: View {
         PermissionCardView(card: card, store: store, ui: ui, actions: actions)
       }
     default:
-      RichDetail(session: session, store: store, ui: ui, actions: actions)
+      RichDetail(session: session, store: store, actions: actions)
     }
   }
 }
@@ -652,7 +652,6 @@ struct SessionRow: View {
 struct RichDetail: View {
   let session: Session
   let store: SessionStore
-  let ui: NotchUIState
   let actions: NotchActions
   @Environment(\.notchTheme) private var theme
 
@@ -670,11 +669,7 @@ struct RichDetail: View {
     } else {
       switch session.status {
       case .question(let text, let options):
-        if let held = store.question(for: session.id) {
-          QuestionAnswerView(question: held, ui: ui, actions: actions)
-        } else {
-          QuestionDetail(text: text, options: options) { actions.focus(session.id) }
-        }
+        QuestionDetail(text: text, options: options) { actions.focus(session.id) }
       case .planApproval(let summary):
         TerminalAsk(title: loc("Waiting for plan approval"), text: summary) { actions.focus(session.id) }
       case .waitingInput(let message):

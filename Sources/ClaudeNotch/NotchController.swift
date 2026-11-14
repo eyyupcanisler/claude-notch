@@ -96,6 +96,7 @@ final class NotchController {
       shortcuts: ShortcutBridge(
         set: { [weak self] role, combo in self?.setShortcut(role, combo) },
         reset: { [weak self] in self?.resetShortcuts() },
+        applyPreset: { [weak self] preset in self?.applyPreset(preset) ?? [:] },
         pause: { [weak self] paused in self?.pauseShortcuts(paused) },
         registered: { [weak self] role in self?.hotKeys?.isRegistered(role) ?? false }),
       modules: modules)
@@ -232,8 +233,8 @@ final class NotchController {
   /// Applies the mode of every surface.
   func refresh() {
     let now = Date()
-    syncQuestionPeek()
-    defer { syncOptionKeys() }
+    // A question answered in the terminal (or a turn that moved on) takes its peek with it.
+    planner.dropAnswered { [store] sid in store.sessions[sid]?.status.kind == "question" }
     if let peek = planner.current, peek.kind == .permission,
       peek.cardID.flatMap({ store.card(id: $0) }) == nil
     {
@@ -621,32 +622,22 @@ final class NotchController {
       guard latches[role, default: GlobalKeyLatch()].released() else { return }
     }
     log("hotkey \(role) \(pressed ? "down" : "up")")
-    // A question on screen and no permission request: Y sends / goes on, N hands it to the
-    // terminal, 1…4 pick. A permission request on screen always keeps Y / N.
-    if let q = shownQuestion(), shownRequest(at: Date()) == nil {
-      switch role {
-      case .allow:
-        if pressed { questionNext(q.id) }
-        return
-      case .deny:
-        if pressed, questionArmed(q.id) { releaseQuestion(q.id) }
-        return
-      default:
-        if let i = role.optionIndex {
-          if pressed { pickOption(q.id, i) }
-          return
-        }
-      }
-    }
-    if role.optionIndex != nil { return }
     switch role {
     case .panel: if pressed { hotKeyPressed() }
     case .allow: globalShortcut(.allow, pressed ? .down : .up)
     case .deny: globalShortcut(.deny, pressed ? .down : .up)
+    case .jump: if pressed { jumpHotKey() }
     case .timer: if pressed { timerHotKey() }
     case .shelf: if pressed { shelfHotKey() }
-    case .option1, .option2, .option3, .option4: break
     }
+  }
+
+  /// ⌃⌥J: the terminal tab of the session that needs the user most (same path as a row
+  /// click); nothing waits: nothing happens.
+  private func jumpHotKey() {
+    guard let sid = store.jumpTarget else { return }
+    log("jump -> \(sid)")
+    Task { @MainActor in _ = await focus(sessionID: sid) }
   }
 
   /// ⌃⌥P: no timer → a Pomodoro starts; running / paused → pause / resume; a finished
@@ -669,7 +660,7 @@ final class NotchController {
     moduleNote(
       ModuleNote(
         source: .timer, id: "timerkey:\(Date().timeIntervalSince1970)", title: title,
-        subtitle: loc("⌃⌥P pauses / resumes"),
+        subtitle: loc("\(settings.shortcut(.timer).display) pauses / resumes"),
         digits: DotClock.countdown(t.remaining(at: Date())),
         validUntil: Date().addingTimeInterval(5)))
   }
@@ -833,8 +824,6 @@ final class NotchController {
   private func registerShortcuts() {
     for role in HotKeyRole.configurable { hotKeys?.register(role, settings.shortcut(role)) }
     for role in HotKeyRole.allCases { latches[role]?.reset() }
-    optionKeysOn = false
-    syncOptionKeys()
     updateKeyHints()
   }
 
@@ -876,6 +865,26 @@ final class NotchController {
     if shortcutPauses > 1 { hotKeys?.unregister(role) }
     updateKeyHints()
     return nil
+  }
+
+  /// Settings preset: every role gets its default key with the preset's modifiers, through
+  /// the recorder's checks. A role that clashes only with another role's old key is tried again
+  /// once the others moved. Returns the roles that kept their shortcut, with the reason.
+  private func applyPreset(_ preset: ShortcutPreset) -> [HotKeyRole: String] {
+    var errors: [HotKeyRole: String] = [:]
+    for role in HotKeyRole.configurable {
+      errors[role] = setShortcut(role, KeyCombo.presetCombo(role, preset))
+    }
+    for role in HotKeyRole.configurable where errors[role] != nil {
+      errors[role] = setShortcut(role, KeyCombo.presetCombo(role, preset))
+    }
+    // A recorder still listens: the keys registered above to test them stay off until it stops.
+    if shortcutPauses > 0 {
+      hotKeys?.unregisterAll()
+      updateKeyHints()
+    }
+    log("preset \(preset.rawValue) errors=\(errors.keys.map { "\($0)" }.sorted())")
+    return errors
   }
 
   private func resetShortcuts() {
@@ -1188,109 +1197,6 @@ final class NotchController {
     return true
   }
 
-  // MARK: - Questions
-
-  /// Held questions keep their peek up until answered (like a permission card), and a new one
-  /// drops in even when its "question" peek already went back.
-  private var shownQuestions: Set<String> = []
-
-  /// ⌃⌥1…4 are registered only while a question is on screen.
-  private var optionKeysOn = false
-
-  /// The held question the user sees right now: the peek's, else (panel open) the oldest.
-  private func shownQuestion() -> PendingQuestion? {
-    if expandedID != nil { return store.questions.first }
-    guard let peek = ui.peek, peek.kind == .attention, let sid = peek.sessionIDs.first else {
-      return nil
-    }
-    return store.question(for: sid)
-  }
-
-  private func syncOptionKeys() {
-    let want = shownQuestion() != nil
-    guard want != optionKeysOn else { return }
-    optionKeysOn = want
-    for role in HotKeyRole.allCases where role.optionIndex != nil {
-      if want { hotKeys?.register(role, KeyCombo.defaultCombo(role)) } else {
-        hotKeys?.unregister(role)
-      }
-    }
-  }
-
-  private func questionArmed(_ id: String) -> Bool {
-    Date() >= (ui.questionArmedAt[id] ?? .distantFuture)
-  }
-
-  private func pickOption(_ id: String, _ option: Int) {
-    guard questionArmed(id), let q = store.questions.first(where: { $0.id == id }) else { return }
-    let index = min(ui.questionIndex[id] ?? 0, q.questions.count - 1)
-    let asked = q.questions[index]
-    guard option < asked.options.count else { return }
-    let label = asked.options[option].label
-    var picks = ui.questionPicks[id] ?? [:]
-    var list = picks[asked.question] ?? []
-    if asked.multiSelect {
-      if list.contains(label) { list.removeAll { $0 == label } } else { list.append(label) }
-    } else {
-      list = [label]
-    }
-    picks[asked.question] = list
-    ui.questionPicks[id] = picks
-  }
-
-  /// Next question, or send when on the last one with every question answered.
-  private func questionNext(_ id: String) {
-    guard questionArmed(id), let q = store.questions.first(where: { $0.id == id }) else { return }
-    let index = min(ui.questionIndex[id] ?? 0, q.questions.count - 1)
-    let picks = ui.questionPicks[id] ?? [:]
-    guard !(picks[q.questions[index].question] ?? []).isEmpty else { return }
-    if index < q.questions.count - 1 {
-      ui.questionIndex[id] = index + 1
-    } else {
-      answerQuestion(id, picks)
-    }
-  }
-
-  private func syncQuestionPeek() {
-    let ids = Set(store.questions.map(\.id))
-    shownQuestions.formIntersection(ids)
-    for q in store.questions where ui.questionArmedAt[q.id] == nil {
-      ui.questionArmedAt[q.id] = Date().addingTimeInterval(QuestionAnswerView.armDelay)
-    }
-    for key in Array(ui.questionArmedAt.keys) where !ids.contains(key) {
-      ui.questionArmedAt[key] = nil
-      ui.questionPicks[key] = nil
-      ui.questionIndex[key] = nil
-    }
-    guard expandedID == nil else { return }
-    for q in store.questions where !shownQuestions.contains(q.id) {
-      shownQuestions.insert(q.id)
-      planner.receive(attention: "question", sessionID: q.sessionID, at: Date())
-    }
-    if let cur = planner.current, cur.kind == .attention,
-      let sid = cur.sessionIDs.first, store.question(for: sid) != nil
-    {
-      planner.hold(at: Date(), seconds: settings.peekDuration.seconds ?? 600)
-    }
-  }
-
-  private func answerQuestion(_ id: String, _ answers: [String: [String]]) {
-    guard let q = store.questions.first(where: { $0.id == id }) else { return }
-    guard store.answerQuestion(id: id, answers: answers) else { return }
-    if planner.current?.sessionIDs.first == q.sessionID, planner.current?.kind == .attention {
-      planner.clear()
-    }
-    refresh()
-  }
-
-  private func releaseQuestion(_ id: String) {
-    guard let q = store.questions.first(where: { $0.id == id }) else { return }
-    store.releaseQuestion(id: id)
-    if planner.current?.sessionIDs.first == q.sessionID { planner.clear() }
-    Task { @MainActor in _ = await focus(sessionID: q.sessionID) }
-    refresh()
-  }
-
   // MARK: - Effects
 
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
@@ -1333,7 +1239,6 @@ final class NotchController {
   private func trackStore() {
     withObservationTracking {
       _ = store.pending.count
-      _ = store.questions.count
       _ = store.attentionCount
       _ = store.workingCount
       _ = store.activeWorkingCount
@@ -1437,14 +1342,6 @@ final class NotchController {
         }
       },
       ghosttyConsent: { [weak self] in self?.ghosttyConsent(dryRun: false) },
-      answerQuestion: { [weak self] id, answers in self?.answerQuestion(id, answers) },
-      releaseQuestion: { [weak self] id in self?.releaseQuestion(id) },
-      pickOption: { [weak self] id, i in self?.pickOption(id, i) },
-      questionNext: { [weak self] id in self?.questionNext(id) },
-      questionBack: { [weak self] id in
-        guard let self, let i = self.ui.questionIndex[id], i > 0 else { return }
-        self.ui.questionIndex[id] = i - 1
-      },
       dropShelf: { [weak self] sid in self?.dropShelf(on: sid) ?? false }
     )
   }
@@ -1789,11 +1686,6 @@ final class NotchController {
           unit: m["unit"]?.stringValue, level: level, validUntil: Date().addingTimeInterval(60)))
     }
     if json["timer_toggle"] != nil { modules.toggleTimer() }
-    // Debug: answer the oldest held question with the given label(s) for every question.
-    if let label = json["answer_question"]?.stringValue, let q = store.questions.first {
-      let answers = Dictionary(uniqueKeysWithValues: q.questions.map { ($0.question, [label]) })
-      answerQuestion(q.id, answers)
-    }
     if let id = json["select_card"]?.stringValue { selectCard(id) }
     if let id = json["open_card"]?.stringValue { ui.openedCards.insert(id) }
     if let id = json["more_card"]?.stringValue { setMore(id) }

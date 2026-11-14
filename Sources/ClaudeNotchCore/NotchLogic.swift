@@ -297,7 +297,7 @@ extension ToolSummary {
 public enum PeekKind: String, Sendable {
   /// A new permission card (the user's setting, default 15 s; hover keeps it).
   case permission
-  /// Question / plan approval / waiting for input (4 s).
+  /// Question / plan approval / waiting for input (4 s; a question stays like a permission).
   case attention
   /// Done / error, coalesced (2.5 s).
   case finished
@@ -368,6 +368,9 @@ public struct PeekItem: Sendable, Equatable {
   public var until: Date
   /// Payload of a module peek.
   public var module: ModuleNote? = nil
+  /// An attention peek for a question Claude asks in the terminal: it stays as long as a
+  /// permission peek, and goes once that session stops asking.
+  public var asking: Bool = false
 }
 
 /// Decides what the peek shows. Pure state machine driven by the store's attention effects.
@@ -382,7 +385,8 @@ public struct PeekPlanner: Sendable {
   public private(set) var current: PeekItem?
   /// A module note that arrived while a Claude peek was up: shown once that one is gone.
   public private(set) var pendingModule: ModuleNote?
-  /// How long an unanswered permission peek stays; nil keeps it until the card is answered.
+  /// How long an unanswered permission peek (and a question peek) stays; nil keeps it until
+  /// the card is answered (the question is answered or the turn moves on).
   public var permissionHold: TimeInterval?
 
   public init(permissionHold: TimeInterval? = PeekPlanner.permissionDuration) {
@@ -445,10 +449,12 @@ public struct PeekPlanner: Sendable {
         return true
       }
     }
+    let asking = attention == "question"
+    let seconds = asking ? permissionHold : duration(kind)
     current = PeekItem(
       kind: kind, sessionIDs: [sessionID],
       errorIDs: attention == "error" ? [sessionID] : [], cardID: cardID, startedAt: t,
-      until: duration(kind).map { t.addingTimeInterval($0) } ?? .distantFuture)
+      until: seconds.map { t.addingTimeInterval($0) } ?? .distantFuture, asking: asking)
     return true
   }
 
@@ -489,6 +495,17 @@ public struct PeekPlanner: Sendable {
   /// Hides the peek. A waiting module note stays (it shows on the next `expire`).
   public mutating func clear() {
     current = nil
+  }
+
+  /// Drops a question peek whose session no longer asks (answered, or the turn moved on).
+  /// Returns true when the peek changed.
+  @discardableResult
+  public mutating func dropAnswered(isAsking: (String) -> Bool) -> Bool {
+    guard let cur = current, cur.asking, let sid = cur.sessionIDs.first, !isAsking(sid) else {
+      return false
+    }
+    current = nil
+    return true
   }
 
   /// Panel opened: the user sees everything there, nothing waits.
