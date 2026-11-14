@@ -337,6 +337,22 @@ public struct Shelf: Sendable, Equatable {
     return items
   }
 
+  /// How long an unpinned item stays on the shelf (pinned items are kept outside the shelf).
+  public static let lifetime: TimeInterval = 3 * 24 * 60 * 60
+
+  /// True once `lifetime` has passed since the item was added (exactly 3 days counts).
+  public static func isExpired(_ item: ShelfItem, at now: Date) -> Bool {
+    now.timeIntervalSince(item.addedAt) >= lifetime
+  }
+
+  /// Removes the expired items and returns them (their temp files can go).
+  @discardableResult
+  public mutating func removeExpired(at now: Date) -> [ShelfItem] {
+    let gone = items.filter { Self.isExpired($0, at: now) }
+    if !gone.isEmpty { items.removeAll { Self.isExpired($0, at: now) } }
+    return gone
+  }
+
   /// Clipboard types that mean "do not keep this" (password managers, transient data).
   public static let skippedTypes: Set<String> = [
     "org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType",
@@ -467,9 +483,11 @@ public struct WeatherPlace: Sendable, Equatable, Codable {
 
 // MARK: - Claude plan usage (from the statusLine payload)
 
-/// Plan limits as Claude Code reports them to the status line (`rate_limits`): the 5-hour and
-/// the 7-day window, each a percentage and a reset time. Only Pro / Max / Ultra subscribers get
-/// them, and a window disappears once its reset time has passed.
+/// Plan limits as Claude Code reports them to the status line (`rate_limits`), each a
+/// percentage and a reset time (Unix seconds). The weekly window (`seven_day`) is the main one:
+/// Claude Code 2.1.325 and later send only that. Older versions also send a 5-hour window
+/// (`five_hour`), shown as a secondary value when present. Unknown keys are ignored. Only
+/// Pro / Max / Ultra subscribers get them, and a window disappears once its reset time has passed.
 public struct PlanUsage: Sendable, Equatable {
   public struct Window: Sendable, Equatable {
     public var percent: Double
@@ -490,6 +508,10 @@ public struct PlanUsage: Sendable, Equatable {
     self.sevenDay = sevenDay
     self.readAt = readAt
   }
+
+  /// The window shown as the main number: the weekly one, else the 5-hour one (older Claude Code
+  /// with only that window).
+  public var primary: Window? { sevenDay ?? fiveHour }
 
   /// Parses the statusLine stdin JSON; nil when it has no usable window.
   public static func statusLine(_ data: Data, at t: Date) -> PlanUsage? {
@@ -514,15 +536,26 @@ public struct PlanUsage: Sendable, Equatable {
       sevenDay: sevenDay.flatMap { $0.resetsAt > now ? $0 : nil }, readAt: readAt)
   }
 
-  /// The warning mark the 5-hour window just reached (80, then 95), or nil. `shown` holds
-  /// "<reset>:<mark>" keys already warned for.
+  /// The warning mark the weekly window just reached (80, then 95), or nil. `shown` holds
+  /// "<reset>:<mark>" keys already warned for. The 5-hour window never warns.
   public func newMark(shown: Set<String>) -> (mark: Int, key: String)? {
-    guard let w = fiveHour else { return nil }
+    guard let w = sevenDay else { return nil }
     for mark in [95, 80] where w.percent >= Double(mark) {
       let key = "\(Int(w.resetsAt.timeIntervalSince1970)):\(mark)"
       return shown.contains(key) ? nil : (mark, key)
     }
     return nil
+  }
+
+  /// The warned keys ("<reset>:<mark>") whose window is still running at `now`; a passed reset
+  /// can never warn again, so its keys are dropped and the stored set stays tiny.
+  public static func liveWarnings(_ keys: Set<String>, at now: Date) -> Set<String> {
+    keys.filter { key in
+      guard let reset = key.split(separator: ":").first.flatMap({ Double($0) }) else {
+        return false
+      }
+      return Date(timeIntervalSince1970: reset) > now
+    }
   }
 }
 
@@ -589,7 +622,8 @@ public struct Pomodoro: Sendable, Equatable {
 // MARK: - Context window (from the statusLine payload)
 
 /// How much of a session's context window is left, from one statusLine payload
-/// (`session_id`, `context_window.remaining_percentage`).
+/// (`session_id`, `context_window.remaining_percentage`). A payload without them (a status line
+/// that passes only `rate_limits`) gives nil.
 public struct ContextLeft: Sendable, Equatable {
   public var sessionID: String
   public var percent: Double

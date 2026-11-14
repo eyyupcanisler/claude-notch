@@ -713,17 +713,16 @@ struct BandWeather: View {
 
 // MARK: - Claude plan usage
 
-/// Plan usage in the open panel's band: a small ring and the percentage of the fuller window
-/// (weekly, or the 5-hour one when Claude Code still reports it). Details in the tooltip.
+/// Plan usage in the open panel's band: a small ring and the weekly window's percentage (the
+/// 5-hour one only when an older Claude Code sends nothing else). Details in the tooltip, the
+/// weekly line first.
 struct BandUsage: View {
   let usage: PlanUsage
   @Environment(\.notchTheme) private var theme
 
   private var main: (label: String, window: PlanUsage.Window)? {
-    let all = [(loc("5 h"), usage.fiveHour), (loc("Week"), usage.sevenDay)].compactMap { l, w in
-      w.map { (l, $0) }
-    }
-    return all.max { $0.1.percent < $1.1.percent }
+    guard let w = usage.primary else { return nil }
+    return (usage.sevenDay != nil ? loc("Week") : loc("5 h"), w)
   }
 
   var body: some View {
@@ -747,11 +746,11 @@ struct BandUsage: View {
 
   private var help: String {
     var parts: [String] = []
-    if let w = usage.fiveHour {
-      parts.append(loc("5-hour: \(Int(w.percent.rounded()))% · resets at \(ModuleCenter.clock(w.resetsAt))"))
-    }
     if let w = usage.sevenDay {
       parts.append(loc("Weekly: \(Int(w.percent.rounded()))% · resets \(Self.day(w.resetsAt))"))
+    }
+    if let w = usage.fiveHour {
+      parts.append(loc("5-hour: \(Int(w.percent.rounded()))% · resets at \(ModuleCenter.clock(w.resetsAt))"))
     }
     return loc("Claude plan") + "\n" + parts.joined(separator: "\n")
   }

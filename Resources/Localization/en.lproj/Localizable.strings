@@ -51,8 +51,6 @@
 "1–180 min" = "1–180 min";
 "30 s" = "30 s";
 "5 h" = "5 h";
-"5-hour limit almost reached" = "5-hour limit almost reached";
-"5-hour limit at 80%" = "5-hour limit at 80%";
 "5-hour: %lld%% · resets at %@" = "5-hour: %lld%% · resets at %@";
 "8 s" = "8 s";
 " … [%lld characters hidden] … " = " … [%lld characters hidden] … ";
@@ -272,7 +270,7 @@
 "Remove from shelf" = "Remove from shelf";
 "Request %lld of %lld" = "Request %lld of %lld";
 "Reset to defaults" = "Reset to defaults";
-"Resets at %@" = "Resets at %@";
+"Resets %@" = "Resets %@";
 "Rich" = "Rich";
 "Risky command: %@" = "Risky command: %@";
 "Rows" = "Rows";
@@ -316,7 +314,7 @@
 "Terminal needs control permission — System Settings > Privacy & Security > Automation" = "Terminal needs control permission — System Settings > Privacy & Security > Automation";
 "The ClaudeNotch socket could not be started" = "The ClaudeNotch socket could not be started";
 "The client is ready. Press Connect to open the Google sign-in in your browser." = "The client is ready. Press Connect to open the Google sign-in in your browser.";
-"The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf lives in a temporary folder and is deleted when you quit." = "The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf lives in a temporary folder and is deleted when you quit.";
+"The clipboard is checked once a second; concealed copies from password managers are skipped. Unpinned items are removed after 3 days and when the app restarts. Turning the shelf off deletes everything, pinned items too." = "The clipboard is checked once a second; concealed copies from password managers are skipped. Unpinned items are removed after 3 days and when the app restarts. Turning the shelf off deletes everything, pinned items too.";
 "The Google session expired; connect again." = "The Google session expired; connect again.";
 "The local sign-in address closed." = "The local sign-in address closed.";
 "The local sign-in address could not be opened." = "The local sign-in address could not be opened.";
@@ -364,6 +362,8 @@
 "Weather: %@, %@" = "Weather: %@, %@";
 "Weather: in the panel band, an island when rain is near" = "Weather: in the panel band, an island when rain is near";
 "Week" = "Week";
+"Weekly limit almost used up" = "Weekly limit almost used up";
+"Weekly limit at 80%" = "Weekly limit at 80%";
 "Weekly: %lld%% · resets %@" = "Weekly: %lld%% · resets %@";
 "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close";

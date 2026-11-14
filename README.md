@@ -45,7 +45,7 @@ back to the terminal, and keep a few handy tools one glance away.
   to jump to its Ghostty / Terminal / iTerm2 tab.
 - **Small tools, all optional:** Pomodoro / focus timer (it grows out of the notch while it
   runs), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
-  Spotify cover and controls, a clipboard shelf with pinning, weather, plan usage, battery,
+  Spotify cover and controls, a clipboard shelf with pinning, weather, weekly plan usage, battery,
   quiet hours and a silent mode.
 - **Light on the machine.** Event-driven: no polling loops while idle, ~40 MB with the panel
   closed. Works on external displays too (a pill stands in for the notch).
@@ -89,7 +89,9 @@ Either way: ClaudeNotch has no Dock icon, launching it again opens its Settings.
 Optional:
 
 - `scripts/install-statusline.sh` adds one line to your status line script so the notch can show
-  your plan usage (Claude Code only reports it to the status line).
+  your weekly plan usage (Claude Code only reports it to the status line). The line only needs
+  to pass `rate_limits.seven_day` (`used_percentage`, `resets_at`); the notch warns at 80% and
+  95% of the weekly limit. A 5-hour window, sent by older Claude Code, shows in the tooltip.
 - `scripts/install-hooks.sh --uninstall` removes the hooks again.
 
 ## How it works

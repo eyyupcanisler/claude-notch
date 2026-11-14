@@ -51,8 +51,6 @@
 "1–180 min" = "1–180 dk";
 "30 s" = "30 sn";
 "5 h" = "5 sa";
-"5-hour limit almost reached" = "5 saatlik limit dolmak üzere";
-"5-hour limit at 80%" = "5 saatlik limitin %80’i doldu";
 "5-hour: %lld%% · resets at %@" = "5 saatlik: %%%lld · %@’de";
 "8 s" = "8 sn";
 " … [%lld characters hidden] … " = " … [%lld karakter gizli] … ";
@@ -272,7 +270,7 @@
 "Remove from shelf" = "Raftan kaldır";
 "Request %lld of %lld" = "İstek %lld / %lld";
 "Reset to defaults" = "Varsayılanlara dön";
-"Resets at %@" = "%@’de sıfırlanır";
+"Resets %@" = "Sıfırlanma: %@";
 "Rich" = "Zengin";
 "Risky command: %@" = "Riskli komut: %@";
 "Rows" = "Satırlar";
@@ -316,7 +314,7 @@
 "Terminal needs control permission — System Settings > Privacy & Security > Automation" = "Terminal'i kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon";
 "The ClaudeNotch socket could not be started" = "ClaudeNotch soketi başlatılamadı";
 "The client is ready. Press Connect to open the Google sign-in in your browser." = "İstemci hazır. Bağlan’a basınca tarayıcıda Google girişi açılır.";
-"The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf lives in a temporary folder and is deleted when you quit." = "Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. Raf geçici klasörde durur, kapatınca silinir.";
+"The clipboard is checked once a second; concealed copies from password managers are skipped. Unpinned items are removed after 3 days and when the app restarts. Turning the shelf off deletes everything, pinned items too." = "Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. Sabitlenmemiş öğeler 3 gün sonra ve uygulama yeniden başlayınca silinir. Rafı kapatmak sabitlenenler dahil her şeyi siler.";
 "The Google session expired; connect again." = "Google oturumu sona erdi; yeniden bağlan.";
 "The local sign-in address closed." = "Yerel giriş adresi kapandı.";
 "The local sign-in address could not be opened." = "Yerel giriş adresi açılamadı.";
@@ -364,6 +362,8 @@
 "Weather: %@, %@" = "Hava: %@, %@";
 "Weather: in the panel band, an island when rain is near" = "Hava durumu: panel bandında, yağmur yaklaşınca ada";
 "Week" = "Hafta";
+"Weekly limit almost used up" = "Haftalık limit dolmak üzere";
+"Weekly limit at 80%" = "Haftalık limitin %80’i doldu";
 "Weekly: %lld%% · resets %@" = "Haftalık: %%%lld · %@’de sıfırlanır";
 "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "Süre dolunca istek çentiğin altındaki sarı çizgide bekler (hook zaman aşımı ~10 dk). Üzerine gelmek açık tutar. Kapanmışken %@ / %@ önce isteği geri getirir; karar ikinci basışta verilir.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · ↑/↓ oturumlar · ⏎ terminale git · Esc kapat";

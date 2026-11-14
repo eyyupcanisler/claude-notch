@@ -221,7 +221,7 @@ struct SettingsView: View {
           }
           Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {
-            Text("The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf lives in a temporary folder and is deleted when you quit.")
+            Text("The clipboard is checked once a second; concealed copies from password managers are skipped. Unpinned items are removed after 3 days and when the app restarts. Turning the shelf off deletes everything, pinned items too.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }

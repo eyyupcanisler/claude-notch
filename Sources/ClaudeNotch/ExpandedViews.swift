@@ -49,9 +49,7 @@ struct ExpandedToolbar: View {
       .notchEnter(0)
       Color.clear.frame(width: notchWidth)
       HStack(spacing: 8) {
-        if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()),
-          u.fiveHour != nil || u.sevenDay != nil
-        {
+        if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()), u.primary != nil {
           BandUsage(usage: u)
         }
         BandChips(store: store, actions: actions)

@@ -220,6 +220,30 @@ final class ShelfTests: XCTestCase {
     XCTAssertNil(Shelf.keepText("  \n "))
     XCTAssertEqual(Shelf.keepText("\n selam \n"), "selam")
   }
+
+  func testExpiryBoundaryIsThreeDays() {
+    let item = text("a", "bir")
+    let threeDays: TimeInterval = 3 * 24 * 60 * 60
+    XCTAssertEqual(Shelf.lifetime, threeDays)
+    XCTAssertFalse(Shelf.isExpired(item, at: t0))
+    XCTAssertFalse(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays - 1)))
+    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays)))
+    XCTAssertTrue(Shelf.isExpired(item, at: t0.addingTimeInterval(threeDays + 3600)))
+  }
+
+  func testRemoveExpiredKeepsNewerItems() {
+    var s = Shelf()
+    let day: TimeInterval = 24 * 60 * 60
+    s.add(text("old", "eski"))
+    s.add(image("oldImage", key: "k"))
+    s.add(ShelfItem(id: "new", kind: .text("yeni"), addedAt: t0.addingTimeInterval(2 * day)))
+    XCTAssertTrue(s.removeExpired(at: t0.addingTimeInterval(3 * day - 1)).isEmpty)
+    XCTAssertEqual(s.items.count, 3)
+    let gone = s.removeExpired(at: t0.addingTimeInterval(3 * day))
+    XCTAssertEqual(Set(gone.map(\.id)), ["old", "oldImage"])
+    XCTAssertEqual(gone.compactMap(\.ownedFile).count, 1, "the image's temp file can go")
+    XCTAssertEqual(s.items.map(\.id), ["new"])
+  }
 }
 
 final class WeatherTests: XCTestCase {
@@ -272,16 +296,68 @@ final class PlanUsageTests: XCTestCase {
     XCTAssertNotNil(later?.sevenDay)
   }
 
-  func testWarningMarksOncePerWindow() {
-    let r = Date(timeIntervalSince1970: 1_738_425_600)
-    var u = PlanUsage(fiveHour: .init(percent: 82, resetsAt: r), sevenDay: nil, readAt: t0)
+  /// Claude Code 2.1.325's status line: only the weekly window, nothing else.
+  private let weeklyOnly =
+    #"{"rate_limits":{"seven_day":{"used_percentage":38,"resets_at":1795068000}}}"#
+
+  func testParsesWeeklyOnlyPayload() {
+    let u = PlanUsage.statusLine(Data(weeklyOnly.utf8), at: t0)
+    XCTAssertEqual(u?.sevenDay?.percent, 38)
+    XCTAssertEqual(u?.sevenDay?.resetsAt, Date(timeIntervalSince1970: 1_795_068_000))
+    XCTAssertNil(u?.fiveHour, "five_hour is absent")
+    XCTAssertEqual(u?.primary, u?.sevenDay)
+    XCTAssertNil(u?.newMark(shown: []), "38% warns for nothing")
+    XCTAssertNil(ContextLeft.statusLine(Data(weeklyOnly.utf8)), "no session, no context")
+  }
+
+  func testUnknownKeysAreIgnoredAndWeeklyIsPrimary() {
+    let json = """
+      {"rate_limits":{"seven_day":{"used_percentage":12,"resets_at":1795068000,"extra":1},
+       "five_hour":{"used_percentage":90,"resets_at":1738425600},"seven_day_opus":{}},
+       "something_new":{"a":[1,2]}}
+      """
+    let u = PlanUsage.statusLine(Data(json.utf8), at: t0)
+    XCTAssertEqual(u?.primary?.percent, 12, "the weekly window is the main number")
+    XCTAssertEqual(u?.fiveHour?.percent, 90, "an older 5-hour window stays as a second value")
+    XCTAssertNil(u?.newMark(shown: []), "the 5-hour window never warns")
+    let fiveOnly = PlanUsage(
+      fiveHour: .init(percent: 40, resetsAt: Date(timeIntervalSince1970: 1_738_425_600)),
+      sevenDay: nil, readAt: t0)
+    XCTAssertEqual(fiveOnly.primary?.percent, 40)
+  }
+
+  func testWeeklyWarningMarksOncePerWindow() {
+    let r = Date(timeIntervalSince1970: 1_795_068_000)
+    var u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 79.9, resetsAt: r), readAt: t0)
+    XCTAssertNil(u.newMark(shown: []))
+    u.sevenDay?.percent = 80
     let first = u.newMark(shown: [])
     XCTAssertEqual(first?.mark, 80)
     XCTAssertNil(u.newMark(shown: [first!.key]))
-    u.fiveHour?.percent = 96
+    u.sevenDay?.percent = 94.9
+    XCTAssertNil(u.newMark(shown: [first!.key]))
+    u.sevenDay?.percent = 95
     XCTAssertEqual(u.newMark(shown: [first!.key])?.mark, 95)
-    u.fiveHour?.percent = 50
+    u.sevenDay?.percent = 50
     XCTAssertNil(u.newMark(shown: []))
+    u.sevenDay = .init(percent: 85, resetsAt: r.addingTimeInterval(7 * 24 * 3600))
+    XCTAssertEqual(u.newMark(shown: [first!.key])?.mark, 80, "a new week warns again")
+  }
+
+  /// A file left from before the weekly reset (Claude Code not run since) never warns.
+  func testStaleWeeklyWindowGivesNoMark() {
+    let r = Date(timeIntervalSince1970: 1_795_068_000)
+    let u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 85, resetsAt: r), readAt: t0)
+    XCTAssertEqual(u.live(at: r.addingTimeInterval(-1)).newMark(shown: [])?.mark, 80)
+    XCTAssertNil(u.live(at: r).newMark(shown: []), "the reset has passed")
+  }
+
+  func testLiveWarningsDropPassedResets() {
+    let keys: Set<String> = ["1795068000:80", "1795068000:95", "1738425600:80", "junk"]
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    XCTAssertEqual(PlanUsage.liveWarnings(keys, at: now), ["1795068000:80", "1795068000:95"])
+    XCTAssertEqual(
+      PlanUsage.liveWarnings(keys, at: Date(timeIntervalSince1970: 1_795_068_000)), [])
   }
 }
 
