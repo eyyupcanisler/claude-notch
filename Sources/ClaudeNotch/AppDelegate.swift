@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
     }
     installSignalHandlers()
+    // Keep the installed hook bridge in step with this build (it used to refresh only when
+    // Settings opened). Demo runs never touch the real hook copy.
+    if !NotchSettings.isDemo { HookInstaller.refreshCopy() }
     // A reinstalled bundle loses its login item: register again if the user wanted it.
     if !NotchSettings.isDemo, UserDefaults.standard.bool(forKey: "loginWanted"),
       SMAppService.mainApp.status != .enabled

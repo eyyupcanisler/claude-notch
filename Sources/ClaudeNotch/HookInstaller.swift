@@ -34,7 +34,7 @@ final class HookInstaller {
   }
 
   init() {
-    refreshCopy()
+    Self.refreshCopy()
     check()
   }
 
@@ -55,13 +55,15 @@ final class HookInstaller {
   }
 
   /// An installed bridge copy is replaced by this version's (app updates bring hook fixes).
-  private func refreshCopy() {
-    guard FileManager.default.fileExists(atPath: Self.hookCopy.path), let src = Self.bundledHook
+  /// Runs at every launch (AppDelegate) and again when Settings opens, so a fixed bridge reaches
+  /// the hooks without the user opening Settings first. Does nothing until the hooks are installed.
+  static func refreshCopy() {
+    guard FileManager.default.fileExists(atPath: hookCopy.path), let src = bundledHook
     else { return }
     copyHook(from: src)
   }
 
-  private func copyHook(from src: URL) {
+  private static func copyHook(from src: URL) {
     let fm = FileManager.default
     try? fm.createDirectory(at: Self.folder, withIntermediateDirectories: true)
     try? fm.removeItem(at: Self.hookCopy)
@@ -77,7 +79,7 @@ final class HookInstaller {
       message = loc("The setup files were not found inside the app.")
       return
     }
-    if !uninstall { copyHook(from: hook) }
+    if !uninstall { Self.copyHook(from: hook) }
     busy = true
     message = nil
     let args = [installer.path, "--hook", Self.hookCopy.path] + (uninstall ? ["--uninstall"] : [])
