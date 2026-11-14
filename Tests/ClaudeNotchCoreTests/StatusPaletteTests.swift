@@ -56,9 +56,9 @@ final class StatusPaletteTests: XCTestCase {
 
   /// A fresh install (nothing saved) gets the original look; an unknown value falls back to it.
   func testFreshInstallResolvesToClassic() throws {
-    let suite = "test.claudenotch.palette.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let scratch = try ScratchDefaults("test.claudenotch.palette")
+    let defaults = scratch.defaults
+    defer { scratch.remove() }
     XCTAssertEqual(StatusColorScheme.defaultsKey, "statusColors")
     XCTAssertEqual(
       StatusColorScheme(stored: defaults.string(forKey: StatusColorScheme.defaultsKey)), .classic)

@@ -16,49 +16,61 @@ public func locPlainDigits(_ value: String.LocalizationValue) -> String {
 }
 
 /// The UI language choice (Settings > General > Language). Stored under `defaultsKey`; a fresh
-/// install (nothing saved) is Turkish, the app's original language. It takes effect at launch:
-/// `main.swift` writes the app-domain `AppleLanguages` from it before any string is looked up,
-/// so the UI, the texts sent back to Claude, dates, numbers and the weather search all follow.
+/// install (nothing saved) follows the Mac: Turkish when the Mac's first language is Turkish,
+/// English otherwise, so a Turkish Mac keeps the app's original Turkish UI. It takes effect at
+/// launch: `main.swift` writes the app-domain `AppleLanguages` from it before any string is
+/// looked up, so the UI, the texts sent back to Claude, dates, numbers and the weather search
+/// all follow.
 public enum LanguageChoice: String, CaseIterable, Sendable {
+  /// The Mac's first preferred language decides: Turkish → Turkish, anything else → English.
+  case system
   case turkish = "tr"
   case english = "en"
-  /// The Mac's own preferred languages (no app override).
-  case system
 
   /// UserDefaults key (app domain).
   public static let defaultsKey = "language"
-  /// What an install without a saved choice uses: Turkish, the original UI.
-  public static let fallback: LanguageChoice = .turkish
+  /// What an install without a saved choice uses: the Mac's language (see `system`).
+  public static let fallback: LanguageChoice = .system
 
   /// The stored raw value, or the fallback when nothing (or something unknown) is stored.
   public init(stored: String?) {
     self = stored.flatMap(Self.init(rawValue:)) ?? Self.fallback
   }
 
-  /// The app-domain `AppleLanguages` this choice writes; nil removes the app's override.
-  public var appleLanguages: [String]? {
+  /// "tr" when the first of the Mac's preferred languages (`macPreferred`, e.g. ["tr-TR",
+  /// "en-US"]) is Turkish, otherwise "en". Only the first entry counts: a Mac set to German
+  /// with Turkish second gets English.
+  public static func systemCode(macPreferred: [String]) -> String {
+    guard let first = macPreferred.first?.lowercased() else { return "en" }
+    return first == "tr" || first.hasPrefix("tr-") || first.hasPrefix("tr_") ? "tr" : "en"
+  }
+
+  /// The Mac's own preferred languages, read from the global domain. Not
+  /// `Locale.preferredLanguages`: that also sees the app-domain value this type writes.
+  public static var macPreferredLanguages: [String] {
+    CFPreferencesCopyAppValue("AppleLanguages" as CFString, kCFPreferencesAnyApplication)
+      as? [String] ?? []
+  }
+
+  /// The app-domain `AppleLanguages` this choice writes.
+  public func appleLanguages(macPreferred: [String]) -> [String] {
     switch self {
     case .turkish: return ["tr"]
     case .english: return ["en"]
-    case .system: return nil
+    case .system: return [Self.systemCode(macPreferred: macPreferred)]
     }
   }
 
-  /// Writes (or removes) `AppleLanguages` in `appDomain` (the app's own domain, never the
-  /// global one). Call before the first localized lookup; a later change needs a restart.
-  public func apply(to appDomain: UserDefaults) {
-    if let langs = appleLanguages {
-      appDomain.set(langs, forKey: "AppleLanguages")
-    } else {
-      appDomain.removeObject(forKey: "AppleLanguages")
-    }
+  /// Writes `AppleLanguages` in `appDomain` (the app's own domain, never the global one). Call
+  /// before the first localized lookup; a later change needs a restart.
+  public func apply(to appDomain: UserDefaults, macPreferred: [String] = macPreferredLanguages) {
+    appDomain.set(appleLanguages(macPreferred: macPreferred), forKey: "AppleLanguages")
   }
 }
 
-/// The language the app's UI resolved to: the one `LanguageChoice` set at launch (Turkish by
-/// default), or with "System" the first of the Mac's preferred languages that the app ships
-/// (en or tr), English otherwise. Dates, weekday names and weather place names follow
-/// it, so they never mix with text in the other language.
+/// The language the app's UI resolved to: the one `LanguageChoice` set at launch (by default
+/// the Mac's: Turkish on a Turkish Mac, English otherwise). Dates, weekday names and weather
+/// place names follow it, so they never mix with text in the other language.
 public enum AppLanguage {
   /// "en" or "tr".
   public static var code: String {

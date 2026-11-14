@@ -333,6 +333,7 @@
 "subagent asks for permission" = "alt ajan izin istiyor";
 "Sync now" = "Şimdi eşitle";
 "System (Mac language)" = "Sistem (Mac dili)";
+"System: Turkish when the Mac's first language is Turkish, English otherwise." = "Sistem: Mac’in ilk dili Türkçeyse Türkçe, değilse İngilizce.";
 "Terminal needs control permission — System Settings > Privacy & Security > Automation" = "Terminal'i kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon";
 "The ClaudeNotch socket could not be started" = "ClaudeNotch soketi başlatılamadı";
 "The client is ready. Press Connect to open the Google sign-in in your browser." = "İstemci hazır. Bağlan’a basınca tarayıcıda Google girişi açılır.";

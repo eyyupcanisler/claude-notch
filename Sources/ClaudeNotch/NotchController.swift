@@ -1357,11 +1357,22 @@ final class NotchController {
       settings.play(settings.soundName(e))
     }
     guard expandedID == nil else { return }
+    if kind == "question", !askingPeekShows(for: sessionID) { return }
     let cardID = kind == "permission"
       ? store.pending.last(where: { $0.sessionID == sessionID })?.id : nil
     if planner.receive(attention: kind, sessionID: sessionID, cardID: cardID, at: Date()) {
       refresh()
     }
+  }
+
+  /// Terminal-only question mode: no "Claude is asking you" peek while the session's terminal
+  /// app is the front app (see `AskingPeek`).
+  private func askingPeekShows(for sessionID: String) -> Bool {
+    let term = store.sessions[sessionID]?.termProgram
+    return AskingPeek.shows(
+      questionMode: settings.questionMode, termProgram: term,
+      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] },
+      frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
   }
 
   private func trackStore() {

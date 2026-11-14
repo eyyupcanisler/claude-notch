@@ -3,9 +3,15 @@
 # starts it from there. Run scripts/build-app.sh first. Opening the app again while it runs
 # shows its Settings.
 set -eu
-# Messages are Turkish (the original) unless CLAUDE_NOTCH_LANG=en; the app passes its own
-# language when it runs install-hooks.sh. Usage: say "<Turkish>" "<English>".
-say() { if [ "${CLAUDE_NOTCH_LANG:-tr}" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
+# Messages follow CLAUDE_NOTCH_LANG (tr or en; the app passes its own language when it
+# runs install-hooks.sh), else the Mac's first language: Turkish on a Turkish Mac, English
+# otherwise.
+# Usage: say "<Turkish>" "<English>".
+case "${CLAUDE_NOTCH_LANG:-$(defaults read -g AppleLanguages 2>/dev/null | sed -n '2s/[^A-Za-z_-]//gp')}" in
+  tr | tr[-_]*) NOTCH_LANG=tr ;;
+  *) NOTCH_LANG=en ;;
+esac
+say() { if [ "$NOTCH_LANG" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/build.noindex/ClaudeNotch.app"
 DEST_DIR="$HOME/Applications"

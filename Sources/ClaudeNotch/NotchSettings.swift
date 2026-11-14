@@ -161,12 +161,17 @@ final class NotchSettings {
   var statusColors: StatusColorScheme {
     didSet { defaults.set(statusColors.rawValue, forKey: StatusColorScheme.defaultsKey) }
   }
-  /// UI language; takes effect at the next launch (see `main.swift`). Fresh install: Turkish.
+  /// UI language; takes effect at the next launch (see `main.swift`). Fresh install: the Mac's
+  /// (Turkish on a Turkish Mac, English otherwise).
   var language: LanguageChoice {
     didSet { defaults.set(language.rawValue, forKey: LanguageChoice.defaultsKey) }
   }
-  /// The language this run started with: a different `language` needs a restart.
-  @ObservationIgnored let launchLanguage: LanguageChoice
+  /// The chosen language resolves to another language than the running UI's (System on a
+  /// Turkish Mac and Türkçe are the same language: no restart needed).
+  var languageNeedsRestart: Bool {
+    language.appleLanguages(macPreferred: LanguageChoice.macPreferredLanguages).first
+      != AppLanguage.code
+  }
   private(set) var sounds: [SoundEvent: Bool]
   /// Chosen macOS sound per event (missing: the event's default).
   private(set) var soundNames: [SoundEvent: String]
@@ -285,7 +290,6 @@ final class NotchSettings {
     statusColors = StatusColorScheme(stored: defaults.string(forKey: StatusColorScheme.defaultsKey))
     let lang = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
     language = lang
-    launchLanguage = lang
     // v1 had a single switch: it seeds every category.
     let legacy = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
     var map: [SoundEvent: Bool] = [:]

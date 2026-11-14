@@ -333,6 +333,7 @@
 "subagent asks for permission" = "subagent asks for permission";
 "Sync now" = "Sync now";
 "System (Mac language)" = "System (Mac language)";
+"System: Turkish when the Mac's first language is Turkish, English otherwise." = "System: Turkish when the Mac's first language is Turkish, English otherwise.";
 "Terminal needs control permission — System Settings > Privacy & Security > Automation" = "Terminal needs control permission — System Settings > Privacy & Security > Automation";
 "The ClaudeNotch socket could not be started" = "The ClaudeNotch socket could not be started";
 "The client is ready. Press Connect to open the Google sign-in in your browser." = "The client is ready. Press Connect to open the Google sign-in in your browser.";

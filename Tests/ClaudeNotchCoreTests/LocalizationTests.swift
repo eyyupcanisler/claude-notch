@@ -168,27 +168,53 @@ final class LocalizationTests: XCTestCase {
     XCTAssertTrue(String(format: error, String(-9878)).contains("(hata -9878)"))
   }
 
-  /// A fresh install (nothing saved) is Turkish, the original UI: main.swift writes
-  /// AppleLanguages = ["tr"] into the app domain. English writes ["en"]; System removes it.
-  func testFreshInstallResolvesToTurkish() throws {
-    let suite = "test.claudenotch.language.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+  /// A fresh install (nothing saved) follows the Mac: main.swift writes AppleLanguages = ["tr"]
+  /// into the app domain when the Mac's first language is Turkish, ["en"] for any other first
+  /// language. Türkçe and English write their own language whatever the Mac uses.
+  func testFreshInstallFollowsTheMacLanguage() throws {
+    let scratch = try ScratchDefaults("test.claudenotch.language")
+    let defaults = scratch.defaults
+    defer { scratch.remove() }
     XCTAssertEqual(LanguageChoice.defaultsKey, "language")
     let fresh = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
-    XCTAssertEqual(fresh, .turkish)
-    fresh.apply(to: defaults)
+    XCTAssertEqual(fresh, .system)
+    XCTAssertEqual(LanguageChoice(stored: "klingon"), .system)
+    XCTAssertEqual(LanguageChoice(stored: "system"), .system)
+
+    // Turkish Mac → Turkish.
+    fresh.apply(to: defaults, macPreferred: ["tr-TR", "en-US"])
     XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["tr"])
-    XCTAssertEqual(LanguageChoice(stored: "klingon"), .turkish)
+    // English Mac (also one with Turkish second, like en-TR + tr-TR) → English.
+    fresh.apply(to: defaults, macPreferred: ["en-TR", "tr-TR"])
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
+    // Any other first language → English, even with Turkish second.
+    fresh.apply(to: defaults, macPreferred: ["de-DE", "tr-TR"])
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
+    fresh.apply(to: defaults, macPreferred: [])
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
+
+    defaults.set("tr", forKey: LanguageChoice.defaultsKey)
+    let turkish = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
+    XCTAssertEqual(turkish, .turkish)
+    turkish.apply(to: defaults, macPreferred: ["en-US"])
+    XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["tr"])
 
     defaults.set("en", forKey: LanguageChoice.defaultsKey)
     let english = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
     XCTAssertEqual(english, .english)
-    english.apply(to: defaults)
+    english.apply(to: defaults, macPreferred: ["tr-TR"])
     XCTAssertEqual(defaults.stringArray(forKey: "AppleLanguages"), ["en"])
+  }
 
-    LanguageChoice(stored: "system").apply(to: defaults)
-    XCTAssertNil(defaults.persistentDomain(forName: suite)?["AppleLanguages"])
+  /// Only the first of the Mac's languages counts, in any spelling macOS uses.
+  func testSystemCodeReadsTheFirstMacLanguage() {
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["tr"]), "tr")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["tr-TR"]), "tr")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["TR_tr"]), "tr")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["en-GB", "tr-TR"]), "en")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["de-DE"]), "en")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: ["trv"]), "en", "Taroko is not Turkish")
+    XCTAssertEqual(LanguageChoice.systemCode(macPreferred: []), "en")
   }
 
   /// Character counts print plain digits ("12345"), as the original interpolation did; a

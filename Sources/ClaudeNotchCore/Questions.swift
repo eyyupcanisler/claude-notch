@@ -108,6 +108,31 @@ public enum QuestionMode: Sendable, Equatable {
   public var answersInNotch: Bool { self == .answerInNotch }
 }
 
+/// Terminal-only question mode: whether the "Claude is asking you" peek drops down.
+public enum AskingPeek {
+  /// TERM_PROGRAM values of apps that are only a terminal: when one is in front, its window
+  /// (and the question in it) is what the user sees. Editors with a built-in terminal (VS
+  /// Code, Cursor) are left out: the editor can be in front with its terminal panel closed.
+  public static let terminalApps: Set<String> = [
+    "ghostty", "Apple_Terminal", "iTerm.app", "WarpTerminal", "WezTerm", "kitty", "Hyper"
+  ]
+
+  /// Hidden when the question arrives while the asking session's terminal app is the front
+  /// app: the user is already looking at that terminal, which shows the question. The band
+  /// under the notch still marks the session as waiting and the jump shortcut still works. The
+  /// original mode (answer in the notch) always shows its peek: the question is answered
+  /// there. An editor's terminal or an unknown terminal (no bundle id) also shows it.
+  public static func shows(
+    questionMode: QuestionMode, termProgram: String?, terminalBundleID: String?,
+    frontmostBundleID: String?
+  ) -> Bool {
+    guard questionMode == .terminalOnly, let termProgram, terminalApps.contains(termProgram),
+      let terminal = terminalBundleID
+    else { return true }
+    return terminal != frontmostBundleID
+  }
+}
+
 /// What the `/question` socket route does with a request (the hook bridge's "question" mode).
 public enum QuestionRoute: Sendable, Equatable {
   /// Not an `AskUserQuestion` hook event: 400.

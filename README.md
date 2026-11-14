@@ -18,10 +18,10 @@ terminal, and keep a few handy tools one glance away.
 
 </div>
 
-> The interface is Turkish by default. Settings → *Genel → Dil* (General → Language) switches it
-> to English or to your Mac's language (English or Turkish), after a restart. Settings paths
-> below give the Turkish label first, with the English one in parentheses. ClaudeNotch is a
-> personal open-source project, not an Anthropic product.
+> The interface follows your Mac: Turkish when the Mac's first language is Turkish, English
+> otherwise. Settings → *Genel → Dil* (General → Language) sets Türkçe or English instead, after
+> a restart. Settings paths below give the Turkish label first, with the English one in
+> parentheses. ClaudeNotch is a personal open-source project, not an Anthropic product.
 
 ## What it does
 
@@ -41,9 +41,12 @@ terminal, and keep a few handy tools one glance away.
 - **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
   or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
   Prefer the terminal? Turn off Settings → *Bildirimler → Claude’un sorularını çentikte
-  yanıtla* (Notifications → Answer Claude's questions in the notch): the terminal then asks at once, and the notch only tells you. The session's segment
-  fades slowly in the "needs you" color, an island drops down with "Claude is asking you" and the
-  question text, and a click on it jumps to that session's terminal tab.
+  yanıtla* (Notifications → Answer Claude's questions in the notch): the terminal then asks at
+  once, and the notch only tells you. The session's segment fades slowly in the "needs you"
+  color, an island drops down with "Claude is asking you" and the question text, and a click on
+  it jumps to that session's terminal tab. If that terminal app (Ghostty, Terminal, iTerm2…; not
+  an editor such as VS Code) is the front app when the question arrives, the island stays
+  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab.
 - **Jump to what needs you.** **⌃⌥J** brings forward the terminal tab of the session that needs
   you most: a permission request first, then a question, plan approval or input wait, then an
   unseen error, then an unseen finished run.

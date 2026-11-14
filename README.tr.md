@@ -7,8 +7,9 @@
 MacBook çentiğinde (notch) yaşayan, menü çubuğunda ikonu olmayan (`LSUIElement`) bir macOS
 uygulaması. Claude Code oturumlarının durumunu gösterir (çalışıyor / bitti / girdi bekliyor /
 hata) ve terminalde olmasanız bile izin isteklerini çentikten **İzin ver / Her zaman / Reddet**
-ile yanıtlamanızı sağlar. Arayüz varsayılan olarak Türkçedir; Ayarlar > Genel > Dil'den İngilizce
-ya da Mac'in dili seçilebilir (yeniden başlatınca geçerli olur).
+ile yanıtlamanızı sağlar. Arayüz Mac'in diline uyar: Mac'in ilk dili Türkçeyse Türkçe, değilse
+İngilizce. Ayarlar > Genel > Dil'den Türkçe ya da English seçilebilir (yeniden başlatınca geçerli
+olur).
 
 ## Nasıl çalışır
 
@@ -275,7 +276,9 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   `scripts/install-hooks.sh` yeniden çalıştırılınca eklenir.
   Ayarlar > Bildirimler > **Claude’un sorularını çentikte yanıtla** kapatılırsa soru hiç
   bekletilmez: terminal hemen sorar, çentik yalnızca "Claude size bir soru soruyor" adasıyla
-  haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür.
+  haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür. Soru geldiğinde o
+  terminal uygulaması (Ghostty, Terminal, iTerm2…; VS Code gibi bir düzenleyici değil) öndeyse
+  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür.
 - `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
 - İzni terminalde **reddederseniz** `PostToolUse` gelmez; kart, aynı oturumdaki (ve aynı
   alt ajandaki) farklı bir `PreToolUse` (1,5 sn'den sonra), `UserPromptSubmit`, `Stop`,

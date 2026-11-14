@@ -95,7 +95,10 @@ struct SettingsView: View {
           Picker("App language", selection: $settings.language) {
             ForEach(LanguageChoice.allCases, id: \.self) { Text($0.title).tag($0) }
           }
-          if settings.language != settings.launchLanguage {
+          Text("System: Turkish when the Mac's first language is Turkish, English otherwise.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          if settings.languageNeedsRestart {
             HStack {
               Text("The new language applies after a restart.")
                 .font(.caption).foregroundStyle(.secondary)

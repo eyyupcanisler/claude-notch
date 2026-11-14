@@ -4,9 +4,15 @@
 # The app is signed with the local "ClaudeNotch Dev" identity, not an Apple Developer ID, so
 # macOS asks once before the first launch (README: "Download").
 set -eu
-# Messages are Turkish (the original) unless CLAUDE_NOTCH_LANG=en; the app passes its own
-# language when it runs install-hooks.sh. Usage: say "<Turkish>" "<English>".
-say() { if [ "${CLAUDE_NOTCH_LANG:-tr}" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
+# Messages follow CLAUDE_NOTCH_LANG (tr or en), else the Mac's first language:
+# Turkish on a Turkish Mac, English otherwise.
+# Usage: say "<Turkish>" "<English>". The release notes below stay Turkish unless
+# CLAUDE_NOTCH_LANG=en, whatever the Mac uses.
+case "${CLAUDE_NOTCH_LANG:-$(defaults read -g AppleLanguages 2>/dev/null | sed -n '2s/[^A-Za-z_-]//gp')}" in
+  tr | tr[-_]*) NOTCH_LANG=tr ;;
+  *) NOTCH_LANG=en ;;
+esac
+say() { if [ "$NOTCH_LANG" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 [ -n "${1:-}" ] || { say "Sürüm gerekli, ör. 1.0.0" "Version required, e.g. 1.0.0" >&2; exit 1; }
@@ -28,7 +34,8 @@ SUM="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 echo "$ZIP  $SUM"
 
 NOTES_FILE="$DIST/notes-$VERSION.md"
-if [ "${CLAUDE_NOTCH_LANG:-tr}" = en ]; then
+case "${CLAUDE_NOTCH_LANG:-tr}" in en | en[-_]*) NOTES_LANG=en ;; *) NOTES_LANG=tr ;; esac
+if [ "$NOTES_LANG" = en ]; then
   cat > "$NOTES_FILE" <<NOTES_EOF
 **Install**
 

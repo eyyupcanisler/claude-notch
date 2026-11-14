@@ -48,9 +48,9 @@ final class QuestionModeTests: XCTestCase {
     XCTAssertEqual(QuestionMode.defaultsKey, "answerQuestionsInNotch")
     XCTAssertEqual(QuestionMode.fallback, .answerInNotch)
     XCTAssertEqual(QuestionMode(stored: nil), .answerInNotch)
-    let suite = "claudenotch.test.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let scratch = try ScratchDefaults("claudenotch.test")
+    let defaults = scratch.defaults
+    defer { scratch.remove() }
     XCTAssertEqual(QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)), .answerInNotch)
     var planner = PeekPlanner()
     XCTAssertEqual(planner.questionMode, .answerInNotch)
@@ -63,9 +63,9 @@ final class QuestionModeTests: XCTestCase {
     XCTAssertEqual(QuestionMode(stored: true), .answerInNotch)
     XCTAssertEqual(QuestionMode(stored: NSNumber(value: false)), .terminalOnly)
     XCTAssertEqual(QuestionMode(stored: "garbage"), .answerInNotch, "unknown values fall back")
-    let suite = "claudenotch.test.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
+    let scratch = try ScratchDefaults("claudenotch.test")
+    let defaults = scratch.defaults
+    defer { scratch.remove() }
     defaults.set(false, forKey: QuestionMode.defaultsKey)
     XCTAssertEqual(QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)), .terminalOnly)
     XCTAssertTrue(QuestionMode(answerInNotch: true).answersInNotch)
@@ -346,6 +346,35 @@ final class QuestionNoticeTests: XCTestCase {
     XCTAssertNotNil(p.current)
     XCTAssertTrue(p.dropAnswered { _ in false })
     XCTAssertNil(p.current)
+  }
+
+  /// Terminal-only mode: no "Claude is asking you" peek when the asking session's terminal app
+  /// is in front; it shows from any other app. An editor's terminal, an unknown terminal and
+  /// the original mode always show it.
+  func testAskingPeekStaysHiddenWhileItsTerminalIsInFront() {
+    let ghostty = "com.mitchellh.ghostty"
+    func shows(
+      _ mode: QuestionMode = .terminalOnly, term: String? = "ghostty",
+      bundle: String? = "com.mitchellh.ghostty", front: String?
+    ) -> Bool {
+      AskingPeek.shows(
+        questionMode: mode, termProgram: term, terminalBundleID: bundle, frontmostBundleID: front)
+    }
+    XCTAssertFalse(shows(front: ghostty))
+    XCTAssertFalse(shows(term: "iTerm.app", bundle: "com.googlecode.iterm2",
+      front: "com.googlecode.iterm2"))
+    XCTAssertTrue(shows(front: "com.google.Chrome"))
+    XCTAssertTrue(shows(front: nil))
+    // Another terminal in front (the session runs in Ghostty): it shows.
+    XCTAssertTrue(shows(front: "com.apple.Terminal"))
+    // An editor in front may have its terminal panel closed: it shows.
+    XCTAssertTrue(shows(term: "vscode", bundle: "com.microsoft.VSCode",
+      front: "com.microsoft.VSCode"))
+    // Unknown terminal: it shows.
+    XCTAssertTrue(shows(term: nil, bundle: nil, front: ghostty))
+    XCTAssertTrue(shows(term: "tmux", bundle: nil, front: ghostty))
+    // Answering in the notch (the original): always shows, the answer UI lives there.
+    XCTAssertTrue(shows(.answerInNotch, front: ghostty))
   }
 
   func testPlanAndWaitingPeeksKeepTheirTime() {
