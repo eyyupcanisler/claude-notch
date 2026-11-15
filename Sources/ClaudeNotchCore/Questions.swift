@@ -126,10 +126,49 @@ public enum AskingPeek {
     questionMode: QuestionMode, termProgram: String?, terminalBundleID: String?,
     frontmostBundleID: String?
   ) -> Bool {
-    guard questionMode == .terminalOnly, let termProgram, terminalApps.contains(termProgram),
-      let terminal = terminalBundleID
-    else { return true }
-    return terminal != frontmostBundleID
+    guard questionMode == .terminalOnly else { return true }
+    return !terminalInFront(
+      termProgram: termProgram, terminalBundleID: terminalBundleID,
+      frontmostBundleID: frontmostBundleID)
+  }
+
+  /// The session's terminal is a terminal-only app (`terminalApps`) with a known bundle id,
+  /// and that app is the front app.
+  public static func terminalInFront(
+    termProgram: String?, terminalBundleID: String?, frontmostBundleID: String?
+  ) -> Bool {
+    guard let termProgram, terminalApps.contains(termProgram), let terminal = terminalBundleID
+    else { return false }
+    return terminal == frontmostBundleID
+  }
+}
+
+/// Settings > Notifications > "Hide permission requests while their terminal is in front".
+/// Stored as a Bool under `defaultsKey` (app domain); a fresh install (nothing saved) is off,
+/// the original behavior: every permission request drops its island.
+public enum PermissionPeek {
+  /// UserDefaults key (app domain), a Bool.
+  public static let defaultsKey = "hidePermissionsWhileTerminalInFront"
+  /// What an install without a saved choice uses: the island always shows (the original).
+  public static let fallback = false
+
+  /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
+  public static func hides(stored: Any?) -> Bool {
+    stored as? Bool ?? fallback
+  }
+
+  /// Whether a new permission request drops its island. With the option on, it stays hidden
+  /// when the request arrives while the session's terminal app is the front app (same rule as
+  /// `AskingPeek`): the terminal shows the same prompt and is answered there. The request
+  /// still waits in the panel, and the band under the notch marks the session as waiting.
+  public static func shows(
+    hideWhileTerminalInFront: Bool, termProgram: String?, terminalBundleID: String?,
+    frontmostBundleID: String?
+  ) -> Bool {
+    guard hideWhileTerminalInFront else { return true }
+    return !AskingPeek.terminalInFront(
+      termProgram: termProgram, terminalBundleID: terminalBundleID,
+      frontmostBundleID: frontmostBundleID)
   }
 }
 

@@ -549,7 +549,8 @@ public struct WeatherPlace: Sendable, Equatable, Codable {
 /// Plan limits as Claude Code reports them to the status line (`rate_limits`): the 5-hour and
 /// the 7-day window, each a percentage and a reset time (Unix seconds). The main window is
 /// chosen automatically: the 5-hour one whenever the input has it (the original behavior), else
-/// the weekly one (Claude Code 2.1.325 and later send only `seven_day`). Unknown keys are
+/// the weekly one (Claude Code 2.1.325 and later send only `seven_day`); a weekly main window
+/// warns only with `WeeklyUsageAlerts` on. Unknown keys are
 /// ignored. Only Pro / Max / Ultra subscribers get them, and a window disappears once its reset
 /// time has passed.
 public struct PlanUsage: Sendable, Equatable {
@@ -579,7 +580,7 @@ public struct PlanUsage: Sendable, Equatable {
   }
 
   /// The main window, which the 80% / 95% notes follow: the 5-hour one when the input has it
-  /// (the original), else the weekly one.
+  /// (the original), else the weekly one (which warns only with `WeeklyUsageAlerts` on).
   public var primaryKind: WindowKind? {
     fiveHour != nil ? .fiveHour : sevenDay != nil ? .sevenDay : nil
   }
@@ -632,8 +633,12 @@ public struct PlanUsage: Sendable, Equatable {
   /// A note to show for this input at `now`, or nil. The main window is picked from the input
   /// as read; only a running window warns, so a file older than its reset (Claude Code not run
   /// since) shows nothing, and a stale 5-hour window never hands the note to the weekly one.
-  public func alert(shown: Set<String>, at now: Date) -> UsageAlert? {
-    guard let kind = primaryKind else { return nil }
+  /// `weekly` (`WeeklyUsageAlerts`, off by default): whether a weekly main window warns at
+  /// all. Off keeps the original behavior, where only the 5-hour window warns.
+  public func alert(
+    shown: Set<String>, at now: Date, weekly: Bool = WeeklyUsageAlerts.fallback
+  ) -> UsageAlert? {
+    guard let kind = primaryKind, kind == .fiveHour || weekly else { return nil }
     let live = live(at: now)
     let running = kind == .fiveHour ? live.fiveHour : live.sevenDay
     guard let w = running,
@@ -651,6 +656,22 @@ public struct PlanUsage: Sendable, Equatable {
       }
       return Date(timeIntervalSince1970: reset) > now
     }
+  }
+}
+
+/// Settings > Modules > "Warn at 80% and 95% of the weekly limit". Stored as a Bool under
+/// `defaultsKey` (app domain); a fresh install (nothing saved) is off, the original behavior:
+/// only the 5-hour window warns, so a status line that passes only the weekly window
+/// (`seven_day`, newer Claude Code) gives no note. The ring in the panel band is not affected.
+public enum WeeklyUsageAlerts {
+  /// UserDefaults key (app domain), a Bool.
+  public static let defaultsKey = "usage.weeklyAlerts"
+  /// What an install without a saved choice uses: no weekly notes (the original).
+  public static let fallback = false
+
+  /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
+  public static func enabled(stored: Any?) -> Bool {
+    stored as? Bool ?? fallback
   }
 }
 

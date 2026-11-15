@@ -47,7 +47,8 @@ import Observation
 //                                    claude processes (and their cards), marks quiet sessions.
 //   processExited(sessionID:pid:)    Exit watch (probe.watchExit) fired: removes the row at once.
 //
-// Effects (onEffect): .sound(name), .autoExpand(seconds), .attention(sessionID:kind:).
+// Effects (onEffect): .sound(name), .autoExpand(seconds), .attention(sessionID:kind:),
+// .bell(sessionID:notificationType:).
 
 @MainActor
 @Observable
@@ -356,6 +357,9 @@ public final class SessionStore {
       announce(e.sessionID, "error", sound: "Basso")
     case "Notification":
       handleNotification(e, session: &session, at: t)
+      if TerminalBell.rings(notificationType: e.notificationType) {
+        emit(.bell(sessionID: e.sessionID, notificationType: e.notificationType))
+      }
     case "PermissionRequest":
       // Forwarded as an event by the bridge: the tool needs interaction in the terminal.
       let status = interactiveStatus(e)

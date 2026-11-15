@@ -27,6 +27,10 @@ final class NotchController {
   private var shortcutPauses = 0
   /// Risky request held with the global allow shortcut (decides when the hold completes).
   private var keyHold: (cardID: String, task: Task<Void, Never>)?
+  /// Permission requests (card ids) and terminal-only questions (session ids) whose island was
+  /// held back because their terminal was in front; see `resurfaceHeld`.
+  private var heldCards: Set<String> = []
+  private var heldAsking: Set<String> = []
   private var nextPeekTask: Task<Void, Never>?
   private var shortcutOpenTask: Task<Void, Never>?
   private var holdHintTask: Task<Void, Never>?
@@ -136,6 +140,7 @@ final class NotchController {
         Task { @MainActor in
           self?.updateActiveScreen()
           if ghostty { self?.refreshConsent() }
+          self?.resurfaceHeld()
         }
       })
     updateScreenTimer()
@@ -1176,6 +1181,7 @@ final class NotchController {
   /// Shows the permission peek for `card` again; its buttons and the shortcuts wait the new
   /// card delay (the request under the user just changed).
   private func showPeek(_ card: PendingPermission) {
+    heldCards.remove(card.id)
     planner.show(cardID: card.id, sessionID: card.sessionID, at: Date())
     ui.pagerArmedAt = max(ui.pagerArmedAt, Date().addingTimeInterval(SessionStore.armDelayNew))
     refresh()
@@ -1339,6 +1345,10 @@ final class NotchController {
   }
 
   private func handle(_ effect: StoreEffect) {
+    if case .bell(let sessionID, let type) = effect {
+      ringBell(for: sessionID, notificationType: type)
+      return
+    }
     guard case .attention(let sessionID, let kind) = effect else {
       // Sounds and expansion are driven by the attention kind (no auto-expand).
       return
@@ -1361,9 +1371,24 @@ final class NotchController {
       settings.play(settings.soundName(e))
     }
     guard expandedID == nil else { return }
-    if kind == "question", !askingPeekShows(for: sessionID) { return }
+    if kind == "question", !askingPeekShows(for: sessionID) {
+      heldAsking.insert(sessionID)
+      return
+    }
     let cardID = kind == "permission"
       ? store.pending.last(where: { $0.sessionID == sessionID })?.id : nil
+    if kind == "permission", !permissionPeekShows(for: sessionID) {
+      if let cardID { heldCards.insert(cardID) }
+      // Claude Code's own notification about this prompt can arrive just before the request
+      // and drop a "waiting" island for the session: it goes too.
+      if let cur = planner.current, cur.kind == .attention, !cur.asking,
+        cur.sessionIDs.first == sessionID, store.question(for: sessionID) == nil
+      {
+        planner.clear()
+        refresh()
+      }
+      return
+    }
     if planner.receive(attention: kind, sessionID: sessionID, cardID: cardID, at: Date()) {
       refresh()
     }
@@ -1377,6 +1402,50 @@ final class NotchController {
       questionMode: settings.questionMode, termProgram: term,
       terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] },
       frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+  }
+
+  /// Optional: a permission request that arrives while its terminal is in front drops no
+  /// island (see `PermissionPeek`); it still waits in the panel.
+  private func permissionPeekShows(for sessionID: String) -> Bool {
+    let term = store.sessions[sessionID]?.termProgram
+    return PermissionPeek.shows(
+      hideWhileTerminalInFront: settings.hidePermissionsWhileTerminalInFront, termProgram: term,
+      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] },
+      frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+  }
+
+  /// Optional: a Claude Code notification rings the session's terminal bell (see
+  /// `TerminalBell`); in silent mode only one that needs an answer. Demo sessions never ring:
+  /// their ttys are made up or someone else's. The session's claude process must still own the
+  /// tty, so a terminal reused by another program is never rung.
+  private func ringBell(for sessionID: String, notificationType: String?) {
+    guard settings.terminalBell, !NotchSettings.isDemo,
+      TerminalBell.ringsNow(notificationType: notificationType, silentMode: settings.silentMode),
+      let session = store.sessions[sessionID], let tty = session.tty, store.isAlive(session)
+    else { return }
+    TerminalBell.ring(tty: tty)
+  }
+
+  /// Islands held back because their terminal was in front (`PermissionPeek`, `AskingPeek`)
+  /// drop down once another app comes to the front, if they still wait: the oldest held
+  /// permission request first, else a held question. Answered ones are forgotten here.
+  private func resurfaceHeld() {
+    guard !heldCards.isEmpty || !heldAsking.isEmpty else { return }
+    heldCards = heldCards.filter { store.card(id: $0) != nil }
+    heldAsking = heldAsking.filter {
+      settings.questionMode == .terminalOnly && store.sessions[$0]?.status.kind == "question"
+    }
+    guard expandedID == nil, planner.current?.kind != .permission else { return }
+    if let card = store.pending.first(where: {
+      heldCards.contains($0.id) && permissionPeekShows(for: $0.sessionID)
+    }) {
+      showPeek(card)
+      return
+    }
+    if let sessionID = heldAsking.first(where: { askingPeekShows(for: $0) }) {
+      heldAsking.remove(sessionID)
+      if planner.receive(attention: "question", sessionID: sessionID, at: Date()) { refresh() }
+    }
   }
 
   private func trackStore() {

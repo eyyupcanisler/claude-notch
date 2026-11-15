@@ -155,21 +155,34 @@ enum AppleScriptRunner {
   static func run(_ source: String, reuse: Bool = false) async -> ScriptResult {
     await withCheckedContinuation { cont in
       queue.async {
-        let (script, failure) = Self.script(source, reuse: reuse)
-        guard let script else {
-          cont.resume(returning: ScriptResult(output: nil, errorCode: failure ?? -1))
-          return
-        }
-        var error: NSDictionary?
-        let desc = script.executeAndReturnError(&error)
-        if let error {
+        var retried = false
+        while true {
+          let wasCached = reuse && compiled[source] != nil
+          let (script, failure) = Self.script(source, reuse: reuse)
+          guard let script else {
+            cont.resume(returning: ScriptResult(output: nil, errorCode: failure ?? -1))
+            return
+          }
+          var error: NSDictionary?
+          let desc = script.executeAndReturnError(&error)
+          guard let error else {
+            cont.resume(returning: ScriptResult(output: desc.stringValue, errorCode: nil))
+            return
+          }
           let code = (error[NSAppleScript.errorNumber] as? NSNumber)?.intValue ?? -1
-          // A cached script that fails for another reason than a missing Automation grant
-          // (for example after Spotify quit and relaunched) is compiled again next time.
-          if reuse, code != -1743, code != -1744 { compiled[source] = nil }
+          // A cached script that fails for another reason than a missing Automation grant is
+          // compiled again. After its app quit and relaunched (Spotify does after an update)
+          // it fails with "connection is invalid" (-609): that one is retried at once with a
+          // fresh compile, so the click is not lost.
+          if reuse, code != -1743, code != -1744 {
+            compiled[source] = nil
+            if wasCached, code == -609, !retried {
+              retried = true
+              continue
+            }
+          }
           cont.resume(returning: ScriptResult(output: nil, errorCode: code))
-        } else {
-          cont.resume(returning: ScriptResult(output: desc.stringValue, errorCode: nil))
+          return
         }
       }
     }

@@ -381,10 +381,11 @@ final class PlanUsageTests: XCTestCase {
   func testWeeklyOnlyAlertUsesWeeklyTexts() {
     let r = Date(timeIntervalSince1970: 1_795_068_000)
     var u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 81, resetsAt: r), readAt: t0)
-    XCTAssertEqual(u.alert(shown: [], at: t0)?.kind, .sevenDay)
-    XCTAssertEqual(u.alert(shown: [], at: t0)?.title, "Weekly limit at 80%")
+    XCTAssertEqual(u.alert(shown: [], at: t0, weekly: true)?.kind, .sevenDay)
+    XCTAssertEqual(u.alert(shown: [], at: t0, weekly: true)?.title, "Weekly limit at 80%")
     u.sevenDay?.percent = 95
-    XCTAssertEqual(u.alert(shown: [], at: t0)?.title, "Weekly limit almost used up")
+    XCTAssertEqual(
+      u.alert(shown: [], at: t0, weekly: true)?.title, "Weekly limit almost used up")
     let fiveOnly = PlanUsage(
       fiveHour: .init(percent: 40, resetsAt: Date(timeIntervalSince1970: 1_738_425_600)),
       sevenDay: nil, readAt: t0)
@@ -399,8 +400,11 @@ final class PlanUsageTests: XCTestCase {
     let u = PlanUsage(
       fiveHour: .init(percent: 90, resetsAt: five), sevenDay: .init(percent: 90, resetsAt: week),
       readAt: t0)
-    XCTAssertEqual(u.alert(shown: [], at: five.addingTimeInterval(-1))?.kind, .fiveHour)
-    XCTAssertNil(u.alert(shown: [], at: five), "the 5-hour reset has passed")
+    for weekly in [false, true] {
+      XCTAssertEqual(
+        u.alert(shown: [], at: five.addingTimeInterval(-1), weekly: weekly)?.kind, .fiveHour)
+      XCTAssertNil(u.alert(shown: [], at: five, weekly: weekly), "the 5-hour reset has passed")
+    }
   }
 
   func testWeeklyWarningMarksOncePerWindow() {
@@ -427,8 +431,27 @@ final class PlanUsageTests: XCTestCase {
     let u = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 85, resetsAt: r), readAt: t0)
     XCTAssertEqual(u.live(at: r.addingTimeInterval(-1)).newMark(shown: [])?.mark, 80)
     XCTAssertNil(u.live(at: r).newMark(shown: []), "the reset has passed")
-    XCTAssertEqual(u.alert(shown: [], at: r.addingTimeInterval(-1))?.mark, 80)
-    XCTAssertNil(u.alert(shown: [], at: r), "the reset has passed")
+    XCTAssertEqual(u.alert(shown: [], at: r.addingTimeInterval(-1), weekly: true)?.mark, 80)
+    XCTAssertNil(u.alert(shown: [], at: r, weekly: true), "the reset has passed")
+  }
+
+  /// The original: only the 5-hour window warns, so a weekly-only status line gives no note
+  /// until the weekly option is turned on. The 5-hour notes do not depend on it.
+  func testWeeklyAlertsStayOffUntilTurnedOn() {
+    XCTAssertFalse(WeeklyUsageAlerts.fallback)
+    XCTAssertFalse(WeeklyUsageAlerts.enabled(stored: nil))
+    XCTAssertFalse(WeeklyUsageAlerts.enabled(stored: "1"), "not a Bool: the fallback")
+    XCTAssertTrue(WeeklyUsageAlerts.enabled(stored: true))
+    let r = Date(timeIntervalSince1970: 1_795_068_000)
+    let weekly = PlanUsage(fiveHour: nil, sevenDay: .init(percent: 97, resetsAt: r), readAt: t0)
+    XCTAssertNil(weekly.alert(shown: [], at: t0))
+    XCTAssertNil(weekly.alert(shown: [], at: t0, weekly: false))
+    XCTAssertEqual(weekly.alert(shown: [], at: t0, weekly: true)?.mark, 95)
+    let five = PlanUsage(
+      fiveHour: .init(percent: 85, resetsAt: Date(timeIntervalSince1970: 1_738_425_600)),
+      sevenDay: .init(percent: 97, resetsAt: r), readAt: t0)
+    XCTAssertEqual(five.alert(shown: [], at: t0, weekly: false)?.kind, .fiveHour)
+    XCTAssertEqual(five.alert(shown: [], at: t0, weekly: true)?.kind, .fiveHour)
   }
 
   func testLiveWarningsDropPassedResets() {

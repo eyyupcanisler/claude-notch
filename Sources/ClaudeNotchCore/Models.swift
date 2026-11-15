@@ -261,4 +261,8 @@ public enum StoreEffect: Sendable, Equatable {
   /// A session entered a state worth a peek. `kind` is a `SessionStatus.kind` ("done", "error",
   /// "waiting", "question", "plan") or "permission" for a new card.
   case attention(sessionID: String, kind: String)
+  /// Claude Code sent a Notification hook event for this session (`TerminalBell.rings`): the
+  /// moment to ring the session's terminal bell when that option is on. The type decides
+  /// whether it rings in silent mode (`TerminalBell.ringsNow`).
+  case bell(sessionID: String, notificationType: String?)
 }

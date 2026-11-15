@@ -377,6 +377,31 @@ final class QuestionNoticeTests: XCTestCase {
     XCTAssertTrue(shows(.answerInNotch, front: ghostty))
   }
 
+  func testPermissionPeekHidesOnlyWhenAskedAndItsTerminalIsInFront() {
+    XCTAssertFalse(PermissionPeek.fallback, "a fresh install always shows the island")
+    XCTAssertFalse(PermissionPeek.hides(stored: nil))
+    XCTAssertFalse(PermissionPeek.hides(stored: 1), "not a Bool: the fallback")
+    XCTAssertTrue(PermissionPeek.hides(stored: true))
+    let ghostty = "com.mitchellh.ghostty"
+    func shows(
+      hide: Bool = true, term: String? = "ghostty", bundle: String? = "com.mitchellh.ghostty",
+      front: String?
+    ) -> Bool {
+      PermissionPeek.shows(
+        hideWhileTerminalInFront: hide, termProgram: term, terminalBundleID: bundle,
+        frontmostBundleID: front)
+    }
+    XCTAssertTrue(shows(hide: false, front: ghostty), "option off: the original island")
+    XCTAssertFalse(shows(front: ghostty))
+    XCTAssertTrue(shows(front: "com.google.Chrome"))
+    XCTAssertTrue(shows(front: nil))
+    XCTAssertTrue(shows(front: "com.apple.Terminal"), "another terminal in front")
+    XCTAssertTrue(
+      shows(term: "vscode", bundle: "com.microsoft.VSCode", front: "com.microsoft.VSCode"),
+      "an editor's terminal panel may be closed")
+    XCTAssertTrue(shows(term: nil, bundle: nil, front: ghostty), "unknown terminal")
+  }
+
   func testPlanAndWaitingPeeksKeepTheirTime() {
     let t0 = Date(timeIntervalSince1970: 1000)
     for attention in ["plan", "waiting"] {

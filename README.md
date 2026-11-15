@@ -38,6 +38,11 @@ terminal, and keep a few handy tools one glance away.
 - **Permission requests in the notch.** An island drops down with the command; allow or deny
   with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
+  Optional: Settings → *Bildirimler → Terminali öndeyken izin isteklerini gizle* (Notifications
+  → Hide permission requests while their terminal is in front; default off) keeps the island
+  hidden when the session's terminal app is the front app as the request arrives, whichever of
+  its tabs you are in: answer it in the terminal. It still waits in the panel, and its island
+  drops down once you switch to another app.
 - **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
   or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
   Prefer the terminal? Turn off Settings → *Bildirimler → Claude’un sorularını çentikte
@@ -46,10 +51,19 @@ terminal, and keep a few handy tools one glance away.
   color, an island drops down with "Claude is asking you" and the question text, and a click on
   it jumps to that session's terminal tab. If that terminal app (Ghostty, Terminal, iTerm2…; not
   an editor such as VS Code) is the front app when the question arrives, the island stays
-  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab.
+  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab. It drops down
+  once you switch to another app while the question still waits.
 - **Jump to what needs you.** **⌃⌥J** brings forward the terminal tab of the session that needs
   you most: a permission request first, then a question, plan approval or input wait, then an
   unseen error, then an unseen finished run.
+- **Terminal bell (optional).** Settings → *Bildirimler → Claude Code bildirim gönderince
+  terminal zilini çal* (Notifications → Ring the terminal bell when Claude Code notifies;
+  default off) rings that session's terminal bell on every Claude Code notification
+  (permission, question, waiting for input): Ghostty puts 🔔 on the tab until you look at it,
+  Terminal and iTerm2 mark the tab (and beep, unless their bell is set to visual). In silent
+  mode only what needs an answer rings. Nothing rings while the app is not running. If Claude
+  Code itself is set to ring the bell (`preferredNotifChannel`: `terminal_bell`), each
+  notification rings twice.
 - **The panel.** Hover the notch: every session with its status, the turn's elapsed time in
   dot-matrix digits, a rhythm strip of its tool calls, subagents, and context left. Click a row
   to jump to its Ghostty / Terminal / iTerm2 tab.
@@ -103,7 +117,9 @@ Optional:
   your plan usage (Claude Code only reports it to the status line). The ring shows the fuller of
   the 5-hour and weekly windows, and the notch warns at 80% and 95% of the 5-hour limit. When the
   status line passes only the weekly window (`rate_limits.seven_day`, as newer Claude Code
-  does), the ring and the warnings follow the weekly limit instead.
+  does), the ring follows the weekly limit; the warnings then come only with Settings →
+  *Modüller → Haftalık limit %80’e, sonra %95’e gelince uyar* (Modules → Warn when the weekly
+  limit reaches 80%, then 95%; default off).
 - `scripts/install-hooks.sh --uninstall` removes the hooks again.
 
 ## How it works

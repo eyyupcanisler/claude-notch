@@ -7,7 +7,9 @@ import Observation
 /// `statusline.json` in the app's folder (scripts/install-statusline.sh). This module watches the
 /// folder (kernel file events, no polling) and reads the small file when it is replaced. The
 /// 80% / 95% notes follow the main window (`PlanUsage.primaryKind`): the 5-hour one when the
-/// input has it (the original), else the weekly one (newer Claude Code sends only that).
+/// input has it (the original), else the weekly one (newer Claude Code sends only that), which
+/// warns only with Settings > Modules > weekly warnings on (`WeeklyUsageAlerts`, off by
+/// default).
 @MainActor
 @Observable
 final class UsageModule {
@@ -86,7 +88,9 @@ final class UsageModule {
     usage = u
     // Only a running window warns: a file older than its reset (Claude Code not run since)
     // must not show a past window's 80%.
-    if let a = u.alert(shown: warned, at: now) {
+    let weekly = WeeklyUsageAlerts.enabled(
+      stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))
+    if let a = u.alert(shown: warned, at: now, weekly: weekly) {
       let w = a.window
       warned = PlanUsage.liveWarnings(warned, at: now)
       warned.insert(a.key)

@@ -237,6 +237,12 @@ struct SettingsView: View {
               .fixedSize(horizontal: false, vertical: true)
           }
           Toggle("Claude plan: usage limit percentage in the panel band", isOn: $settings.usageEnabled)
+          if settings.usageEnabled {
+            Toggle("Warn when the weekly limit reaches 80%, then 95%", isOn: $settings.weeklyUsageAlerts)
+            Text("Newer Claude Code passes only the weekly limit to the status line; this makes it warn then. Off: only the 5-hour limit warns, so you get no warnings. When the 5-hour limit is passed too, it alone warns.")
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
           if settings.usageEnabled && !modules.usage.hasData {
             Text("Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup).")
               .font(.caption).foregroundStyle(.secondary)
@@ -272,6 +278,16 @@ struct SettingsView: View {
           Text(settings.answerQuestionsInNotch
             ? "Claude waits while a question is in the island: pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
             : "The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle(
+            "Hide permission requests while their terminal is in front",
+            isOn: $settings.hidePermissionsWhileTerminalInFront)
+          Text("When the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app as a request arrives, no island drops down, whichever of its tabs you are in: answer it in the terminal. It still waits in the panel, and its island drops down once you switch to another app.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)
+          Text("Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }

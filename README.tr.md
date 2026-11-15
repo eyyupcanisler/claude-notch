@@ -165,7 +165,7 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   çıkınca satır kalkar. `SessionEnd`'den sonraki 10 sn yeniden
   keşfedilmez (/clear).
 - **Sekme adı (Ghostty):** Ghostty için Otomasyon izni **zaten verilmişse** (uygulama izni
-  kendiliğinden sormaz) panel açılınca ve oturum varken ~15 sn'de bir iki ham Apple Event
+  kendiliğinden sormaz) panel açılınca ve oturum varken ~15 sn'de bir, iki ham Apple Event
   `get` isteğiyle (her terminalin `tty` ve `name` değeri; AppleScript derlenmez) sekme adları
   okunur. Ad satırın ikincil
   metni olur ve aynı projedeki oturumları ayırt eder (ad da aynıysa dal / tty eki eklenir).
@@ -279,7 +279,19 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   bekletilmez: terminal hemen sorar, çentik yalnızca "Claude size bir soru soruyor" adasıyla
   haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür. Soru geldiğinde o
   terminal uygulaması (Ghostty, Terminal, iTerm2…; VS Code gibi bir düzenleyici değil) öndeyse
-  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür.
+  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür. Başka bir
+  uygulamaya geçtiğinizde soru hâlâ bekliyorsa ada açılır.
+- Ayarlar > Bildirimler > **Terminali öndeyken izin isteklerini gizle** (varsayılan: kapalı)
+  açıksa izin isteği geldiğinde o oturumun terminal uygulaması (aynı liste; düzenleyici değil)
+  öndeyse, hangi sekmesinde olursanız olun ada açılmaz: istek terminalde yanıtlanır, panelde de
+  bekler. Başka bir uygulamaya geçtiğinizde istek hâlâ bekliyorsa adası açılır.
+- Ayarlar > Bildirimler > **Claude Code bildirim gönderince terminal zilini çal** (varsayılan:
+  kapalı): Claude Code'un her `Notification` olayında (izin, soru, girdi bekleme; giriş onayı
+  hariç) uygulama o oturumun tty'sine bir zil karakteri (BEL) yazar. Ghostty sekmeye bakılana
+  kadar başlığa 🔔 koyar; Terminal ve iTerm2 sekmeyi işaretler (zilleri görsel olarak
+  ayarlanmadıysa ses de çıkarır). Sessiz modda yalnızca yanıt bekleyen bildirimler çalar. Uygulama kapalıyken
+  zil çalmaz. Claude Code'un kendisi de zil çalacak şekilde ayarlıysa (`preferredNotifChannel`:
+  `terminal_bell`) her bildirim iki kez çalar.
 - `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
 - İzni terminalde **reddederseniz** `PostToolUse` gelmez; kart, aynı oturumdaki (ve aynı
   alt ajandaki) farklı bir `PreToolUse` (1,5 sn'den sonra), `UserPromptSubmit`, `Stop`,
@@ -310,7 +322,8 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
 - **Claude planı** (`scripts/install-statusline.sh`): halka 5 saatlik ve haftalık pencereden
   dolu olanı gösterir, %80 ve %95 uyarıları 5 saatlik pencere içindir. Durum satırı yalnız
   haftalık pencereyi (`rate_limits.seven_day`) gönderiyorsa (yeni Claude Code sürümleri) halka
-  ve uyarılar haftalık limiti izler.
+  haftalık limiti izler; uyarılar ise yalnızca Ayarlar > Modüller > **Haftalık limit %80’e,
+  sonra %95’e gelince uyar** açıksa (varsayılan: kapalı) haftalık limit için gelir.
 
 ## Hata ayıklama
 

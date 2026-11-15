@@ -203,6 +203,23 @@ final class NotchSettings {
     didSet { defaults.set(answerQuestionsInNotch, forKey: QuestionMode.defaultsKey) }
   }
   var questionMode: QuestionMode { QuestionMode(answerInNotch: answerQuestionsInNotch) }
+  /// A permission request that arrives while its session's terminal is the front app drops
+  /// no island (off by default, the original: see `PermissionPeek`).
+  var hidePermissionsWhileTerminalInFront: Bool {
+    didSet {
+      defaults.set(hidePermissionsWhileTerminalInFront, forKey: PermissionPeek.defaultsKey)
+    }
+  }
+  /// Claude Code notifications ring the session's terminal bell (off by default, the
+  /// original: see `TerminalBell`).
+  var terminalBell: Bool {
+    didSet { defaults.set(terminalBell, forKey: TerminalBell.defaultsKey) }
+  }
+  /// The 80% / 95% notes also warn for a weekly main window (off by default, the original:
+  /// see `WeeklyUsageAlerts`). UsageModule reads the stored value when a status line arrives.
+  var weeklyUsageAlerts: Bool {
+    didSet { defaults.set(weeklyUsageAlerts, forKey: WeeklyUsageAlerts.defaultsKey) }
+  }
   /// Global shortcuts (missing role: the default).
   private(set) var shortcuts: [HotKeyRole: KeyCombo]
   /// The one-time "⌃⌥Y allow · ⌃⌥N deny" line under the peek was used / dismissed.
@@ -312,6 +329,11 @@ final class NotchSettings {
       ?? .normal
     answerQuestionsInNotch =
       QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)).answersInNotch
+    hidePermissionsWhileTerminalInFront =
+      PermissionPeek.hides(stored: defaults.object(forKey: PermissionPeek.defaultsKey))
+    terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
+    weeklyUsageAlerts =
+      WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))
     var keys: [HotKeyRole: KeyCombo] = [:]
     for role in HotKeyRole.allCases {
       keys[role] = KeyCombo(stored: defaults.array(forKey: role.defaultsKey))
