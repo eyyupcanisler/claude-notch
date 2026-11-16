@@ -188,6 +188,45 @@ public enum TerminalIslands {
   }
 }
 
+/// Settings > Notifications > "Focus is on: hide islands that only point to the terminal".
+/// macOS does not tell apps when a Focus such as Do Not Disturb starts or ends, so two Shortcuts
+/// automations switch this (`command(on:)`): they store the Bool under `defaultsKey` (app
+/// domain) and post the Darwin notification `notifyName`, so the running app reads it at once.
+/// Nothing saved is off, the original behavior.
+public enum FocusIslands {
+  /// UserDefaults key (app domain), a Bool.
+  public static let defaultsKey = "focusActive"
+  /// Posted after the key is written (`notifyutil -p`): the running app reads it again.
+  public static let notifyName = "com.eyyupcan.claudenotch.focus"
+  /// What an install without a saved choice uses: off (the original).
+  public static let fallback = false
+
+  /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
+  public static func active(stored: Any?) -> Bool {
+    stored as? Bool ?? fallback
+  }
+
+  /// Whether an island of attention `kind` shows while a Focus is on: the islands that only
+  /// point to the terminal stay hidden ("Claude is asking you" in terminal-only question mode,
+  /// a plan approval, a wait for input). A permission request (answered in the notch too), a
+  /// question answered in the notch, finished runs and errors still show.
+  public static func shows(kind: String, focusActive: Bool, questionMode: QuestionMode) -> Bool {
+    guard focusActive else { return true }
+    switch kind {
+    case "question": return questionMode != .terminalOnly
+    case "plan", "waiting": return false
+    default: return true
+    }
+  }
+
+  /// The shell command a Shortcuts automation runs ("Run Shell Script") when a Focus turns on
+  /// (`on` true) or off.
+  public static func command(on: Bool, domain: String = "com.eyyupcan.claudenotch") -> String {
+    "/usr/bin/defaults write \(domain) \(defaultsKey) -bool \(on ? "true" : "false"); "
+      + "/usr/bin/notifyutil -p \(notifyName)"
+  }
+}
+
 /// What the `/question` socket route does with a request (the hook bridge's "question" mode).
 public enum QuestionRoute: Sendable, Equatable {
   /// Not an `AskUserQuestion` hook event: 400.

@@ -158,6 +158,25 @@ jumps...), and **Varsayılana dön** (Reset to defaults) goes back to ⌃⌥. No
 you press one of them. The Hyper preset needs a tool that turns Caps Lock
 into ⌃⌥⇧⌘: Raycast (Settings → Advanced → Hyper Key), Hyperkey or Karabiner-Elements.
 
+## Do Not Disturb (optional)
+
+Settings → *Bildirimler → Odak açık: yalnızca terminali gösteren adaları gizle* (Notifications →
+Focus is on: hide islands that only point to the terminal; default off) hides the "Claude is
+asking you" (terminal-only questions), plan approval and "waiting for input" islands from every
+app. Permission requests, questions answered in the notch and finished runs still show. macOS
+does not tell apps when a Focus starts, so on macOS 26 two Shortcuts automations can switch it
+for you:
+
+1. Shortcuts → Settings → Advanced: turn on **Allow Running Scripts**.
+2. Automation → New Automation → **Focus** → Do Not Disturb → **When Turning On**, Run
+   Immediately. Add the action **Run Shell Script** with:
+   ```sh
+   /usr/bin/defaults write com.eyyupcan.claudenotch focusActive -bool true; /usr/bin/notifyutil -p com.eyyupcan.claudenotch.focus
+   ```
+3. A second automation for **When Turning Off**, with `-bool false` in the same command.
+
+The app reads the new value at once. Other Focus modes work the same way.
+
 ## Google Calendar (optional)
 
 ClaudeNotch can read Google Calendar directly with **your own** OAuth client (read-only):

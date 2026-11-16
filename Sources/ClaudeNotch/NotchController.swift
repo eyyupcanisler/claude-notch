@@ -2,6 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import ClaudeNotchCore
 import Observation
+import notify
 import SwiftUI
 
 /// Owns the surfaces (one per screen), decides the mode of each (collapsed / peek / expanded),
@@ -111,6 +112,7 @@ final class NotchController {
     trackSettings()
     trackPeekSettings()
     installMonitors()
+    observeFocus()
     let nc = NotificationCenter.default
     observers.append(
       nc.addObserver(
@@ -137,7 +139,7 @@ final class NotchController {
         Task { @MainActor in
           self?.updateActiveScreen()
           if ghostty { self?.refreshConsent() }
-          self?.dropIslandBehindTerminal(front: bundleID)
+          self?.dropHiddenIsland(front: bundleID)
         }
       })
     updateScreenTimer()
@@ -1379,16 +1381,33 @@ final class NotchController {
 
   /// Whether the island of attention `kind` for `sessionID` may be on screen while `front` (by
   /// default the current front app) is in front: hidden while the session's terminal is (see
-  /// `TerminalIslands`).
+  /// `TerminalIslands`), and, for one that only points to the terminal, while a Focus is on
+  /// (see `FocusIslands`).
   private func islandShows(
     _ kind: String, for sessionID: String,
     front: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
   ) -> Bool {
+    guard
+      FocusIslands.shows(
+        kind: kind, focusActive: settings.focusActive, questionMode: settings.questionMode)
+    else { return false }
     let term = store.sessions[sessionID]?.termProgram
     return TerminalIslands.shows(
       kind: kind, hideWhileTerminalInFront: settings.hideIslandsWhileTerminalInFront,
       questionMode: settings.questionMode, termProgram: term,
       terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] }, frontmostBundleID: front)
+  }
+
+  /// Darwin notification token of `observeFocus` (kept for the app's lifetime).
+  private var focusToken: Int32 = 0
+
+  /// A Shortcuts automation switched the Focus value (see `FocusIslands`): read it again. The
+  /// settings observer then takes away an island it hides. Demo instances keep their own.
+  private func observeFocus() {
+    guard !NotchSettings.isDemo else { return }
+    notify_register_dispatch(FocusIslands.notifyName, &focusToken, .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.settings.reloadFocusActive() }
+    }
   }
 
   /// Optional: a Claude Code notification rings the session's terminal bell (see
@@ -1403,10 +1422,13 @@ final class NotchController {
     TerminalBell.ring(tty: tty)
   }
 
-  /// An app came to the front: the Claude island on screen goes if its session's terminal is
-  /// that app (see `TerminalIslands`), so switching to the terminal clears what it already
-  /// shows. A permission request still waits in the panel; nothing drops down again by itself.
-  private func dropIslandBehindTerminal(front: String?) {
+  /// An app came to the front (or a Focus started): the Claude island on screen goes if it is
+  /// hidden now, e.g. its session's terminal is that app (see `TerminalIslands`, `FocusIslands`),
+  /// so switching to the terminal clears what it already shows. A permission request still
+  /// waits in the panel; nothing drops down again by itself.
+  private func dropHiddenIsland(
+    front: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+  ) {
     guard let peek = planner.current, let sid = peek.sessionIDs.first,
       let kind = TerminalIslands.kind(
         of: peek, statusKind: store.sessions[sid]?.status.kind,
@@ -1451,9 +1473,11 @@ final class NotchController {
       _ = settings.peekDuration
       _ = settings.shortcutHintSeen
       _ = settings.answerQuestionsInNotch
+      _ = settings.focusActive
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
+        self.dropHiddenIsland()
         self.planner.permissionHold = self.settings.peekDuration.seconds
         self.applyQuestionMode()
         self.updateKeyHints()

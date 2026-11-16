@@ -210,6 +210,15 @@ final class NotchSettings {
       defaults.set(hideIslandsWhileTerminalInFront, forKey: TerminalIslands.defaultsKey)
     }
   }
+  /// A Focus such as Do Not Disturb is on: the islands that only point to the terminal stay
+  /// hidden (off by default, the original: see `FocusIslands`). Shortcuts automations switch it
+  /// from outside; `reloadFocusActive` reads their value.
+  var focusActive: Bool {
+    didSet {
+      guard focusActive != oldValue else { return }
+      defaults.set(focusActive, forKey: FocusIslands.defaultsKey)
+    }
+  }
   /// Claude Code notifications ring the session's terminal bell (off by default, the
   /// original: see `TerminalBell`).
   var terminalBell: Bool {
@@ -331,6 +340,7 @@ final class NotchSettings {
       QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)).answersInNotch
     hideIslandsWhileTerminalInFront =
       TerminalIslands.hides(stored: defaults.object(forKey: TerminalIslands.defaultsKey))
+    focusActive = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
     terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
     weeklyUsageAlerts =
       WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))
@@ -368,6 +378,14 @@ final class NotchSettings {
 
   /// A stored decision chord that is no longer allowed (see `KeyCombo.error(for:)`) falls back
   /// to the default.
+  /// A Shortcuts automation wrote the Focus value from outside (see `FocusIslands`): read it
+  /// again past this process's cached copy.
+  func reloadFocusActive() {
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+    let stored = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
+    if stored != focusActive { focusActive = stored }
+  }
+
   func shortcut(_ role: HotKeyRole) -> KeyCombo {
     guard let combo = shortcuts[role], combo.error(for: role) == nil else {
       return KeyCombo.defaultCombo(role)

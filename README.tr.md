@@ -326,6 +326,24 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   haftalık limiti izler; uyarılar ise yalnızca Ayarlar > Modüller > **Haftalık limit %80’e,
   sonra %95’e gelince uyar** açıksa (varsayılan: kapalı) haftalık limit için gelir.
 
+## Rahatsız Etme (isteğe bağlı)
+
+Ayarlar > Bildirimler > **Odak açık: yalnızca terminali gösteren adaları gizle** (varsayılan:
+kapalı) açıkken "Claude size bir soru soruyor" (terminalde yanıtlanan sorular), plan onayı ve
+"girdi bekliyor" adaları hiçbir uygulamada açılmaz. İzin istekleri, çentikte yanıtlanan sorular
+ve biten işler yine görünür. macOS bir Odak başladığında uygulamalara haber vermez; macOS 26'da
+bunu iki Kestirmeler otomasyonu sizin yerinize açıp kapatabilir:
+
+1. Kestirmeler > Ayarlar > İleri Düzey: **Betikleri Çalıştırmaya İzin Ver**'i açın.
+2. Otomasyon > Yeni Otomasyon > **Odak** > Rahatsız Etme > **Açılırken**, Hemen Çalıştır. Şu
+   komutla bir **Kabuk Betiği Çalıştır** eylemi ekleyin:
+   ```sh
+   /usr/bin/defaults write com.eyyupcan.claudenotch focusActive -bool true; /usr/bin/notifyutil -p com.eyyupcan.claudenotch.focus
+   ```
+3. **Kapanırken** için ikinci bir otomasyon; aynı komutta `-bool false`.
+
+Uygulama yeni değeri hemen okur. Diğer Odak modları da aynı şekilde bağlanır.
+
 ## Hata ayıklama
 
 `/debug/*` uçları kartları onaylayabildiği için **varsayılan olarak kapalıdır** (404). Yalnızca

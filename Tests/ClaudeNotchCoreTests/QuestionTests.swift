@@ -409,6 +409,37 @@ final class QuestionNoticeTests: XCTestCase {
     }
   }
 
+  /// A Focus on hides only the islands that point to the terminal: a terminal-only question, a
+  /// plan approval, a wait for input. A permission request, a question answered in the notch,
+  /// finished runs and errors still show; a fresh install has no Focus.
+  func testFocusHidesOnlyIslandsThatPointToTheTerminal() {
+    XCTAssertFalse(FocusIslands.fallback)
+    XCTAssertFalse(FocusIslands.active(stored: nil))
+    XCTAssertFalse(FocusIslands.active(stored: "yes"), "not a Bool: the fallback")
+    XCTAssertTrue(FocusIslands.active(stored: true))
+    func shows(_ kind: String, focus: Bool = true, _ mode: QuestionMode = .terminalOnly) -> Bool {
+      FocusIslands.shows(kind: kind, focusActive: focus, questionMode: mode)
+    }
+    for kind in ["question", "plan", "waiting"] {
+      XCTAssertFalse(shows(kind), kind)
+      XCTAssertTrue(shows(kind, focus: false), "no Focus: \(kind) shows")
+    }
+    XCTAssertTrue(shows("question", .answerInNotch), "answered in the notch: it shows")
+    XCTAssertFalse(shows("plan", .answerInNotch))
+    for kind in ["permission", "done", "error", "quiet"] {
+      XCTAssertTrue(shows(kind), "always shows: \(kind)")
+    }
+  }
+
+  /// The command an automation runs writes the key and wakes the running app.
+  func testFocusCommandWritesTheKeyAndPostsTheNotification() {
+    XCTAssertEqual(
+      FocusIslands.command(on: true),
+      "/usr/bin/defaults write com.eyyupcan.claudenotch focusActive -bool true; "
+        + "/usr/bin/notifyutil -p com.eyyupcan.claudenotch.focus")
+    XCTAssertTrue(FocusIslands.command(on: false).contains("focusActive -bool false;"))
+  }
+
   /// When an app comes to the front, the island on screen is checked by its kind: a permission
   /// card, a terminal-only question, or the status of the session it waits for. Finished runs,
   /// module notes and questions answered in the notch are never taken away.
