@@ -203,11 +203,11 @@ final class NotchSettings {
     didSet { defaults.set(answerQuestionsInNotch, forKey: QuestionMode.defaultsKey) }
   }
   var questionMode: QuestionMode { QuestionMode(answerInNotch: answerQuestionsInNotch) }
-  /// A permission request that arrives while its session's terminal is the front app drops
-  /// no island (off by default, the original: see `PermissionPeek`).
-  var hidePermissionsWhileTerminalInFront: Bool {
+  /// While a session's terminal is the front app, its permission requests, plan approvals and
+  /// waiting notices drop no island (off by default, the original: see `TerminalIslands`).
+  var hideIslandsWhileTerminalInFront: Bool {
     didSet {
-      defaults.set(hidePermissionsWhileTerminalInFront, forKey: PermissionPeek.defaultsKey)
+      defaults.set(hideIslandsWhileTerminalInFront, forKey: TerminalIslands.defaultsKey)
     }
   }
   /// Claude Code notifications ring the session's terminal bell (off by default, the
@@ -329,8 +329,8 @@ final class NotchSettings {
       ?? .normal
     answerQuestionsInNotch =
       QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)).answersInNotch
-    hidePermissionsWhileTerminalInFront =
-      PermissionPeek.hides(stored: defaults.object(forKey: PermissionPeek.defaultsKey))
+    hideIslandsWhileTerminalInFront =
+      TerminalIslands.hides(stored: defaults.object(forKey: TerminalIslands.defaultsKey))
     terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
     weeklyUsageAlerts =
       WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))

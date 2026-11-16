@@ -348,58 +348,103 @@ final class QuestionNoticeTests: XCTestCase {
     XCTAssertNil(p.current)
   }
 
-  /// Terminal-only mode: no "Claude is asking you" peek when the asking session's terminal app
-  /// is in front; it shows from any other app. An editor's terminal, an unknown terminal and
-  /// the original mode always show it.
-  func testAskingPeekStaysHiddenWhileItsTerminalIsInFront() {
-    let ghostty = "com.mitchellh.ghostty"
-    func shows(
-      _ mode: QuestionMode = .terminalOnly, term: String? = "ghostty",
-      bundle: String? = "com.mitchellh.ghostty", front: String?
-    ) -> Bool {
-      AskingPeek.shows(
-        questionMode: mode, termProgram: term, terminalBundleID: bundle, frontmostBundleID: front)
-    }
-    XCTAssertFalse(shows(front: ghostty))
-    XCTAssertFalse(shows(term: "iTerm.app", bundle: "com.googlecode.iterm2",
-      front: "com.googlecode.iterm2"))
-    XCTAssertTrue(shows(front: "com.google.Chrome"))
-    XCTAssertTrue(shows(front: nil))
-    // Another terminal in front (the session runs in Ghostty): it shows.
-    XCTAssertTrue(shows(front: "com.apple.Terminal"))
-    // An editor in front may have its terminal panel closed: it shows.
-    XCTAssertTrue(shows(term: "vscode", bundle: "com.microsoft.VSCode",
-      front: "com.microsoft.VSCode"))
-    // Unknown terminal: it shows.
-    XCTAssertTrue(shows(term: nil, bundle: nil, front: ghostty))
-    XCTAssertTrue(shows(term: "tmux", bundle: nil, front: ghostty))
-    // Answering in the notch (the original): always shows, the answer UI lives there.
-    XCTAssertTrue(shows(.answerInNotch, front: ghostty))
+  /// Shorthand for `TerminalIslands.shows`: a session running in Ghostty by default.
+  private func islandShows(
+    _ kind: String, hide: Bool = true, _ mode: QuestionMode = .terminalOnly,
+    term: String? = "ghostty", bundle: String? = "com.mitchellh.ghostty", front: String?
+  ) -> Bool {
+    TerminalIslands.shows(
+      kind: kind, hideWhileTerminalInFront: hide, questionMode: mode, termProgram: term,
+      terminalBundleID: bundle, frontmostBundleID: front)
   }
 
-  func testPermissionPeekHidesOnlyWhenAskedAndItsTerminalIsInFront() {
-    XCTAssertFalse(PermissionPeek.fallback, "a fresh install always shows the island")
-    XCTAssertFalse(PermissionPeek.hides(stored: nil))
-    XCTAssertFalse(PermissionPeek.hides(stored: 1), "not a Bool: the fallback")
-    XCTAssertTrue(PermissionPeek.hides(stored: true))
+  /// Terminal-only mode: no "Claude is asking you" island while the asking session's terminal
+  /// app is in front, with or without the hide option; it shows from any other app. An
+  /// editor's terminal, an unknown terminal and the original mode always show it.
+  func testAskingIslandStaysHiddenWhileItsTerminalIsInFront() {
     let ghostty = "com.mitchellh.ghostty"
-    func shows(
-      hide: Bool = true, term: String? = "ghostty", bundle: String? = "com.mitchellh.ghostty",
-      front: String?
-    ) -> Bool {
-      PermissionPeek.shows(
-        hideWhileTerminalInFront: hide, termProgram: term, terminalBundleID: bundle,
-        frontmostBundleID: front)
+    for hide in [false, true] {
+      XCTAssertFalse(islandShows("question", hide: hide, front: ghostty))
+      XCTAssertFalse(islandShows("question", hide: hide, term: "iTerm.app",
+        bundle: "com.googlecode.iterm2", front: "com.googlecode.iterm2"))
+      XCTAssertTrue(islandShows("question", hide: hide, front: "com.google.Chrome"))
+      XCTAssertTrue(islandShows("question", hide: hide, front: nil))
+      // Another terminal in front (the session runs in Ghostty): it shows.
+      XCTAssertTrue(islandShows("question", hide: hide, front: "com.apple.Terminal"))
+      // An editor in front may have its terminal panel closed: it shows.
+      XCTAssertTrue(islandShows("question", hide: hide, term: "vscode",
+        bundle: "com.microsoft.VSCode", front: "com.microsoft.VSCode"))
+      // Unknown terminal: it shows.
+      XCTAssertTrue(islandShows("question", hide: hide, term: nil, bundle: nil, front: ghostty))
+      XCTAssertTrue(islandShows("question", hide: hide, term: "tmux", bundle: nil, front: ghostty))
+      // Answering in the notch (the original): always shows, the answer UI lives there.
+      XCTAssertTrue(islandShows("question", hide: hide, .answerInNotch, front: ghostty))
     }
-    XCTAssertTrue(shows(hide: false, front: ghostty), "option off: the original island")
-    XCTAssertFalse(shows(front: ghostty))
-    XCTAssertTrue(shows(front: "com.google.Chrome"))
-    XCTAssertTrue(shows(front: nil))
-    XCTAssertTrue(shows(front: "com.apple.Terminal"), "another terminal in front")
-    XCTAssertTrue(
-      shows(term: "vscode", bundle: "com.microsoft.VSCode", front: "com.microsoft.VSCode"),
-      "an editor's terminal panel may be closed")
-    XCTAssertTrue(shows(term: nil, bundle: nil, front: ghostty), "unknown terminal")
+  }
+
+  /// The option hides permission requests, plan approvals and waiting notices while their
+  /// terminal is in front; finished runs and errors always show, and a fresh install hides
+  /// nothing.
+  func testTerminalIslandsHideOnlyWhenAskedAndTheirTerminalIsInFront() {
+    XCTAssertFalse(TerminalIslands.fallback, "a fresh install always shows the islands")
+    XCTAssertFalse(TerminalIslands.hides(stored: nil))
+    XCTAssertFalse(TerminalIslands.hides(stored: 1), "not a Bool: the fallback")
+    XCTAssertTrue(TerminalIslands.hides(stored: true))
+    let ghostty = "com.mitchellh.ghostty"
+    for kind in ["permission", "plan", "waiting"] {
+      XCTAssertTrue(islandShows(kind, hide: false, front: ghostty), "option off: \(kind) shows")
+      XCTAssertFalse(islandShows(kind, front: ghostty), kind)
+      XCTAssertFalse(islandShows(kind, .answerInNotch, front: ghostty), "either question mode")
+      XCTAssertTrue(islandShows(kind, front: "com.google.Chrome"), kind)
+      XCTAssertTrue(islandShows(kind, front: nil), kind)
+      XCTAssertTrue(islandShows(kind, front: "com.apple.Terminal"), "another terminal in front")
+      XCTAssertTrue(
+        islandShows(kind, term: "vscode", bundle: "com.microsoft.VSCode",
+          front: "com.microsoft.VSCode"),
+        "an editor's terminal panel may be closed")
+      XCTAssertTrue(islandShows(kind, term: nil, bundle: nil, front: ghostty), "unknown terminal")
+    }
+    for kind in ["done", "error", "quiet", ""] {
+      XCTAssertTrue(islandShows(kind, front: ghostty), "never hidden: \(kind)")
+    }
+  }
+
+  /// When an app comes to the front, the island on screen is checked by its kind: a permission
+  /// card, a terminal-only question, or the status of the session it waits for. Finished runs,
+  /// module notes and questions answered in the notch are never taken away.
+  func testIslandOnScreenIsCheckedByWhatItShows() {
+    let t0 = Date(timeIntervalSince1970: 1000)
+    var p = PeekPlanner(permissionHold: 15)
+    p.questionMode = .terminalOnly
+    func kind(statusKind: String? = "waiting", heldInNotch: Bool = false) -> String? {
+      p.current.flatMap {
+        TerminalIslands.kind(of: $0, statusKind: statusKind, heldInNotch: heldInNotch)
+      }
+    }
+    p.receive(attention: "permission", sessionID: "s1", cardID: "c1", at: t0)
+    XCTAssertEqual(kind(), "permission")
+    p.clear()
+    p.receive(attention: "question", sessionID: "s1", at: t0)
+    XCTAssertEqual(kind(statusKind: "question"), "question")
+    XCTAssertEqual(kind(statusKind: "waiting"), "question", "an asking island stays a question")
+    p.clear()
+    p.receive(attention: "plan", sessionID: "s1", at: t0)
+    XCTAssertEqual(kind(statusKind: "plan"), "plan")
+    p.clear()
+    p.receive(attention: "waiting", sessionID: "s1", at: t0)
+    XCTAssertEqual(kind(statusKind: "waiting"), "waiting")
+    XCTAssertEqual(kind(statusKind: "working"), "working", "moved on: shows until its time")
+    XCTAssertNil(kind(statusKind: "question", heldInNotch: true), "answered in the notch")
+    p.clear()
+    p.receive(attention: "done", sessionID: "s1", at: t0)
+    XCTAssertNil(kind())
+    p.clear()
+    p.receive(
+      module: ModuleNote(
+        source: .claude, id: "n", title: "t", subtitle: nil, digits: nil, unit: nil,
+        validUntil: t0.addingTimeInterval(60)),
+      at: t0)
+    XCTAssertNil(kind())
   }
 
   func testPlanAndWaitingPeeksKeepTheirTime() {

@@ -108,7 +108,12 @@ public enum QuestionMode: Sendable, Equatable {
   public var answersInNotch: Bool { self == .answerInNotch }
 }
 
-/// Terminal-only question mode: whether the "Claude is asking you" peek drops down.
+/// Terminal-only question mode: the "Claude is asking you" island stays hidden while the asking
+/// session's terminal app is in front: the user is already looking at that terminal, which
+/// shows the question. The band under the notch still marks the session as waiting and the jump
+/// shortcut still works. The original mode (answer in the notch) always shows its island: the
+/// question is answered there. An editor's terminal or an unknown terminal (no bundle id) also
+/// shows it. The rule itself is `TerminalIslands.shows` (kind "question").
 public enum AskingPeek {
   /// TERM_PROGRAM values of apps that are only a terminal: when one is in front, its window
   /// (and the question in it) is what the user sees. Editors with a built-in terminal (VS
@@ -116,21 +121,6 @@ public enum AskingPeek {
   public static let terminalApps: Set<String> = [
     "ghostty", "Apple_Terminal", "iTerm.app", "WarpTerminal", "WezTerm", "kitty", "Hyper"
   ]
-
-  /// Hidden when the question arrives while the asking session's terminal app is the front
-  /// app: the user is already looking at that terminal, which shows the question. The band
-  /// under the notch still marks the session as waiting and the jump shortcut still works. The
-  /// original mode (answer in the notch) always shows its peek: the question is answered
-  /// there. An editor's terminal or an unknown terminal (no bundle id) also shows it.
-  public static func shows(
-    questionMode: QuestionMode, termProgram: String?, terminalBundleID: String?,
-    frontmostBundleID: String?
-  ) -> Bool {
-    guard questionMode == .terminalOnly else { return true }
-    return !terminalInFront(
-      termProgram: termProgram, terminalBundleID: terminalBundleID,
-      frontmostBundleID: frontmostBundleID)
-  }
 
   /// The session's terminal is a terminal-only app (`terminalApps`) with a known bundle id,
   /// and that app is the front app.
@@ -143,13 +133,13 @@ public enum AskingPeek {
   }
 }
 
-/// Settings > Notifications > "Hide permission requests while their terminal is in front".
-/// Stored as a Bool under `defaultsKey` (app domain); a fresh install (nothing saved) is off,
-/// the original behavior: every permission request drops its island.
-public enum PermissionPeek {
+/// Settings > Notifications > "Hide islands while their terminal is in front". Stored as a
+/// Bool under `defaultsKey` (app domain); a fresh install (nothing saved) is off, the original
+/// behavior: every permission request, plan approval and waiting notice drops its island.
+public enum TerminalIslands {
   /// UserDefaults key (app domain), a Bool.
-  public static let defaultsKey = "hidePermissionsWhileTerminalInFront"
-  /// What an install without a saved choice uses: the island always shows (the original).
+  public static let defaultsKey = "hideIslandsWhileTerminalInFront"
+  /// What an install without a saved choice uses: the islands always show (the original).
   public static let fallback = false
 
   /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
@@ -157,18 +147,44 @@ public enum PermissionPeek {
     stored as? Bool ?? fallback
   }
 
-  /// Whether a new permission request drops its island. With the option on, it stays hidden
-  /// when the request arrives while the session's terminal app is the front app (same rule as
-  /// `AskingPeek`): the terminal shows the same prompt and is answered there. The request
-  /// still waits in the panel, and the band under the notch marks the session as waiting.
+  /// Attention kinds the option hides: each asks for something the terminal shows too (a
+  /// permission prompt, the plan to approve, the input Claude waits for). Finished runs and
+  /// errors are left alone.
+  public static let kinds: Set<String> = ["permission", "plan", "waiting"]
+
+  /// Whether a Claude island of attention `kind` ("permission", "question", "plan",
+  /// "waiting"...) may be on screen while `frontmostBundleID` is the front app. While the
+  /// session's terminal app is in front (`AskingPeek.terminalInFront`, whichever of its tabs):
+  /// a terminal-only question never shows (`AskingPeek`), and with the option on neither does
+  /// a permission request, plan approval or waiting notice. The app checks it when an island
+  /// would drop down and again when an app comes to the front, so an island already up goes
+  /// once you switch to that terminal. Nothing hidden drops down later by itself: the band
+  /// under the notch (and the terminal bell, when on) still marks the session.
   public static func shows(
-    hideWhileTerminalInFront: Bool, termProgram: String?, terminalBundleID: String?,
-    frontmostBundleID: String?
+    kind: String, hideWhileTerminalInFront: Bool, questionMode: QuestionMode,
+    termProgram: String?, terminalBundleID: String?, frontmostBundleID: String?
   ) -> Bool {
-    guard hideWhileTerminalInFront else { return true }
+    let hidden =
+      kind == "question"
+      ? questionMode == .terminalOnly : hideWhileTerminalInFront && kinds.contains(kind)
+    guard hidden else { return true }
     return !AskingPeek.terminalInFront(
       termProgram: termProgram, terminalBundleID: terminalBundleID,
       frontmostBundleID: frontmostBundleID)
+  }
+
+  /// The attention kind of an island on screen, to check with `shows` when an app comes to the
+  /// front: nil for one that never hides (a finished run, a module note, a question waiting
+  /// for its answer in the notch). An attention peek that is not a terminal-only question
+  /// takes its session's status kind (`statusKind`), "plan" or "waiting".
+  public static func kind(of peek: PeekItem, statusKind: String?, heldInNotch: Bool) -> String? {
+    switch peek.kind {
+    case .permission: return "permission"
+    case .attention:
+      guard !heldInNotch else { return nil }
+      return peek.asking ? "question" : statusKind
+    case .finished, .module: return nil
+    }
   }
 }
 

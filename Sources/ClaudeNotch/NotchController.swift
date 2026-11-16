@@ -27,10 +27,6 @@ final class NotchController {
   private var shortcutPauses = 0
   /// Risky request held with the global allow shortcut (decides when the hold completes).
   private var keyHold: (cardID: String, task: Task<Void, Never>)?
-  /// Permission requests (card ids) and terminal-only questions (session ids) whose island was
-  /// held back because their terminal was in front; see `resurfaceHeld`.
-  private var heldCards: Set<String> = []
-  private var heldAsking: Set<String> = []
   private var nextPeekTask: Task<Void, Never>?
   private var shortcutOpenTask: Task<Void, Never>?
   private var holdHintTask: Task<Void, Never>?
@@ -136,11 +132,12 @@ final class NotchController {
         forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
       ) { [weak self] note in
         let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-        let ghostty = app?.bundleIdentifier == Terminals.ghosttyBundleID
+        let bundleID = app?.bundleIdentifier
+        let ghostty = bundleID == Terminals.ghosttyBundleID
         Task { @MainActor in
           self?.updateActiveScreen()
           if ghostty { self?.refreshConsent() }
-          self?.resurfaceHeld()
+          self?.dropIslandBehindTerminal(front: bundleID)
         }
       })
     updateScreenTimer()
@@ -1171,8 +1168,11 @@ final class NotchController {
       try? await Task.sleep(for: .seconds(Self.nextPeekDelay))
       guard !Task.isCancelled, let self else { return }
       self.nextPeekTask = nil
+      // A request whose terminal is in front (and the option on) stays in the panel.
       guard self.expandedID == nil, self.planner.current?.kind != .permission,
-        let next = self.store.pending.first
+        let next = self.store.pending.first(where: {
+          self.islandShows("permission", for: $0.sessionID)
+        })
       else { return }
       self.showPeek(next)
     }
@@ -1181,7 +1181,6 @@ final class NotchController {
   /// Shows the permission peek for `card` again; its buttons and the shortcuts wait the new
   /// card delay (the request under the user just changed).
   private func showPeek(_ card: PendingPermission) {
-    heldCards.remove(card.id)
     planner.show(cardID: card.id, sessionID: card.sessionID, at: Date())
     ui.pagerArmedAt = max(ui.pagerArmedAt, Date().addingTimeInterval(SessionStore.armDelayNew))
     refresh()
@@ -1370,48 +1369,26 @@ final class NotchController {
     if let e = SoundEvent(attention: kind), settings.soundEnabled(e) {
       settings.play(settings.soundName(e))
     }
-    guard expandedID == nil else { return }
-    if kind == "question", !askingPeekShows(for: sessionID) {
-      heldAsking.insert(sessionID)
-      return
-    }
+    guard expandedID == nil, islandShows(kind, for: sessionID) else { return }
     let cardID = kind == "permission"
       ? store.pending.last(where: { $0.sessionID == sessionID })?.id : nil
-    if kind == "permission", !permissionPeekShows(for: sessionID) {
-      if let cardID { heldCards.insert(cardID) }
-      // Claude Code's own notification about this prompt can arrive just before the request
-      // and drop a "waiting" island for the session: it goes too.
-      if let cur = planner.current, cur.kind == .attention, !cur.asking,
-        cur.sessionIDs.first == sessionID, store.question(for: sessionID) == nil
-      {
-        planner.clear()
-        refresh()
-      }
-      return
-    }
     if planner.receive(attention: kind, sessionID: sessionID, cardID: cardID, at: Date()) {
       refresh()
     }
   }
 
-  /// Terminal-only question mode: no "Claude is asking you" peek while the session's terminal
-  /// app is the front app (see `AskingPeek`).
-  private func askingPeekShows(for sessionID: String) -> Bool {
+  /// Whether the island of attention `kind` for `sessionID` may be on screen while `front` (by
+  /// default the current front app) is in front: hidden while the session's terminal is (see
+  /// `TerminalIslands`).
+  private func islandShows(
+    _ kind: String, for sessionID: String,
+    front: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+  ) -> Bool {
     let term = store.sessions[sessionID]?.termProgram
-    return AskingPeek.shows(
+    return TerminalIslands.shows(
+      kind: kind, hideWhileTerminalInFront: settings.hideIslandsWhileTerminalInFront,
       questionMode: settings.questionMode, termProgram: term,
-      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] },
-      frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-  }
-
-  /// Optional: a permission request that arrives while its terminal is in front drops no
-  /// island (see `PermissionPeek`); it still waits in the panel.
-  private func permissionPeekShows(for sessionID: String) -> Bool {
-    let term = store.sessions[sessionID]?.termProgram
-    return PermissionPeek.shows(
-      hideWhileTerminalInFront: settings.hidePermissionsWhileTerminalInFront, termProgram: term,
-      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] },
-      frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] }, frontmostBundleID: front)
   }
 
   /// Optional: a Claude Code notification rings the session's terminal bell (see
@@ -1426,26 +1403,18 @@ final class NotchController {
     TerminalBell.ring(tty: tty)
   }
 
-  /// Islands held back because their terminal was in front (`PermissionPeek`, `AskingPeek`)
-  /// drop down once another app comes to the front, if they still wait: the oldest held
-  /// permission request first, else a held question. Answered ones are forgotten here.
-  private func resurfaceHeld() {
-    guard !heldCards.isEmpty || !heldAsking.isEmpty else { return }
-    heldCards = heldCards.filter { store.card(id: $0) != nil }
-    heldAsking = heldAsking.filter {
-      settings.questionMode == .terminalOnly && store.sessions[$0]?.status.kind == "question"
-    }
-    guard expandedID == nil, planner.current?.kind != .permission else { return }
-    if let card = store.pending.first(where: {
-      heldCards.contains($0.id) && permissionPeekShows(for: $0.sessionID)
-    }) {
-      showPeek(card)
-      return
-    }
-    if let sessionID = heldAsking.first(where: { askingPeekShows(for: $0) }) {
-      heldAsking.remove(sessionID)
-      if planner.receive(attention: "question", sessionID: sessionID, at: Date()) { refresh() }
-    }
+  /// An app came to the front: the Claude island on screen goes if its session's terminal is
+  /// that app (see `TerminalIslands`), so switching to the terminal clears what it already
+  /// shows. A permission request still waits in the panel; nothing drops down again by itself.
+  private func dropIslandBehindTerminal(front: String?) {
+    guard let peek = planner.current, let sid = peek.sessionIDs.first,
+      let kind = TerminalIslands.kind(
+        of: peek, statusKind: store.sessions[sid]?.status.kind,
+        heldInNotch: store.question(for: sid) != nil),
+      !islandShows(kind, for: sid, front: front)
+    else { return }
+    planner.clear()
+    refresh()
   }
 
   private func trackStore() {

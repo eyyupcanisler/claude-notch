@@ -277,13 +277,13 @@ struct SettingsView: View {
           Toggle("Answer Claude's questions in the notch", isOn: $settings.answerQuestionsInNotch)
           Text(settings.answerQuestionsInNotch
             ? "Claude waits while a question is in the island: pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
-            : "The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab.")
+            : "The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab. While that terminal is in front, no island drops down, and one already up goes away when you switch to it.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle(
-            "Hide permission requests while their terminal is in front",
-            isOn: $settings.hidePermissionsWhileTerminalInFront)
-          Text("When the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app as a request arrives, no island drops down, whichever of its tabs you are in: answer it in the terminal. It still waits in the panel, and its island drops down once you switch to another app.")
+            "Hide islands while their terminal is in front",
+            isOn: $settings.hideIslandsWhileTerminalInFront)
+          Text("While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices drop no island, whichever of its tabs you are in: answer them in the terminal. An island already up goes away when you switch to that terminal. Requests still wait in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)

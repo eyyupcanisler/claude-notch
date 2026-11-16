@@ -279,12 +279,13 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   bekletilmez: terminal hemen sorar, çentik yalnızca "Claude size bir soru soruyor" adasıyla
   haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür. Soru geldiğinde o
   terminal uygulaması (Ghostty, Terminal, iTerm2…; VS Code gibi bir düzenleyici değil) öndeyse
-  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür. Başka bir
-  uygulamaya geçtiğinizde soru hâlâ bekliyorsa ada açılır.
-- Ayarlar > Bildirimler > **Terminali öndeyken izin isteklerini gizle** (varsayılan: kapalı)
-  açıksa izin isteği geldiğinde o oturumun terminal uygulaması (aynı liste; düzenleyici değil)
-  öndeyse, hangi sekmesinde olursanız olun ada açılmaz: istek terminalde yanıtlanır, panelde de
-  bekler. Başka bir uygulamaya geçtiğinizde istek hâlâ bekliyorsa adası açılır.
+  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür. Açık bir ada, o
+  terminale geçtiğinizde kapanır.
+- Ayarlar > Bildirimler > **Terminali öndeyken adaları gizle** (varsayılan: kapalı) açıksa, o
+  oturumun terminal uygulaması (aynı liste; düzenleyici değil) öndeyken, hangi sekmesinde
+  olursanız olun izin istekleri, plan onayları ve "girdi bekliyor" bildirimleri için ada
+  açılmaz: terminalde yanıtlanır. Açık bir ada, o terminale geçtiğinizde kapanır. İstekler
+  panelde bekler; gizlenen ada sonradan kendiliğinden açılmaz.
 - Ayarlar > Bildirimler > **Claude Code bildirim gönderince terminal zilini çal** (varsayılan:
   kapalı): Claude Code'un her `Notification` olayında (izin, soru, girdi bekleme; giriş onayı
   hariç) uygulama o oturumun tty'sine bir zil karakteri (BEL) yazar. Ghostty sekmeye bakılana

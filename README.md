@@ -38,11 +38,12 @@ terminal, and keep a few handy tools one glance away.
 - **Permission requests in the notch.** An island drops down with the command; allow or deny
   with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
-  Optional: Settings → *Bildirimler → Terminali öndeyken izin isteklerini gizle* (Notifications
-  → Hide permission requests while their terminal is in front; default off) keeps the island
-  hidden when the session's terminal app is the front app as the request arrives, whichever of
-  its tabs you are in: answer it in the terminal. It still waits in the panel, and its island
-  drops down once you switch to another app.
+  Optional: Settings → *Bildirimler → Terminali öndeyken adaları gizle* (Notifications → Hide
+  islands while their terminal is in front; default off): while the session's terminal app is
+  the front app, whichever of its tabs you are in, its permission requests, plan approvals and
+  "waiting for input" notices drop no island: answer them in the terminal. An island already up
+  goes away when you switch to that terminal. Requests still wait in the panel, and nothing
+  drops down later by itself.
 - **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
   or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
   Prefer the terminal? Turn off Settings → *Bildirimler → Claude’un sorularını çentikte
@@ -51,8 +52,8 @@ terminal, and keep a few handy tools one glance away.
   color, an island drops down with "Claude is asking you" and the question text, and a click on
   it jumps to that session's terminal tab. If that terminal app (Ghostty, Terminal, iTerm2…; not
   an editor such as VS Code) is the front app when the question arrives, the island stays
-  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab. It drops down
-  once you switch to another app while the question still waits.
+  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab. An island
+  already up goes away when you switch to that terminal.
 - **Jump to what needs you.** **⌃⌥J** brings forward the terminal tab of the session that needs
   you most: a permission request first, then a question, plan approval or input wait, then an
   unseen error, then an unseen finished run.

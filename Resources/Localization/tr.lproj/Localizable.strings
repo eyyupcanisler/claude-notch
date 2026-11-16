@@ -356,7 +356,7 @@
 "The setup files were not found inside the app." = "Uygulamanın içinde kurulum dosyaları bulunamadı.";
 "The shortcut could not be registered (error %@); the previous one stays." = "Kısayol kaydedilemedi (hata %@); önceki kısayol korunuyor.";
 "The shortcut could not be registered; choose another one." = "Kısayol kaydedilemedi; başka bir kısayol seçin.";
-"The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab." = "Soruyu terminal hemen sorar; ada yalnızca Claude’un soru sorduğunu söyler ve seni o sekmeye götürür.";
+"The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab. While that terminal is in front, no island drops down, and one already up goes away when you switch to it." = "Soruyu terminal hemen sorar; ada yalnızca Claude’un soru sorduğunu söyler ve sizi o sekmeye götürür. O terminal öndeyken ada açılmaz; açık bir ada da o terminale geçtiğinizde kapanır.";
 "The user denied this request through ClaudeNotch." = "Kullanıcı bu isteği ClaudeNotch üzerinden reddetti.";
 "Thinking…" = "Düşünüyor…";
 "This is not a Google “Desktop app” client file." = "Bu bir Google “Masaüstü uygulaması” istemci dosyası değil.";
@@ -403,8 +403,8 @@
 "When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, %@ / %@ first bring the request back; the second press decides." = "Süre dolunca istek çentiğin altındaki sarı çizgide bekler (hook zaman aşımı ~10 dk). Üzerine gelmek açık tutar. Kapanmışken %@ / %@ önce isteği geri getirir; karar ikinci basışta verilir.";
 "While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close" = "Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · ↑/↓ oturumlar · ⏎ terminale git · Esc kapat";
 "Working" = "Çalışıyor";
-"Hide permission requests while their terminal is in front" = "Terminali öndeyken izin isteklerini gizle";
-"When the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app as a request arrives, no island drops down, whichever of its tabs you are in: answer it in the terminal. It still waits in the panel, and its island drops down once you switch to another app." = "İstek geldiğinde oturumun terminal uygulaması (Ghostty, Terminal, iTerm2…; düzenleyici değil) öndeyse, hangi sekmesinde olursanız olun ada açılmaz: terminalde yanıtlayın. İstek panelde bekler; başka bir uygulamaya geçtiğinizde adası açılır.";
+"Hide islands while their terminal is in front" = "Terminali öndeyken adaları gizle";
+"While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices drop no island, whichever of its tabs you are in: answer them in the terminal. An island already up goes away when you switch to that terminal. Requests still wait in the panel." = "Oturumun terminal uygulaması (Ghostty, Terminal, iTerm2…; düzenleyici değil) öndeyken, hangi sekmesinde olursanız olun izin istekleri, plan onayları ve bekleme bildirimleri için ada açılmaz: terminalde yanıtlayın. Açık bir ada, o terminale geçtiğinizde kapanır. İstekler panelde bekler.";
 "Ring the terminal bell when Claude Code notifies" = "Claude Code bildirim gönderince terminal zilini çal";
 "Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring." = "Claude Code’un bildirimleri (izin, soru, girdi bekleme) o oturumun terminal zilini çalar: Ghostty sekmeye bakılana kadar sekmede 🔔 gösterir. Sessiz modda yalnızca yanıt bekleyenler çalar.";
 "Warn when the weekly limit reaches 80%, then 95%" = "Haftalık limit %80’e, sonra %95’e gelince uyar";
