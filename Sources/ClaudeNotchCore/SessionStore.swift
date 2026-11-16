@@ -312,12 +312,14 @@ public final class SessionStore {
     case "SessionStart":
       flushPending(e.sessionID)
       session.agents = [:]
+      session.waitsForBackground = false
       session.activity = nil
       session.turnToolCount = 0
       session.rhythm = nil
       setStatus(&session, .idle, at: t)
     case "UserPromptSubmit":
       flushPending(e.sessionID)
+      session.waitsForBackground = false
       session.turnStartedAt = t
       session.turnToolCount = 0
       session.rhythm = ActivityRhythm(start: t)
@@ -345,17 +347,30 @@ public final class SessionStore {
     case "Stop":
       flushPending(e.sessionID, agentID: e.agentID)
       session.agents = [:]
+      let continuing = BackgroundWork.continuing(e.backgroundTasks)
+      session.waitsForBackground = !continuing.isEmpty
+      if session.waitsForBackground {
+        // A workflow or background agent still runs and wakes the session when it is back:
+        // not done yet (no island, chime or green); the Stop after it is the real end.
+        session.activity = nil
+        setStatus(&session, .working(tool: BackgroundWork.summary(continuing)), at: t)
+        break
+      }
       setStatus(&session, .done(Self.clean(e.lastAssistantMessage, fallback: loc("Completed"))), at: t)
       session.unseen = true
       announce(e.sessionID, "done", sound: "Glass")
     case "StopFailure":
       flushPending(e.sessionID, agentID: e.agentID)
+      session.waitsForBackground = false
       session.agents = [:]
       let text = e.errorText ?? e.lastAssistantMessage
       setStatus(&session, .error(Self.clean(text, fallback: loc("An error occurred"))), at: t)
       session.unseen = true
       announce(e.sessionID, "error", sound: "Basso")
     case "Notification":
+      // Claude Code's "waiting for your input" while a workflow it started still runs: the
+      // session is not waiting for the user, so no status change, card flush or bell.
+      if e.notificationType == "idle_prompt", session.waitsForBackground { break }
       handleNotification(e, session: &session, at: t)
       if TerminalBell.rings(notificationType: e.notificationType) {
         emit(.bell(sessionID: e.sessionID, notificationType: e.notificationType))
@@ -724,7 +739,8 @@ public final class SessionStore {
         continue
       }
       var u = s
-      if s.status.isWorking, !hasPending(for: id),
+      // A session waiting for its workflow may hear nothing for long: not stuck.
+      if s.status.isWorking, !s.waitsForBackground, !hasPending(for: id),
         t.timeIntervalSince(s.lastUpdate) >= Self.quietAfter
       {
         setStatus(&u, .quiet, at: t)

@@ -35,6 +35,11 @@ terminal, and keep a few handy tools one glance away.
   `#388BFD` = done, a broken pink-red `#FB7185` bar (three short dashes) = error, faint white =
   idle; the shapes tell the states apart even in grayscale. With Reduce Motion on, the shine and
   the fade stop, so working, needs you and done are told apart by color and brightness only.
+- **"Done" means done.** When the chat's turn ends while a workflow or background agent it
+  started still runs (Claude Code lists it in the `Stop` hook), the session stays "working",
+  shown as "In the background: …", with no done island or chime, no "quiet for 10 min" note
+  and no "waiting for your input". The done comes when that work is back and the turn really
+  ends. A background shell or monitor (a dev server, a log watch) does not hold it.
 - **Permission requests in the notch.** An island drops down with the command; allow or deny
   with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.

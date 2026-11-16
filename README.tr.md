@@ -293,6 +293,11 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   ayarlanmadıysa ses de çıkarır). Sessiz modda yalnızca yanıt bekleyen bildirimler çalar. Uygulama kapalıyken
   zil çalmaz. Claude Code'un kendisi de zil çalacak şekilde ayarlıysa (`preferredNotifChannel`:
   `terminal_bell`) her bildirim iki kez çalar.
+- Sohbetin turu, başlattığı bir workflow ya da arka plan ajanı hâlâ çalışırken biterse
+  (Claude Code bunu `Stop` kancasında listeler) oturum "çalışıyor" kalır ve "Arka planda: …"
+  yazar: bitti adası ya da sesi, "10 dk’dır sessiz" notu ve "girdinizi bekliyor" gelmez. Bitti,
+  o iş dönüp tur gerçekten bitince gelir. Arka planda çalışan bir kabuk komutu ya da izleyici
+  (geliştirme sunucusu, log takibi) bunu bekletmez.
 - `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
 - İzni terminalde **reddederseniz** `PostToolUse` gelmez; kart, aynı oturumdaki (ve aynı
   alt ajandaki) farklı bir `PreToolUse` (1,5 sn'den sonra), `UserPromptSubmit`, `Stop`,

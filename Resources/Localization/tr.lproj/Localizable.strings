@@ -411,3 +411,5 @@
 "Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring." = "Claude Code’un bildirimleri (izin, soru, girdi bekleme) o oturumun terminal zilini çalar: Ghostty sekmeye bakılana kadar sekmede 🔔 gösterir. Sessiz modda yalnızca yanıt bekleyenler çalar.";
 "Warn when the weekly limit reaches 80%, then 95%" = "Haftalık limit %80’e, sonra %95’e gelince uyar";
 "Newer Claude Code passes only the weekly limit to the status line; this makes it warn then. Off: only the 5-hour limit warns, so you get no warnings. When the 5-hour limit is passed too, it alone warns." = "Yeni Claude Code durum satırına yalnızca haftalık limiti verir; bu ayar o durumda da uyarır. Kapalıyken yalnızca 5 saatlik limit uyarır, yani uyarı gelmez. 5 saatlik limit de geliyorsa yalnızca o uyarır.";
+"In the background: %@" = "Arka planda: %@";
+"In the background: %lld tasks" = "Arka planda: %lld görev";

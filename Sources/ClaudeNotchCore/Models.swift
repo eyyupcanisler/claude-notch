@@ -121,6 +121,10 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var turnToolCount: Int
   /// When those calls happened (the row's rhythm strip); nil before the first turn.
   public var rhythm: ActivityRhythm?
+  /// The turn ended while a workflow or background agent it started still runs: the session
+  /// keeps working until that work wakes it (see `BackgroundWork`). Cleared by the next Stop,
+  /// prompt or session start.
+  public var waitsForBackground = false
 
   public init(
     id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,

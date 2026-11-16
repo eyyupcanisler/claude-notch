@@ -19,13 +19,15 @@ public struct HookEvent: Sendable, Equatable {
   public var agentType: String?
   /// SessionStart `source`: "startup", "resume", "clear", "compact" (nil when absent).
   public var source: String?
+  /// Stop `background_tasks`: work still in flight as the turn ends (see `BackgroundWork`).
+  public var backgroundTasks: [BackgroundTask]
 
   public init(
     name: String, sessionID: String, cwd: String = "", toolName: String? = nil,
     toolInput: JSONValue? = nil, message: String? = nil, title: String? = nil,
     notificationType: String? = nil, lastAssistantMessage: String? = nil,
     errorText: String? = nil, suggestions: [JSONValue] = [], agentID: String? = nil,
-    agentType: String? = nil, source: String? = nil
+    agentType: String? = nil, source: String? = nil, backgroundTasks: [BackgroundTask] = []
   ) {
     self.name = name
     self.sessionID = sessionID
@@ -41,6 +43,7 @@ public struct HookEvent: Sendable, Equatable {
     self.agentID = agentID
     self.agentType = agentType
     self.source = source
+    self.backgroundTasks = backgroundTasks
   }
 
   public static func parse(_ data: Data) -> HookEvent? {
@@ -60,7 +63,8 @@ public struct HookEvent: Sendable, Equatable {
       suggestions: root["permission_suggestions"]?.arrayValue ?? [],
       agentID: root["agent_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
       agentType: root["agent_type"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
-      source: root["source"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+      source: root["source"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
+      backgroundTasks: BackgroundTask.list(root["background_tasks"])
     )
   }
 

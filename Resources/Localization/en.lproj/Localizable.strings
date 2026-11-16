@@ -411,3 +411,5 @@
 "Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring." = "Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring.";
 "Warn when the weekly limit reaches 80%, then 95%" = "Warn when the weekly limit reaches 80%, then 95%";
 "Newer Claude Code passes only the weekly limit to the status line; this makes it warn then. Off: only the 5-hour limit warns, so you get no warnings. When the 5-hour limit is passed too, it alone warns." = "Newer Claude Code passes only the weekly limit to the status line; this makes it warn then. Off: only the 5-hour limit warns, so you get no warnings. When the 5-hour limit is passed too, it alone warns.";
+"In the background: %@" = "In the background: %@";
+"In the background: %lld tasks" = "In the background: %lld tasks";
