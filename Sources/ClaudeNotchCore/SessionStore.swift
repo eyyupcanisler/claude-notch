@@ -66,6 +66,12 @@ public final class SessionStore {
   public private(set) var tabOrder: [String: Int] = [:]
   @ObservationIgnored public private(set) var lastRemovalAt = Date.distantPast
   @ObservationIgnored private var recentPre: [String: [(key: String, at: Date)]] = [:]
+  /// The tool a session is asking with (AskUserQuestion / ExitPlanMode), by session id. Hook
+  /// events arrive async and can be out of order, so while it asks, only that tool's own end
+  /// (or a new prompt, the end of the turn) may clear the asking state; a late event of
+  /// another tool must not turn its "needs you" segment back to working. Matched by tool name,
+  /// not by the call's input: the answers can be added to the input before PostToolUse.
+  @ObservationIgnored private var askingCall: [String: String] = [:]
   /// Exit watches of the sessions' claude processes (session id -> pid + watch).
   @ObservationIgnored private var exitWatches: [String: (pid: Int32, watch: ExitWatch)] = [:]
   /// pids whose session just ended (SessionEnd), with the time: not re-discovered for a moment.
@@ -336,11 +342,15 @@ public final class SessionStore {
       }
       if let status = interactiveStatus(e) {
         setStatus(&session, status, at: t)
+        askingCall[e.sessionID] = e.toolName
+      } else if keepsAsking(session, despite: e) {
+        break
       } else if !(e.agentID != nil && session.status.isBlocking) {
         setStatus(&session, .working(tool: e.toolName), at: t)
       }
     case "PostToolUse", "PostToolUseFailure":
       resolveMatching(e)
+      if keepsAsking(session, despite: e) { break }
       if !(e.agentID != nil && session.status.isBlocking) {
         setStatus(&session, .working(tool: nil), at: t)
       }
@@ -380,6 +390,7 @@ public final class SessionStore {
       let status = interactiveStatus(e)
         ?? .waitingInput(loc("Waiting for input: \(e.toolName ?? loc("tool"))"))
       setStatus(&session, status, at: t)
+      if interactiveStatus(e) != nil { askingCall[e.sessionID] = e.toolName }
     case "SubagentStart":
       break
     case "SubagentStop":
@@ -478,7 +489,17 @@ public final class SessionStore {
     }
   }
 
+  /// The session is asking (question / plan approval) with a known tool, and `e` belongs to
+  /// another tool: a late, out-of-order event that must not end the asking state.
+  private func keepsAsking(_ s: Session, despite e: HookEvent) -> Bool {
+    guard s.status.kind == "question" || s.status.kind == "plan",
+      let call = askingCall[s.id]
+    else { return false }
+    return e.toolName != call
+  }
+
   private func setStatus(_ s: inout Session, _ status: SessionStatus, at t: Date) {
+    if status.kind != "question" && status.kind != "plan" { askingCall[s.id] = nil }
     if s.status.kind != status.kind { s.statusSince = t }
     s.status = status
     s.unseen = false
@@ -757,6 +778,7 @@ public final class SessionStore {
     flushPending(id)
     sessions.removeValue(forKey: id)
     recentPre.removeValue(forKey: id)
+    askingCall.removeValue(forKey: id)
     exitWatches.removeValue(forKey: id)?.watch.cancel()
   }
 
