@@ -721,3 +721,14 @@ public struct ActivityRhythm: Sendable, Equatable {
     }
   }
 }
+
+/// Click rectangles that hang down from the top of a screen. At the very top pixel row the
+/// pointer's y is exactly the screen's top edge, which a rect ending at the top edge does not
+/// contain (`NSRect.contains` leaves out the max edge): a click there would pass through to the
+/// menu bar. These rects reach 1 pt past the top so that row counts.
+public enum TopEdgeRect {
+  public static func hanging(minX: CGFloat, width: CGFloat, top: CGFloat, depth: CGFloat) -> CGRect
+  {
+    CGRect(x: minX, y: top - depth, width: width, height: depth + 1)
+  }
+}

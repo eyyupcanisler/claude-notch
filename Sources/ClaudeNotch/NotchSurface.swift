@@ -63,26 +63,24 @@ final class NotchSurface {
     switch state.mode {
     case .collapsed:
       let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
-      let notch = NSRect(
-        x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+      let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
       guard ears else { return [notch] }
       // The ears take clicks too (they cover the menu bar there anyway).
       let w = NotchMetrics.earWidth(full: fullEars)
       let h = g.bandHeight
       return [
-        notch, NSRect(x: cx - g.notchWidth / 2 - w, y: top - h, width: w, height: h),
-        NSRect(x: cx + g.notchWidth / 2, y: top - h, width: w, height: h),
+        notch, TopEdgeRect.hanging(minX: cx - g.notchWidth / 2 - w, width: w, top: top, depth: h),
+        TopEdgeRect.hanging(minX: cx + g.notchWidth / 2, width: w, top: top, depth: h),
       ]
     case .peek:
-      let wings = NSRect(x: cx - i.topWidth / 2, y: top - i.height, width: i.topWidth, height: i.height)
+      let wings = TopEdgeRect.hanging(minX: cx - i.topWidth / 2, width: i.topWidth, top: top, depth: i.height)
       // The status line (and timer extension) under the notch still hovers / clicks.
       let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
-      let notch = NSRect(
-        x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+      let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
       return [wings, notch]
     case .expanded:
       let w = i.topWidth + i.shoulder * 2
-      return [NSRect(x: cx - w / 2, y: top - i.height, width: w, height: i.height)]
+      return [TopEdgeRect.hanging(minX: cx - w / 2, width: w, top: top, depth: i.height)]
     }
   }
 

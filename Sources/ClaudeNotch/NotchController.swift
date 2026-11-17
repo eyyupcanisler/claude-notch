@@ -1876,8 +1876,7 @@ final class NotchController {
     let cx = g.screenFrame.midX
     let top = g.screenFrame.maxY
     let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
-    let notch = NSRect(
-      x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+    let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
     switch s.state.mode {
     case .collapsed:
       guard notch.contains(p), s.isLive(hasSessions: live, pill: pill) else { return false }
@@ -1885,8 +1884,7 @@ final class NotchController {
       return true
     case .peek:
       let i = s.island
-      let wings = NSRect(
-        x: cx - i.topWidth / 2, y: top - i.height, width: i.topWidth, height: i.height)
+      let wings = TopEdgeRect.hanging(minX: cx - i.topWidth / 2, width: i.topWidth, top: top, depth: i.height)
       guard wings.contains(p) || notch.contains(p) else { return false }
       wingTap(s.displayID)
       return true
