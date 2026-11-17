@@ -52,9 +52,9 @@ struct NotchTheme: Sendable {
       primaryFill: Color(hex: 0xF5F5F4), primaryText: Color(hex: 0x0B0B0C), grainOpacity: 1)
   }
 
-  /// The original look (orange / amber / green / red).
+  /// The original look (grey / amber / near-white / red).
   static let classic = make(StatusPalette.classic)
-  /// Colorblind-friendly status colors (cyan / yellow / blue / pink-red).
+  /// Colorblind-friendly status colors (grey / yellow / near-white / pink-red).
   static let colorblind = make(StatusPalette.colorblind)
 
   static func scheme(_ scheme: StatusColorScheme) -> NotchTheme {
@@ -111,10 +111,16 @@ enum Motion {
   static let expand = Animation.spring(response: 0.3, dampingFraction: 0.9)
   /// The collapsed notch swelling under the pointer (instant acknowledgement).
   static let prime = Animation.spring(response: 0.18, dampingFraction: 0.72)
-  /// The island dropping out of the notch: a little life, it arrives on its own.
-  static let peek = Animation.spring(response: 0.34, dampingFraction: 0.86)
   /// The island going back into the notch: same response, no undershoot past the notch.
   static let retract = Animation.spring(response: 0.34, dampingFraction: 1)
+  /// The wings growing out of the notch sideways, shrinking to their mark and going back in:
+  /// critically damped (no gesture threw them, so no overshoot past their width), the same
+  /// response as the island, and a spring so a new arrival re-targets from where they are.
+  static let wings = Animation.spring(response: 0.34, dampingFraction: 1)
+  /// Wing text leaving before the wings shrink to their mark (the width waits this long).
+  static let wingShrinkDelay: Double = 0.1
+  /// Wing text / mark arriving: a strong ease-out, short (wings show many times a day).
+  static let wingContentIn = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
   /// Content height changes inside an open shape (a card opens, a row appears).
   static let resize = Animation.spring(response: 0.38, dampingFraction: 1)
   /// Reduce motion: crossfades only.
@@ -138,6 +144,6 @@ enum Motion {
   static func shape(from old: NotchMode, to new: NotchMode) -> Animation {
     if reduce { return crossfade }
     if old == .expanded || new == .expanded { return expand }
-    return new == .peek ? peek : retract
+    return new == .peek || old == .peek ? wings : retract
   }
 }

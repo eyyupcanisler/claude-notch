@@ -119,7 +119,8 @@ enum SoundEvent: String, CaseIterable, Sendable {
   }
 }
 
-/// How long an unanswered permission peek stays under the notch.
+/// How long a panel a global shortcut opened stays open while the pointer never reaches it
+/// (Settings: "Keep the panel open when a shortcut opens it").
 enum PeekDuration: String, CaseIterable, Sendable {
   case short = "8"
   case normal = "15"
@@ -204,13 +205,14 @@ final class NotchSettings {
   }
   var questionMode: QuestionMode { QuestionMode(answerInNotch: answerQuestionsInNotch) }
   /// While a session's terminal is the front app, its permission requests, plan approvals and
-  /// waiting notices drop no island (off by default, the original: see `TerminalIslands`).
+  /// waiting notices show no wing beside the notch (off by default, the original: see
+  /// `TerminalIslands`).
   var hideIslandsWhileTerminalInFront: Bool {
     didSet {
       defaults.set(hideIslandsWhileTerminalInFront, forKey: TerminalIslands.defaultsKey)
     }
   }
-  /// A Focus such as Do Not Disturb is on: the islands that only point to the terminal stay
+  /// A Focus such as Do Not Disturb is on: the wings that only point to the terminal stay
   /// hidden (off by default, the original: see `FocusIslands`). Shortcuts automations switch it
   /// from outside; `reloadFocusActive` reads their value.
   var focusActive: Bool {
@@ -218,6 +220,11 @@ final class NotchSettings {
       guard focusActive != oldValue else { return }
       defaults.set(focusActive, forKey: FocusIslands.defaultsKey)
     }
+  }
+  /// The notch wings show only their small mark, never the 4 s of text first (off by default:
+  /// see `NotchWings`). One stored value behind both Settings switches.
+  var wingsMarkOnly: Bool {
+    didSet { defaults.set(wingsMarkOnly, forKey: NotchWings.defaultsKey) }
   }
   /// Claude Code notifications ring the session's terminal bell (off by default, the
   /// original: see `TerminalBell`).
@@ -341,6 +348,7 @@ final class NotchSettings {
     hideIslandsWhileTerminalInFront =
       TerminalIslands.hides(stored: defaults.object(forKey: TerminalIslands.defaultsKey))
     focusActive = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
+    wingsMarkOnly = NotchWings.markOnly(stored: defaults.object(forKey: NotchWings.defaultsKey))
     terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
     weeklyUsageAlerts =
       WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))

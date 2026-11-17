@@ -26,39 +26,52 @@ terminal, and keep a few handy tools one glance away.
 ## What it does
 
 - **Live status under the notch.** One thin segment per Claude Code session. With the default
-  **Classic** colors: Claude orange with a moving shine while it works, amber with a slow fade
-  when it needs you, green when it finished and you have not looked yet (it flashes once on
-  arrival), red on an error, faint white when idle.
+  **Classic** colors: color means "needs you" and nothing else. Solid grey with a moving shine
+  while it works, amber with a slow fade when it needs you, near-white when it finished and you
+  have not looked yet (it flashes once on arrival), red on an error, faint white when idle.
   Settings → *Genel → Görünüm → Durum renkleri* → **Renk körlüğüne uygun** (General →
-  Appearance → Status colors → Colorblind-friendly) switches at once to colors that stay apart for red-green color blindness, plus shape signs: cyan `#22D3EE`
-  with a moving shine = working, yellow `#F0E442` with a slow fade = needs you, solid blue
-  `#388BFD` = done, a broken pink-red `#FB7185` bar (three short dashes) = error, faint white =
-  idle; the shapes tell the states apart even in grayscale. With Reduce Motion on, the shine and
+  Appearance → Status colors → Colorblind-friendly) switches at once to colors that stay apart for red-green color blindness, plus shape signs:
+  grey `#8E8E8E` with a moving shine = working, yellow `#F0E442` with a slow fade = needs you,
+  near-white `#E8E8E8` = done, a broken pink-red `#FB7185` bar (three short dashes) = error,
+  faint white = idle; only needs-you and error are colored in both palettes, and the shapes
+  tell the states apart even in grayscale. With Reduce Motion on, the shine and
   the fade stop, so working, needs you and done are told apart by color and brightness only.
 - **"Done" means done.** When the chat's turn ends while a workflow or background agent it
   started still runs (Claude Code lists it in the `Stop` hook), the session stays "working",
-  shown as "In the background: …", with no done island or chime, no "quiet for 10 min" note
+  shown as "In the background: …", with no done wing or chime, no "quiet for 10 min" note
   and no "waiting for your input". The done comes when that work is back and the turn really
   ends. A background shell or monitor (a dev server, a log watch) does not hold it.
-- **Permission requests in the notch.** An island drops down with the command; allow or deny
-  with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
+- **Nothing drops down.** Permission requests, questions, plan approvals, finished runs, errors
+  and module notes never expand below the menu-bar band, so what is under it (browser tabs)
+  stays clickable. The notch grows sideways instead, at the same height ("wings"): for 4 s the
+  left wing says who and what ("claude-notch wants to run") and the right wing the detail (the
+  command, the question's first words), then both shrink to a small colored mark (a dot and a
+  shield, ?, ! or check; a count when several are waiting). Permission and question marks stay
+  until answered, an error mark until seen; done and module notes leave no mark. Settings →
+  *Bildirimler → Çentiğin yanında yalnızca küçük bir işaret göster* (Notifications → Show only a
+  small mark beside the notch; also under General → Appearance; default off) skips the 4 s of
+  text. Clicking the wings opens the panel (a terminal-only question jumps to its terminal);
+  hovering the notch opens the panel as before.
+- **Permission requests in the notch.** The wings show the command; allow or deny
+  with **⌃⌥Y / ⌃⌥N** from any app, or click the wings to open the panel. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
-  Optional: Settings → *Bildirimler → Terminali öndeyken adaları gizle* (Notifications → Hide
-  islands while their terminal is in front; default off): while the session's terminal app is
+  Optional: Settings → *Bildirimler → Terminali öndeyken kanatları gizle* (Notifications → Hide
+  wings while their terminal is in front; default off): while the session's terminal app is
   the front app, whichever of its tabs you are in, its permission requests, plan approvals and
-  "waiting for input" notices drop no island: answer them in the terminal. An island already up
-  goes away when you switch to that terminal. Requests still wait in the panel, and nothing
-  drops down later by itself.
+  "waiting for input" notices show no wing: answer them in the terminal. A wing already showing
+  goes away when you switch to that terminal. Requests still wait in the panel; one you leave
+  unanswered comes back as a small mark once that terminal is no longer in front (never as the
+  4 s text).
 - **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
   or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
   Prefer the terminal? Turn off Settings → *Bildirimler → Claude’un sorularını çentikte
   yanıtla* (Notifications → Answer Claude's questions in the notch): the terminal then asks at
   once, and the notch only tells you. The session's segment fades slowly in the "needs you"
-  color, an island drops down with "Claude is asking you" and the question text, and a click on
-  it jumps to that session's terminal tab. If that terminal app (Ghostty, Terminal, iTerm2…; not
-  an editor such as VS Code) is the front app when the question arrives, the island stays
-  hidden: you are looking at the question, and **⌃⌥J** still jumps to the tab. An island
-  already up goes away when you switch to that terminal.
+  color, the wings say "<project> asks:" with the question's first words, and a click on them
+  jumps to that session's terminal tab. If that terminal app (Ghostty, Terminal, iTerm2…; not an
+  editor such as VS Code) is the front app when the question arrives, no wing shows: you are
+  looking at the question, and **⌃⌥J** still jumps to the tab. A wing already showing goes away
+  when you switch to that terminal; leave it unanswered and its small mark comes back.
 - **Jump to what needs you.** **⌃⌥J** brings forward the terminal tab of the session that needs
   you most: a permission request first, then a question, plan approval or input wait, then an
   unseen error, then an unseen finished run.
@@ -165,10 +178,12 @@ into ⌃⌥⇧⌘: Raycast (Settings → Advanced → Hyper Key), Hyperkey or Ka
 
 ## Do Not Disturb (optional)
 
-Settings → *Bildirimler → Odak açık: yalnızca terminali gösteren adaları gizle* (Notifications →
-Focus is on: hide islands that only point to the terminal; default off) hides the "Claude is
-asking you" (terminal-only questions), plan approval and "waiting for input" islands from every
-app. Permission requests, questions answered in the notch and finished runs still show. macOS
+Settings → *Bildirimler → Odak açık: yalnızca terminali gösteren kanatları gizle* (Notifications →
+Focus is on: hide wings that only point to the terminal; default off) hides the wings of
+terminal-only questions ("<project> asks:"), plan approvals and "waiting for input" notices from
+every app. Permission requests, questions answered in the notch and finished runs still show (with a
+Focus on, only a permission request keeps a mark beside the notch; the status line still shows
+the rest). macOS
 does not tell apps when a Focus starts, so on macOS 26 two Shortcuts automations can switch it
 for you:
 

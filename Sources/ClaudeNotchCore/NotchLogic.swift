@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 // Pure UI policy (no AppKit) so it can be unit tested: risky commands, text shortening, the
-// peek planner, hover intent and the display order of the session list.
+// peek rules (the wings' items), hover intent and the display order of the session list.
 
 // MARK: - Risky commands
 
@@ -295,25 +295,16 @@ extension ToolSummary {
 // MARK: - Peek planner
 
 public enum PeekKind: String, Sendable {
-  /// A new permission card (the user's setting, default 15 s; hover keeps it).
+  /// A new permission card.
   case permission
-  /// Question / plan approval / waiting for input (4 s; in terminal-only question mode a
-  /// question stays like a permission).
+  /// Question / plan approval / waiting for input (`asking` for a question Claude asks in the
+  /// terminal).
   case attention
-  /// Done / error, coalesced (2.5 s).
+  /// Done / error, coalesced (`PeekPlanner.coalesceWindow`).
   case finished
-  /// A module note (meeting soon, timer done, charging): the lowest priority, never over a
-  /// Claude peek, and any Claude peek replaces it at once.
+  /// A module note (meeting soon, timer done, charging): never over a Claude item in the
+  /// wings, and any Claude arrival replaces it at once.
   case module
-
-  var priority: Int {
-    switch self {
-    case .permission: return 3
-    case .attention: return 2
-    case .finished: return 1
-    case .module: return 0
-    }
-  }
 }
 
 /// What a module peek shows: a dot-matrix value with a unit, a title and a subtitle.
@@ -369,35 +360,17 @@ public struct PeekItem: Sendable, Equatable {
   public var until: Date
   /// Payload of a module peek.
   public var module: ModuleNote? = nil
-  /// Terminal-only question mode: an attention peek for a question Claude asks in the
-  /// terminal. It stays as long as a permission peek, and goes once that session stops asking.
+  /// Terminal-only question mode: an attention item for a question Claude asks in the
+  /// terminal. A click on the wings goes to that terminal; the item goes once that session
+  /// stops asking.
   public var asking: Bool = false
 }
 
-/// Decides what the peek shows. Pure state machine driven by the store's attention effects.
-public struct PeekPlanner: Sendable {
+/// Shared rules of the notch's Claude items, used by `WingPlanner` (the state machine of the
+/// wings beside the notch) and the wings' text.
+public enum PeekPlanner {
+  /// Done / error arrivals this close together merge into one item.
   public static let coalesceWindow: TimeInterval = 1.5
-  public static let finishedDuration: TimeInterval = 2.5
-  public static let attentionDuration: TimeInterval = 4
-  /// Default of a bare `PeekPlanner()`; the app passes the user's setting.
-  public static let permissionDuration: TimeInterval = 6
-  public static let moduleDuration: TimeInterval = 4
-
-  public private(set) var current: PeekItem?
-  /// A module note that arrived while a Claude peek was up: shown once that one is gone.
-  public private(set) var pendingModule: ModuleNote?
-  /// How long an unanswered permission peek (and, in terminal-only question mode, a question
-  /// peek) stays; nil keeps it until the card is answered (the question is answered or the
-  /// turn moves on).
-  public var permissionHold: TimeInterval?
-  /// The user's question setting. `.answerInNotch` (the original) keeps the 4 s attention peek
-  /// for a question event (a held question is kept up by the app itself); `.terminalOnly`
-  /// makes it an `asking` peek.
-  public var questionMode: QuestionMode = .fallback
-
-  public init(permissionHold: TimeInterval? = PeekPlanner.permissionDuration) {
-    self.permissionHold = permissionHold
-  }
 
   public static func kind(for attention: String) -> PeekKind {
     switch attention {
@@ -405,119 +378,6 @@ public struct PeekPlanner: Sendable {
     case "done", "error": return .finished
     default: return .attention
     }
-  }
-
-  /// Seconds the peek stays; nil means until it is answered (no expiry).
-  func duration(_ kind: PeekKind) -> TimeInterval? {
-    switch kind {
-    case .permission: return permissionHold
-    case .attention: return Self.attentionDuration
-    case .finished: return Self.finishedDuration
-    case .module: return Self.moduleDuration
-    }
-  }
-
-  /// Feeds a module note. Shown at once unless a Claude peek is up; then it waits (one slot,
-  /// the newest wins) and shows when that peek is gone. Returns true when the peek changed.
-  @discardableResult
-  public mutating func receive(module note: ModuleNote, at t: Date) -> Bool {
-    if let cur = current, cur.until > t, cur.kind != .module {
-      pendingModule = note
-      return false
-    }
-    if current?.module?.id == note.id { return false }
-    present(note, at: t)
-    return true
-  }
-
-  private mutating func present(_ note: ModuleNote, at t: Date) {
-    current = PeekItem(
-      kind: .module, sessionIDs: [], errorIDs: [], cardID: nil, startedAt: t,
-      until: t.addingTimeInterval(Self.moduleDuration), module: note)
-  }
-
-  /// Feeds one attention effect. Returns true when the visible peek changed.
-  @discardableResult
-  public mutating func receive(
-    attention: String, sessionID: String, cardID: String? = nil, at t: Date
-  ) -> Bool {
-    let kind = Self.kind(for: attention)
-    if let cur = current, cur.until > t {
-      if cur.kind.priority > kind.priority { return false }
-      if cur.kind == .finished, kind == .finished,
-        t.timeIntervalSince(cur.startedAt) <= Self.coalesceWindow
-      {
-        var merged = cur
-        if !merged.sessionIDs.contains(sessionID) { merged.sessionIDs.append(sessionID) }
-        if attention == "error" { merged.errorIDs.insert(sessionID) }
-        merged.until = t.addingTimeInterval(Self.finishedDuration)
-        current = merged
-        return true
-      }
-    }
-    let asking = attention == "question" && questionMode == .terminalOnly
-    let seconds = asking ? permissionHold : duration(kind)
-    current = PeekItem(
-      kind: kind, sessionIDs: [sessionID],
-      errorIDs: attention == "error" ? [sessionID] : [], cardID: cardID, startedAt: t,
-      until: seconds.map { t.addingTimeInterval($0) } ?? .distantFuture, asking: asking)
-    return true
-  }
-
-  /// Shows the permission peek for `cardID` again (a global shortcut pressed while nothing was
-  /// shown, or the next card after a decision), for the usual permission time.
-  public mutating func show(cardID: String, sessionID: String, at t: Date) {
-    current = PeekItem(
-      kind: .permission, sessionIDs: [sessionID], errorIDs: [], cardID: cardID, startedAt: t,
-      until: permissionHold.map { t.addingTimeInterval($0) } ?? .distantFuture)
-  }
-
-  /// Keeps the peek up at least until `t + seconds` (pointer over it).
-  public mutating func hold(at t: Date, seconds: TimeInterval = 1.5) {
-    guard var cur = current else { return }
-    cur.until = max(cur.until, t.addingTimeInterval(seconds))
-    current = cur
-  }
-
-  /// Drops the peek once its time is over, then shows a waiting module note (if still
-  /// valid). Returns true when the peek changed.
-  @discardableResult
-  public mutating func expire(at t: Date) -> Bool {
-    var changed = false
-    if let cur = current, cur.until <= t {
-      current = nil
-      changed = true
-    }
-    if current == nil, let note = pendingModule {
-      pendingModule = nil
-      if note.validUntil > t {
-        present(note, at: t)
-        changed = true
-      }
-    }
-    return changed
-  }
-
-  /// Hides the peek. A waiting module note stays (it shows on the next `expire`).
-  public mutating func clear() {
-    current = nil
-  }
-
-  /// Terminal-only question mode: drops a question peek whose session no longer asks
-  /// (answered, or the turn moved on). Returns true when the peek changed.
-  @discardableResult
-  public mutating func dropAnswered(isAsking: (String) -> Bool) -> Bool {
-    guard let cur = current, cur.asking, let sid = cur.sessionIDs.first, !isAsking(sid) else {
-      return false
-    }
-    current = nil
-    return true
-  }
-
-  /// Panel opened: the user sees everything there, nothing waits.
-  public mutating func clearAll() {
-    current = nil
-    pendingModule = nil
   }
 
   /// "api done", "api failed", "3 sessions done", "2 sessions done · 1 error".
@@ -603,13 +463,13 @@ public struct HoverIntent: Sendable {
 
 /// Color role of one status-line segment (collapsed notch).
 public enum LineState: String, Sendable {
-  /// Running and not blocked on the user: Claude orange (colorblind palette: cyan) with a
+  /// Running and not blocked on the user: a neutral grey with a
   /// moving shine.
   case working
   /// Card pending, question, plan approval or input request: amber (colorblind: yellow), a
   /// slow fade (breathing).
   case needs
-  /// Finished and not seen yet: green (colorblind: blue), a solid steady bar.
+  /// Finished and not seen yet: light grey, near-white (both palettes), a solid steady bar.
   case done
   /// Failed and not seen yet: red, a solid bar (colorblind: pink-red, a broken bar of three
   /// short dashes), static.

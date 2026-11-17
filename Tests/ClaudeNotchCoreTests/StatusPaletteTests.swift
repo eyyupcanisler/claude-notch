@@ -26,25 +26,75 @@ final class StatusPaletteTests: XCTestCase {
     XCTAssertLessThan(StatusPalette.contrast(StatusPalette.colorblind.needs, 0xFFFFFF), 1.5)
   }
 
-  /// The original look, exactly: Claude orange, amber, green, red; error a solid bar.
-  func testClassicPaletteHoldsTheOriginalColors() {
+  /// Color only signals "needs the user": classic keeps its amber and red, working is a
+  /// neutral grey and done a near-white; error stays a solid bar.
+  func testClassicPaletteGreysWorkingAndDoneKeepsNeedsAndError() {
     let c = StatusPalette.classic
-    XCTAssertEqual(c.working, 0xD97757)
+    XCTAssertEqual(c.working, 0x8E8E8E)
     XCTAssertEqual(c.needs, 0xFFB020)
-    XCTAssertEqual(c.done, 0x34C759)
+    XCTAssertEqual(c.done, 0xE8E8E8)
     XCTAssertEqual(c.error, 0xFF453A)
     XCTAssertFalse(c.errorDashed)
     XCTAssertEqual(StatusColorScheme.classic.colors, c)
   }
 
-  func testColorblindPaletteHoldsItsColors() {
+  /// The same rule in the colorblind palette: yellow and pink-red stay, working and done are
+  /// the same greys as in classic; error stays a broken bar.
+  func testColorblindPaletteGreysWorkingAndDoneKeepsNeedsAndError() {
     let c = StatusPalette.colorblind
-    XCTAssertEqual(c.working, 0x22D3EE)
+    XCTAssertEqual(c.working, 0x8E8E8E)
     XCTAssertEqual(c.needs, 0xF0E442)
-    XCTAssertEqual(c.done, 0x388BFD)
+    XCTAssertEqual(c.done, 0xE8E8E8)
     XCTAssertEqual(c.error, 0xFB7185)
     XCTAssertTrue(c.errorDashed)
     XCTAssertEqual(StatusColorScheme.colorblind.colors, c)
+  }
+
+  /// Working and done carry no hue in either palette (a neutral grey, a near-white).
+  func testWorkingAndDoneHaveNoHueInBothPalettes() {
+    for c in [StatusPalette.classic, StatusPalette.colorblind] {
+      XCTAssertLessThanOrEqual(StatusPalette.chroma(c.working), 0.02, String(c.working, radix: 16))
+      XCTAssertLessThanOrEqual(StatusPalette.chroma(c.done), 0.02, String(c.done, radix: 16))
+    }
+  }
+
+  /// Needs and error are the only states with a clear hue (they are what color signals).
+  func testOnlyNeedsAndErrorCarryColor() {
+    for c in [StatusPalette.classic, StatusPalette.colorblind] {
+      XCTAssertGreaterThanOrEqual(StatusPalette.chroma(c.needs), 0.3, String(c.needs, radix: 16))
+      XCTAssertGreaterThanOrEqual(StatusPalette.chroma(c.error), 0.3, String(c.error, radix: 16))
+    }
+  }
+
+  /// On the status line (over the black band) the three neutral states step up clearly:
+  /// idle (white at 0.22) < working grey < done near-white, each step at least 2:1.
+  func testWorkingGreyIsBrighterThanIdleAndDarkerThanDone() {
+    for c in [StatusPalette.classic, StatusPalette.colorblind] {
+      let idle = StatusPalette.lineColor(.idle, in: c)
+      let working = StatusPalette.lineColor(.working, in: c)
+      let done = StatusPalette.lineColor(.done, in: c)
+      XCTAssertLessThan(StatusPalette.luminance(idle), StatusPalette.luminance(working))
+      XCTAssertLessThan(StatusPalette.luminance(working), StatusPalette.luminance(done))
+      XCTAssertGreaterThanOrEqual(StatusPalette.contrast(idle, working), 2, "idle -> working")
+      XCTAssertGreaterThanOrEqual(StatusPalette.contrast(working, done), 2, "working -> done")
+    }
+  }
+
+  /// The done bar is drawn opaque (it used to rest at 0.7): at 0.7 the near-white would sink
+  /// toward the working grey. Working is opaque, idle keeps its faint white.
+  func testDoneSegmentIsDrawnOpaque() {
+    XCTAssertEqual(StatusPalette.lineOpacity(.done), 1)
+    XCTAssertEqual(StatusPalette.lineOpacity(.working), 1)
+    XCTAssertEqual(StatusPalette.lineOpacity(.idle), StatusPalette.idleAlpha)
+    XCTAssertEqual(StatusPalette.idleAlpha, 0.22)
+  }
+
+  func testOnBlackCompositesPerChannel() {
+    XCTAssertEqual(StatusPalette.onBlack(0xFFFFFF, opacity: 0.22), 0x383838)
+    XCTAssertEqual(StatusPalette.onBlack(0x8E8E8E, opacity: 1), 0x8E8E8E)
+    XCTAssertEqual(StatusPalette.onBlack(0xFF0000, opacity: 0), 0x000000)
+    XCTAssertEqual(StatusPalette.chroma(0x777777), 0)
+    XCTAssertEqual(StatusPalette.chroma(0xFF0000), 1, accuracy: 0.0001)
   }
 
   /// Classic draws the error segment as one solid bar (no mask); colorblind cuts it in 3.

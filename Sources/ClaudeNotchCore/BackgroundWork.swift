@@ -28,7 +28,7 @@ public struct BackgroundTask: Sendable, Equatable {
 
 /// A turn that ends while a workflow or a background agent it started still runs is not done:
 /// that work wakes the session when it finishes and the turn goes on. So the session keeps
-/// working (no "done" island, chime or green), and its real end is the Stop after the work is
+/// working (no "done" wing, chime or done bar), and its real end is the Stop after the work is
 /// back. Claude Code lists the work in the Stop hook (`background_tasks`, "lets hooks
 /// distinguish 'session is done' from 'session is paused waiting for background work to wake
 /// it'"). Meanwhile the session gets no "quiet for 10 min" note, and Claude Code's "waiting for

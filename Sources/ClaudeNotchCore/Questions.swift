@@ -108,9 +108,9 @@ public enum QuestionMode: Sendable, Equatable {
   public var answersInNotch: Bool { self == .answerInNotch }
 }
 
-/// Terminal-only question mode: the "Claude is asking you" island stays hidden while the asking
-/// session's terminal app is in front: the user is already looking at that terminal, which
-/// shows the question. The band under the notch still marks the session as waiting and the jump
+/// Terminal-only question mode: the question's wing ("<project> asks:") stays hidden while the
+/// asking session's terminal app is in front: the user is already looking at that terminal,
+/// which shows the question. The band under the notch still marks the session as waiting and the jump
 /// shortcut still works. The original mode (answer in the notch) always shows its island: the
 /// question is answered there. An editor's terminal or an unknown terminal (no bundle id) also
 /// shows it. The rule itself is `TerminalIslands.shows` (kind "question").
@@ -206,8 +206,8 @@ public enum FocusIslands {
     stored as? Bool ?? fallback
   }
 
-  /// Whether an island of attention `kind` shows while a Focus is on: the islands that only
-  /// point to the terminal stay hidden ("Claude is asking you" in terminal-only question mode,
+  /// Whether an island of attention `kind` shows while a Focus is on: the wings that only
+  /// point to the terminal stay hidden (a question in terminal-only question mode,
   /// a plan approval, a wait for input). A permission request (answered in the notch too), a
   /// question answered in the notch, finished runs and errors still show.
   public static func shows(kind: String, focusActive: Bool, questionMode: QuestionMode) -> Bool {

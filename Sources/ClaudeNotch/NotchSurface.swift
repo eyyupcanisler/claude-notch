@@ -38,7 +38,7 @@ final class NotchSurface {
   /// Target outline of the current mode.
   var island: IslandGeometry {
     NotchMetrics.island(
-      state.mode, geometry: state.geometry, body: state.bodyHeight, peekWidth: state.peekWidth)
+      state.mode, geometry: state.geometry, body: state.bodyHeight, wingSide: state.wingSide)
   }
 
   /// Draws or reacts to anything at all (a hidden synthetic pill does not).
@@ -48,9 +48,10 @@ final class NotchSurface {
     return g.hasNotch || state.mode != .collapsed || hasSessions || pill || ears
   }
 
-  /// Screen rectangles that take the pointer (Cocoa, y-up): the notch-wide band part plus the
-  /// island under it, or the notch plus the status line while collapsed. Never the menu-bar
-  /// band beside the notch, unless the panel is expanded (it then owns that band).
+  /// Screen rectangles that take the pointer (Cocoa, y-up): the notch plus the status line while
+  /// collapsed, the drawn wings (band height only) plus that same notch zone in peek mode, the
+  /// whole panel when expanded. Never the menu-bar band beside the notch outside what is drawn,
+  /// and in peek mode nothing below the band except the status line under the notch.
   func hitRects(
     hasSessions: Bool, pill: Bool = false, ears: Bool = false, fullEars: Bool = true
   ) -> [NSRect] {
@@ -73,12 +74,12 @@ final class NotchSurface {
         NSRect(x: cx + g.notchWidth / 2, y: top - h, width: w, height: h),
       ]
     case .peek:
-      let band = NSRect(
-        x: cx - i.topWidth / 2, y: top - g.bandHeight, width: i.topWidth, height: g.bandHeight)
-      let body = NSRect(
-        x: cx - i.bodyWidth / 2, y: top - i.height, width: i.bodyWidth,
-        height: max(0, i.height - g.bandHeight))
-      return [band, body]
+      let wings = NSRect(x: cx - i.topWidth / 2, y: top - i.height, width: i.topWidth, height: i.height)
+      // The status line (and timer extension) under the notch still hovers / clicks.
+      let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
+      let notch = NSRect(
+        x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+      return [wings, notch]
     case .expanded:
       let w = i.topWidth + i.shoulder * 2
       return [NSRect(x: cx - w / 2, y: top - i.height, width: w, height: i.height)]

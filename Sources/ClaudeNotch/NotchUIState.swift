@@ -4,7 +4,8 @@ import Observation
 import SwiftUI
 
 /// The three shapes: collapsed (exactly the notch, plus the status line while sessions exist),
-/// peek (an island dropping out of the notch) and the expanded panel.
+/// peek (the notch grown sideways into "wings" at band height, see `WingPlanner`; nothing drops
+/// below the menu-bar band) and the expanded panel.
 enum NotchMode: String, Sendable {
   case collapsed
   case peek
@@ -15,7 +16,9 @@ enum NotchMode: String, Sendable {
 @MainActor
 @Observable
 final class NotchUIState {
-  /// Live activity shown on the active surface (nil: none).
+  /// What the wings show on the active surface (nil: nothing, the notch is collapsed).
+  var wings: WingDisplay?
+  /// The item in its 4 s wing phase (`wings?.item`; nil once only a mark lingers).
   var peek: PeekItem?
   /// Keeps the expanded panel open (header pin).
   var pinned = false
@@ -119,10 +122,10 @@ final class SurfaceState {
   var mode: NotchMode = .collapsed
   /// Built-in notch surface (full UI) or a synthetic pill on another screen.
   var isPrimary: Bool
-  /// Measured height of the content under the band, per mode.
-  var bodyHeight: [NotchMode: CGFloat] = [.peek: 52, .expanded: 220]
-  /// Island width of the current peek (one line for done / error, two lines for a card).
-  var peekWidth: CGFloat = NotchMetrics.finishedWidth
+  /// Measured height of the content under the band (the expanded panel; the wings have none).
+  var bodyHeight: [NotchMode: CGFloat] = [.expanded: 220]
+  /// Width of each wing beside the notch (see `WingMetrics.sideWidth`).
+  var wingSide: CGFloat = WingMetrics.markWidth
   /// The pill is shown at all (a synthetic pill with nothing to show is hidden).
   var visible = true
   /// The pointer is on the collapsed notch (dwell running): the shape swells a little at once,
@@ -165,12 +168,6 @@ enum NotchMetrics {
 
   /// Running timer (collapsed only): the notch grows down by this much, the time inside.
   static let pillHeight: CGFloat = 22
-  /// Done / error peek: one line.
-  static let finishedWidth: CGFloat = 300
-  static let moduleWidth: CGFloat = 340
-  /// Permission / question peek: two lines and compact buttons.
-  static let permissionMinWidth: CGFloat = 380
-  static let peekPadding: CGFloat = 14
   static let expandedWidth: CGFloat = 600
   static let maxHeight: CGFloat = 560
   static let windowWidth: CGFloat = 660
@@ -190,15 +187,6 @@ enum NotchMetrics {
   static func expandedWidth(screen: CGFloat) -> CGFloat {
     max(320, min(expandedWidth, screen - 2 * (expandedShoulder + 12)))
   }
-
-  /// A permission peek wide enough for `PendingPermission.peekLimit` monospaced columns.
-  @MainActor
-  static let permissionWidth: CGFloat = {
-    let font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-    let advance = ("0" as NSString).size(withAttributes: [.font: font]).width
-    let text = ceil(advance * CGFloat(PendingPermission.peekLimit)) + 4
-    return max(permissionMinWidth, text + peekPadding * 2)
-  }()
 
   /// Status line width (notch minus the insets; never negative).
   static func lineWidth(notch: CGFloat) -> CGFloat { max(24, notch - lineInset * 2) }
@@ -233,7 +221,7 @@ enum NotchMetrics {
 
   @MainActor
   static func island(
-    _ mode: NotchMode, geometry g: NotchGeometry, body: [NotchMode: CGFloat], peekWidth: CGFloat
+    _ mode: NotchMode, geometry g: NotchGeometry, body: [NotchMode: CGFloat], wingSide: CGFloat
   ) -> IslandGeometry {
     switch mode {
     case .collapsed:
@@ -245,9 +233,12 @@ enum NotchMetrics {
         height: g.notchHeight - inset, shoulder: 0,
         bottomRadius: g.hasNotch ? 10 : min(10, g.notchHeight / 2))
     case .peek:
+      // The wings: the notch grown sideways, exactly the band's height (no flare, nothing
+      // below the band), so the page under the menu bar stays clickable.
+      let w = WingMetrics.totalWidth(side: wingSide, notchWidth: g.notchWidth)
+      let h = WingMetrics.height(bandHeight: g.bandHeight)
       return IslandGeometry(
-        topWidth: g.notchWidth, bodyWidth: max(g.notchWidth, peekWidth),
-        height: g.bandHeight + (body[.peek] ?? 52), shoulder: 0, bottomRadius: 20)
+        topWidth: w, bodyWidth: w, height: h, shoulder: 0, bottomRadius: min(10, h / 2))
     case .expanded:
       let w = expandedWidth(screen: g.screenFrame.width)
       let h = min(g.toolbarHeight + (body[.expanded] ?? 220), maxHeight)

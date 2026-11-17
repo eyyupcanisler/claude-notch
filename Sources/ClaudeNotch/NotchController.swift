@@ -6,7 +6,7 @@ import notify
 import SwiftUI
 
 /// Owns the surfaces (one per screen), decides the mode of each (collapsed / peek / expanded),
-/// the peek, hover intent, the hotkey and every decision path.
+/// the wings, hover intent, the hotkey and every decision path.
 @MainActor
 final class NotchController {
   let store: SessionStore
@@ -18,7 +18,10 @@ final class NotchController {
   private var primaryID: CGDirectDisplayID?
   private var activeID: CGDirectDisplayID?
   private var expandedID: CGDirectDisplayID?
-  private var planner = PeekPlanner()
+  private var wings = WingPlanner()
+  /// The next wing change comes from a key press (a global shortcut brought a request back):
+  /// it appears at once, without the grow motion (keyboard actions are never animated).
+  private var instantWings = false
   private var menu: AppMenuController?
   private var settingsWindow: SettingsWindowController?
   private var hotKeys: HotKeyCenter?
@@ -31,7 +34,8 @@ final class NotchController {
   private var nextPeekTask: Task<Void, Never>?
   private var shortcutOpenTask: Task<Void, Never>?
   private var holdHintTask: Task<Void, Never>?
-  /// After a decision from the peek, the next pending card drops in after this long.
+  /// After a decision with the panel closed, the next pending card shows in the wings after
+  /// this long.
   static let nextPeekDelay: TimeInterval = 0.5
   private var previousApp: NSRunningApplication?
   /// Fresh key press per keyboard decision (no auto-repeat, key-up between decisions).
@@ -53,6 +57,8 @@ final class NotchController {
   private var menuOpen = false
   /// Debug: keeps forced modes (no peek expiry, no hover collapse).
   private var debugFreeze = false
+  /// Debug "mode": "collapsed": the marks open at that moment stay off (new ones still show).
+  private var debugDroppedMarks: Set<String> = []
   /// Debug: module notes fired since launch, by source (scripts/measure-memory.sh records
   /// whether a calendar reminder fired during a run).
   private var debugNotesFired: [String: Int] = [:]
@@ -83,8 +89,9 @@ final class NotchController {
     hotKeys = HotKeyCenter { [weak self] role, pressed in
       self?.hotKeyEvent(role, pressed: pressed)
     }
-    planner.permissionHold = settings.peekDuration.seconds
-    planner.questionMode = settings.questionMode
+    wings.markOnly = settings.wingsMarkOnly
+    wings.setFocusActive(settings.focusActive)
+    wings.questionMode = settings.questionMode
     registerShortcuts()
     modules.onNote = { [weak self] note in self?.moduleNote(note) }
     modules.usage.onContextLow = { [weak self] sid, left in
@@ -243,20 +250,32 @@ final class NotchController {
     let now = Date()
     syncQuestionPeek()
     defer { syncOptionKeys() }
-    // Terminal-only questions: a question answered in the terminal (or a turn that moved on)
-    // takes its peek with it. Does nothing in the original answer-in-notch mode.
-    planner.dropAnswered { [store] sid in store.sessions[sid]?.status.kind == "question" }
-    if let peek = planner.current, peek.kind == .permission,
-      peek.cardID.flatMap({ store.card(id: $0) }) == nil
+    // The marks follow the store: one goes when its reason is gone (answered, handled, seen),
+    // one is added for what opened while the panel was up; the long text of an answered
+    // request or an answered terminal question goes too.
+    let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    wings.sync(open: openMarks(at: now))
+    if let cur = wings.current, cur.kind == .permission,
+      cur.cardID.flatMap({ store.card(id: $0) }) == nil
     {
-      planner.clear()
+      wings.clear()
     }
-    // After the stale-card check, so a module note waiting behind that card shows now.
-    if !debugFreeze { planner.expire(at: now) }
+    if let cur = wings.current, cur.asking, let sid = cur.sessionIDs.first,
+      store.sessions[sid]?.status.kind != "question"
+    {
+      wings.clear()
+    }
+    // After the stale-item checks, so a module note waiting behind that item shows now.
+    if !debugFreeze { wings.expire(at: now) }
     store.removalArmDelay = SessionStore.removalArmDelay(
       doubleClickInterval: NSEvent.doubleClickInterval)
-    if expandedID != nil { planner.clearAll() }
-    if ui.peek != planner.current { ui.peek = planner.current }
+    if expandedID != nil { wings.clearAll() }
+    // A mark whose island is hidden right now (its terminal in front) stays, unseen.
+    let shown = wings.display(at: now) { [unowned self] in self.markShows($0, front: front) }
+    if ui.wings != shown { ui.wings = shown }
+    if ui.peek != shown?.item { ui.peek = shown?.item }
+    let instant = instantWings
+    instantWings = false
     validateSelection()
     if let hold = keyHold, shownRequest(at: now)?.cardID != hold.cardID {
       cancelKeyHold(hint: false)
@@ -268,35 +287,36 @@ final class NotchController {
       let mode: NotchMode
       if id == expandedID {
         mode = .expanded
-      } else if expandedID == nil, ui.peek != nil, id == peekSurfaceID {
+      } else if expandedID == nil, let shown = ui.wings, id == peekSurfaceID,
+        Self.wingsFit(shown, s.state.geometry)
+      {
         mode = .peek
       } else {
         mode = .collapsed
       }
       let visible = s.state.geometry.hasNotch || live || mode != .collapsed
-      if mode == .peek, let peek = ui.peek {
-        let w: CGFloat
-        switch peek.kind {
-        case .finished: w = NotchMetrics.finishedWidth
-        case .module: w = NotchMetrics.moduleWidth
-        default: w = NotchMetrics.permissionWidth
-        }
-        if s.state.mode != .peek {
-          // The island leaves the notch already at its width (no sideways morph on arrival).
-          s.state.peekWidth = w
-        } else if s.state.peekWidth != w {
-          withAnimation(Motion.reduce ? Motion.crossfade : Motion.resize) { s.state.peekWidth = w }
+      if mode == .peek, let shown = ui.wings {
+        let side = wingSide(shown, geometry: s.state.geometry)
+        if s.state.mode != .peek || instant {
+          // Out of the notch: the mode change's spring grows the shape to this width.
+          s.state.wingSide = side
+        } else if abs(s.state.wingSide - side) > 0.5 {
+          // Long text -> mark: the text leaves first, then the wings shrink; a new arrival
+          // grows them at once. Each re-targets the spring from where the wings are.
+          let shrink = side < s.state.wingSide
+          let spring = shrink ? Motion.wings.delay(Motion.wingShrinkDelay) : Motion.wings
+          withAnimation(Motion.reduce ? Motion.crossfade : spring) { s.state.wingSide = side }
         }
       }
       if s.state.mode != mode || s.state.visible != visible {
         if mode == .peek && s.state.mode != .peek { s.pointerAtAppear = NSEvent.mouseLocation }
         changes.append((s.state, mode, visible))
-        log("mode \(id) \(s.state.mode.rawValue)->\(mode.rawValue) peek=\(ui.peek != nil)")
+        log("mode \(id) \(s.state.mode.rawValue)->\(mode.rawValue) wings=\(ui.wings?.style.rawValue ?? "-")")
       }
     }
     // One spring per transition drives the shape, the material and the line together.
     for (state, mode, visible) in changes {
-      withAnimation(Motion.shape(from: state.mode, to: mode)) {
+      withAnimation(instant && mode == .peek ? nil : Motion.shape(from: state.mode, to: mode)) {
         state.mode = mode
         state.visible = visible
       }
@@ -304,6 +324,58 @@ final class NotchController {
     schedulePeekExpiry()
     scheduleArmTick()
     updatePointer()
+  }
+
+  /// A screen without a menu bar (full screen, auto-hide) has no band to grow into: the wings
+  /// would sit on the app's content, so there they show only an item's 4 s, as a mark, and no
+  /// lingering mark (the status line still marks the session).
+  private static func wingsFit(_ shown: WingDisplay, _ g: NotchGeometry) -> Bool {
+    g.bandHeight > 0 || shown.item != nil
+  }
+
+  /// Width of each wing for `shown` on a screen: the long text's width while it has one (never
+  /// on a screen without a menu bar), else the mark's.
+  private func wingSide(_ shown: WingDisplay, geometry g: NotchGeometry) -> CGFloat {
+    if shown.style == .long, g.bandHeight > 0, let item = shown.item,
+      let text = WingText.make(item, store: store)
+    {
+      return text.side(g)
+    }
+    return WingMetrics.sideWidth(
+      style: .mark, leftContent: 0, rightContent: 0, notchWidth: g.notchWidth,
+      screenWidth: g.screenFrame.width)
+  }
+
+  /// Everything that still waits for the user, as marks (`WingPlanner.sync`): one per pending
+  /// permission card, and each session's question, plan, wait or unseen error
+  /// (`WingPlanner.openMark`). The planner keeps the arrival time of a mark it already has.
+  private func openMarks(at now: Date) -> [WingMark] {
+    var open = store.pending.map {
+      WingMark(kind: .permission, sessionID: $0.sessionID, cardID: $0.id, since: $0.createdAt)
+    }
+    for session in store.sessions.values {
+      if let mark = WingPlanner.openMark(
+        sessionID: session.id, statusKind: session.status.kind, unseen: session.unseen,
+        heldQuestion: store.question(for: session.id) != nil,
+        questionMode: settings.questionMode, silent: focusQuiet, since: now)
+      {
+        open.append(mark)
+      }
+    }
+    guard !debugDroppedMarks.isEmpty else { return open }
+    debugDroppedMarks.formIntersection(open.map(\.id))
+    return open.filter { !debugDroppedMarks.contains($0.id) }
+  }
+
+  /// Whether an open mark may show right now: hidden (not dropped) while its island would be,
+  /// e.g. its session's terminal is in front (`TerminalIslands`) or a Focus is on
+  /// (`FocusIslands`). It shows again once the user leaves that terminal, until it is handled.
+  private func markShows(_ mark: WingMark, front: String?) -> Bool {
+    guard let sid = mark.sessionID else { return true }
+    let kind = WingPlanner.islandKind(
+      of: mark, statusKind: store.sessions[sid]?.status.kind,
+      heldQuestion: store.question(for: sid) != nil)
+    return kind.map { islandShows($0, for: sid, front: front) } ?? true
   }
 
   private func validateSelection() {
@@ -329,8 +401,8 @@ final class NotchController {
 
   private func schedulePeekExpiry() {
     peekTask?.cancel()
-    // "Until answered": nothing to schedule, the answer clears it.
-    guard let until = planner.current?.until, until != .distantFuture, !debugFreeze else {
+    // Only the 4 s phase is timed; a lingering mark goes when what it stands for is handled.
+    guard let until = wings.nextChange, !debugFreeze else {
       return
     }
     let delay = max(0.05, until.timeIntervalSinceNow + 0.02)
@@ -368,9 +440,9 @@ final class NotchController {
     collapseTask = nil
     let opening = expandedID != id
     let slotBefore = opening ? nil : RowKind.slotCard(store: store, ui: ui)?.id
-    // The permission peek's request: a panel opened from that peek shows the same request,
-    // never another one the user did not read.
-    let peekCard = planner.current.flatMap { $0.kind == .permission ? $0.cardID : nil }
+    // The permission in the wings: a panel opened from them shows the same request, never
+    // another one the user did not read.
+    let peekCard = wings.current.flatMap { $0.kind == .permission ? $0.cardID : nil }
       .flatMap { store.card(id: $0)?.id }
     if reason == .hotkey {
       ui.selectedCardID = store.pending.first?.id
@@ -381,7 +453,7 @@ final class NotchController {
     }
     if opening {
       expandedID = id
-      planner.clearAll()
+      wings.clearAll()
       freezeOrder()
       onExpand?()
     }
@@ -399,6 +471,24 @@ final class NotchController {
       performanceTime: .now) }
     refresh()
     refreshConsent()
+  }
+
+  /// A click on the wings (the old island click): a terminal-only question goes to its
+  /// session's terminal tab; anything else opens the panel, on the clicked request when it is
+  /// a permission.
+  private func wingTap(_ id: CGDirectDisplayID) {
+    let target = ui.wings?.target
+    if let t = target, t.asking, let sid = t.sessionID,
+      store.sessions[sid]?.status.kind == "question"
+    {
+      Task { @MainActor in _ = await focus(sessionID: sid) }
+      return
+    }
+    if expandedID != id, let cardID = target?.cardID, store.card(id: cardID) != nil {
+      ui.selectedCardID = cardID
+      ui.selectedSessionID = store.card(id: cardID)?.sessionID
+    }
+    expand(id, reason: .click)
   }
 
   func collapse() {
@@ -481,8 +571,12 @@ final class NotchController {
   /// panel takes clicks (moves over our own window reach neither monitor reliably); a
   /// collapsed, idle notch costs nothing but the mouse monitor.
   private func updatePollTimer() {
+    // A lingering mark alone needs no timer: the global monitor sees the pointer arrive, and
+    // once it is over the wings the panel takes events (then the timer runs).
+    let timedWings = ui.wings?.item != nil
     let needed = surfaces.values.contains {
-      $0.state.mode != .collapsed || $0.intent.dwellStart != nil || $0.intent.recheckPending
+      $0.state.mode == .expanded || ($0.state.mode == .peek && timedWings)
+        || $0.intent.dwellStart != nil || $0.intent.recheckPending
         || !$0.panel.ignoresMouseEvents
     }
     if needed, pollTimer == nil {
@@ -537,11 +631,14 @@ final class NotchController {
         }
         if !fired, s.intent.dwellStart != nil || s.intent.recheckPending { scheduleDwellCheck() }
       case .peek:
-        if inside {
-          planner.hold(at: now)
-          schedulePeekExpiry()
+        // The pointer over the wings keeps their text up (a lingering mark has no timer).
+        if inside, ui.wings?.item != nil {
+          let before = wings.nextChange
+          wings.hold(at: now)
+          // Re-armed only when the end moved (not on every poll).
+          if wings.nextChange != before { schedulePeekExpiry() }
         }
-        // Dwelling on the notch part of the island opens the panel.
+        // Dwelling on the notch between the wings opens the panel.
         let fired = s.intent.update(
           point: p, at: now, minX: notchMinX, maxX: notchMaxX, top: top,
           bottom: top - g.notchHeight)
@@ -711,8 +808,9 @@ final class NotchController {
         title: loc("Copied to the clipboard"), subtitle: what, validUntil: Date().addingTimeInterval(5)))
   }
 
-  /// The request the user sees right now: the open panel's card, or the permission peek's.
-  /// nil when none is on screen (the peek went back to the line, the slot is empty).
+  /// The request the user sees right now: the open panel's card, or the permission whose text
+  /// the wings show (their 4 s phase). nil when none is on screen (only a mark shows, the
+  /// wings went back, the slot is empty).
   private func shownRequest(at now: Date = Date()) -> ShownRequest? {
     if let e = expandedID, surfaces[e]?.state.mode == .expanded {
       guard let card = RowKind.slotCard(store: store, ui: ui) else { return nil }
@@ -722,13 +820,24 @@ final class NotchController {
         cardID: card.id, inPeek: false, armed: isArmed(card, at: now), risky: card.risk != nil,
         fullyVisible: !card.needsExpansion || read, opened: opened)
     }
-    guard expandedID == nil, let peek = ui.peek, peek.kind == .permission,
-      let id = peek.cardID, let card = store.card(id: id),
-      let sid = peekSurfaceID, surfaces[sid]?.state.mode == .peek
+    guard expandedID == nil, let shown = ui.wings, shown.style == .long,
+      let item = shown.item, item.kind == .permission,
+      let id = item.cardID, let card = store.card(id: id),
+      let sid = peekSurfaceID, let surface = surfaces[sid], surface.state.mode == .peek,
+      surface.state.geometry.bandHeight > 0
     else { return nil }
     return ShownRequest(
       cardID: id, inPeek: true, armed: isArmed(card, at: now), risky: card.risk != nil,
-      fullyVisible: card.fitsPeek)
+      fullyVisible: wingShowsWhole(card))
+  }
+
+  /// The right wing shows `card` whole on the wings' screen: its line is the whole request
+  /// (`fitsWing`) and, measured with the wing's font, fits the wing there (a narrow screen has
+  /// narrower wings; a risky request's wing also holds the hold ring).
+  private func wingShowsWhole(_ card: PendingPermission) -> Bool {
+    guard card.fitsWing, let sid = peekSurfaceID, let g = surfaces[sid]?.state.geometry
+    else { return false }
+    return WingText.permission(card, store: store).showsWholeRight(g)
   }
 
   /// Global shortcuts: the card delays, and the key delay (panel just opened by ⌃⌥Space, a
@@ -765,8 +874,10 @@ final class NotchController {
     }
   }
 
-  /// Nothing was on screen: bring the oldest request back (peek, or the panel's slot) and
-  /// decide nothing. The next press decides once the new-card delay is over.
+  /// Nothing was on screen: bring the oldest request back (its text in the wings, or the
+  /// panel's slot) and decide nothing. The next press decides once the new-card delay is over.
+  /// With "mark only" on, the wings would only bring back a mark (nothing to read), so the
+  /// panel opens on the request instead.
   private func reveal(_ id: String) {
     guard let card = store.card(id: id) else { return }
     nextPeekTask?.cancel()
@@ -777,9 +888,17 @@ final class NotchController {
       ui.pagerArmedAt = max(ui.pagerArmedAt, Date().addingTimeInterval(SessionStore.armDelayNew))
       scheduleArmTick()
       refresh()
+    } else if wings.markOnly || !peekScreenHasBand {
+      openFull(id)
     } else {
+      instantWings = true
       showPeek(card)
     }
+  }
+
+  /// The wings' screen shows a menu bar (the wings can carry text there).
+  private var peekScreenHasBand: Bool {
+    peekSurfaceID.flatMap { surfaces[$0]?.state.geometry.bandHeight }.map { $0 > 0 } ?? false
   }
 
   /// The shown text is not all on screen: the panel opens on that card with its full text
@@ -799,8 +918,9 @@ final class NotchController {
     refresh()
   }
 
-  /// A panel a shortcut opened, never reached by the pointer, closes after the peek time (the
-  /// request stays pending on the line).
+  /// A panel a shortcut opened, never reached by the pointer, closes after the "Keep the
+  /// panel open when a shortcut opens it" time (the request stays pending, its mark in the
+  /// wings).
   private func scheduleShortcutPanelTimeout() {
     shortcutOpenTask?.cancel()
     guard let seconds = settings.peekDuration.seconds else { return }
@@ -811,9 +931,14 @@ final class NotchController {
     }
   }
 
-  /// Risky request: the allow shortcut must stay down for the hold time (ring on Allow).
+  /// Risky request: the allow shortcut must stay down for the hold time (ring on Allow, or on
+  /// the right wing). The wings' text stays up for the whole hold.
   private func startKeyHold(_ id: String) {
     cancelKeyHold(hint: false)
+    if expandedID == nil {
+      wings.hold(at: Date(), seconds: GlobalShortcutPolicy.holdDuration + 0.5)
+      schedulePeekExpiry()
+    }
     ui.holdHintCardID = nil
     ui.keyHoldCardID = id
     ui.holdProgress[id] = 0
@@ -1060,7 +1185,7 @@ final class NotchController {
     if let card = store.firstCard(for: s.id) { selectCard(card.id) }
   }
 
-  // MARK: - Decisions (the single path for clicks, peek buttons, hold and keys)
+  // MARK: - Decisions (the single path for clicks, holds, keys and global shortcuts)
 
   func decide(_ id: String, _ decision: PermissionDecision, source: DecisionSource) {
     guard let card = store.card(id: id) else { return }
@@ -1073,19 +1198,20 @@ final class NotchController {
       else { return }
     }
     if source.isGlobal {
-      // Global shortcuts: only the request on screen (peek or the panel's card), never
-      // "Always".
+      // Global shortcuts: only the request on screen (the wings' text or the panel's card),
+      // never "Always".
       guard decision != .always, now >= ui.keysArmedAt,
         shownRequest(at: now)?.cardID == card.id
       else { return }
     }
-    let inPeek = source.fromPeek || (source.isGlobal && expandedID == nil)
+    let inWings = source.isGlobal && expandedID == nil
     if case .deny = decision {
       finish(card, decision, source: source)
       return
     }
-    // The peek shows one line: it may allow only when that line is the whole request.
-    if inPeek && !card.fitsPeek {
+    // The wing shows one short line: a shortcut may allow only when that line is the whole
+    // request; otherwise the panel opens on it.
+    if inWings && !wingShowsWhole(card) {
       if let peekID = peekSurfaceID {
         ui.selectedCardID = id
         expand(peekID, reason: .click)
@@ -1126,8 +1252,8 @@ final class NotchController {
     guard let first = cards.first, store.isArmed(first), Date() >= ui.pagerArmedAt else { return }
     let selectedGoes = cards.contains { $0.id == ui.selectedCardID }
     store.denyAll(sessionID: sessionID)
-    if let peek = planner.current?.cardID, cards.contains(where: { $0.id == peek }) {
-      planner.clear()
+    if let shown = wings.current?.cardID, cards.contains(where: { $0.id == shown }) {
+      wings.clear()
     }
     if selectedGoes {
       ui.selectedCardID = store.pending.first?.id
@@ -1142,13 +1268,13 @@ final class NotchController {
   ) {
     let index = store.queuePosition(of: card.id)?.index ?? 0
     let wasSelected = ui.selectedCardID == nil || ui.selectedCardID == card.id
-    let fromPeek = source.fromPeek || (source.isGlobal && expandedID == nil)
+    let inWings = source.isGlobal && expandedID == nil
     let shortcutPanel = ui.shortcutOpen && source.isGlobal
     if keyHold?.cardID == card.id { cancelKeyHold(hint: false) }
     store.decide(id: card.id, decision: decision)
     // The next card slides into the slot: keys wait as long as clicks do.
     ui.keysArmedAt = max(ui.keysArmedAt, Date().addingTimeInterval(store.removalArmDelay))
-    if planner.current?.cardID == card.id { planner.clear() }
+    if wings.current?.cardID == card.id { wings.clear() }
     if wasSelected, !store.pending.isEmpty {
       let next = store.pending[min(index, store.pending.count - 1)]
       ui.selectedCardID = next.id
@@ -1158,11 +1284,11 @@ final class NotchController {
     // A panel a shortcut opened for this request closes with it.
     if shortcutPanel { collapse() }
     refresh()
-    if fromPeek || shortcutPanel { scheduleNextPeek() }
+    if inWings || shortcutPanel { scheduleNextPeek() }
   }
 
-  /// After a decision from the peek (or a panel a shortcut opened), the oldest pending request
-  /// drops in a moment later, never under the same key press or click.
+  /// After a shortcut decision with the panel closed (or in a panel a shortcut opened), the
+  /// oldest pending request shows in the wings a moment later, never under the same key press.
   private func scheduleNextPeek() {
     nextPeekTask?.cancel()
     guard !store.pending.isEmpty else { return }
@@ -1171,7 +1297,7 @@ final class NotchController {
       guard !Task.isCancelled, let self else { return }
       self.nextPeekTask = nil
       // A request whose terminal is in front (and the option on) stays in the panel.
-      guard self.expandedID == nil, self.planner.current?.kind != .permission,
+      guard self.expandedID == nil, self.wings.current?.kind != .permission,
         let next = self.store.pending.first(where: {
           self.islandShows("permission", for: $0.sessionID)
         })
@@ -1180,10 +1306,10 @@ final class NotchController {
     }
   }
 
-  /// Shows the permission peek for `card` again; its buttons and the shortcuts wait the new
-  /// card delay (the request under the user just changed).
+  /// Shows the text of `card` in the wings again (4 s); the shortcuts wait the new card delay
+  /// (the request under the user just changed).
   private func showPeek(_ card: PendingPermission) {
-    planner.show(cardID: card.id, sessionID: card.sessionID, at: Date())
+    wings.show(cardID: card.id, sessionID: card.sessionID, at: Date())
     ui.pagerArmedAt = max(ui.pagerArmedAt, Date().addingTimeInterval(SessionStore.armDelayNew))
     refresh()
   }
@@ -1234,20 +1360,17 @@ final class NotchController {
 
   // MARK: - Questions
 
-  /// Held questions keep their peek up until answered (like a permission card), and a new one
-  /// drops in even when its "question" peek already went back.
+  /// Held questions: each new one shows in the wings once, even when its "question" event
+  /// already went by; its mark then lingers until it is answered (Focus off).
   private var shownQuestions: Set<String> = []
 
-  /// ⌃⌥1…4 are registered only while a question is on screen.
+  /// ⌃⌥1…4 are registered only while a question's options are on screen (the open panel).
   private var optionKeysOn = false
 
-  /// The held question the user sees right now: the peek's, else (panel open) the oldest.
+  /// The held question whose options the user sees right now: the oldest, while the panel is
+  /// open. The wings show no options (a click on them opens the panel).
   private func shownQuestion() -> PendingQuestion? {
-    if expandedID != nil { return store.questions.first }
-    guard let peek = ui.peek, peek.kind == .attention, let sid = peek.sessionIDs.first else {
-      return nil
-    }
-    return store.question(for: sid)
+    expandedID != nil ? store.questions.first : nil
   }
 
   private func syncOptionKeys() {
@@ -1309,20 +1432,15 @@ final class NotchController {
     guard expandedID == nil else { return }
     for q in store.questions where !shownQuestions.contains(q.id) {
       shownQuestions.insert(q.id)
-      planner.receive(attention: "question", sessionID: q.sessionID, at: Date())
-    }
-    if let cur = planner.current, cur.kind == .attention,
-      let sid = cur.sessionIDs.first, store.question(for: sid) != nil
-    {
-      planner.hold(at: Date(), seconds: settings.peekDuration.seconds ?? 600)
+      wings.receive(attention: "question", sessionID: q.sessionID, at: Date())
     }
   }
 
   private func answerQuestion(_ id: String, _ answers: [String: [String]]) {
     guard let q = store.questions.first(where: { $0.id == id }) else { return }
     guard store.answerQuestion(id: id, answers: answers) else { return }
-    if planner.current?.sessionIDs.first == q.sessionID, planner.current?.kind == .attention {
-      planner.clear()
+    if wings.current?.sessionIDs.first == q.sessionID, wings.current?.kind == .attention {
+      wings.clear()
     }
     refresh()
   }
@@ -1330,7 +1448,7 @@ final class NotchController {
   private func releaseQuestion(_ id: String) {
     guard let q = store.questions.first(where: { $0.id == id }) else { return }
     store.releaseQuestion(id: id)
-    if planner.current?.sessionIDs.first == q.sessionID { planner.clear() }
+    if wings.current?.sessionIDs.first == q.sessionID { wings.clear() }
     Task { @MainActor in _ = await focus(sessionID: q.sessionID) }
     refresh()
   }
@@ -1338,11 +1456,11 @@ final class NotchController {
   // MARK: - Effects
 
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
-  /// Claude peek (the planner queues it).
+  /// Claude item in the wings (the planner queues it).
   private func moduleNote(_ note: ModuleNote) {
     debugNotesFired[note.source.rawValue, default: 0] += 1
     guard expandedID == nil, !focusQuiet else { return }
-    if planner.receive(module: note, at: Date()) { refresh() }
+    if wings.receive(module: note, at: Date()) { refresh() }
   }
 
   private func handle(_ effect: StoreEffect) {
@@ -1374,7 +1492,7 @@ final class NotchController {
     guard expandedID == nil, islandShows(kind, for: sessionID) else { return }
     let cardID = kind == "permission"
       ? store.pending.last(where: { $0.sessionID == sessionID })?.id : nil
-    if planner.receive(attention: kind, sessionID: sessionID, cardID: cardID, at: Date()) {
+    if wings.receive(attention: kind, sessionID: sessionID, cardID: cardID, at: Date()) {
       refresh()
     }
   }
@@ -1422,20 +1540,24 @@ final class NotchController {
     TerminalBell.ring(tty: tty)
   }
 
-  /// An app came to the front (or a Focus started): the Claude island on screen goes if it is
+  /// An app came to the front (or a Focus started): the Claude item in the wings goes if it is
   /// hidden now, e.g. its session's terminal is that app (see `TerminalIslands`, `FocusIslands`),
-  /// so switching to the terminal clears what it already shows. A permission request still
-  /// waits in the panel; nothing drops down again by itself.
+  /// so switching to the terminal clears what it already shows. A lingering mark is only hidden
+  /// while that terminal is in front (`markShows`): it shows again when the user leaves it,
+  /// until what it stands for is handled. The long text never comes back by itself.
   private func dropHiddenIsland(
     front: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
   ) {
-    guard let peek = planner.current, let sid = peek.sessionIDs.first,
+    if let cur = wings.current, let sid = cur.sessionIDs.first,
       let kind = TerminalIslands.kind(
-        of: peek, statusKind: store.sessions[sid]?.status.kind,
+        of: cur, statusKind: store.sessions[sid]?.status.kind,
         heldInNotch: store.question(for: sid) != nil),
       !islandShows(kind, for: sid, front: front)
-    else { return }
-    planner.clear()
+    {
+      wings.clear()
+    }
+    // A mark hidden while its terminal was in front shows again once another app is.
+    guard ui.wings != nil || !wings.marks.isEmpty else { return }
     refresh()
   }
 
@@ -1470,16 +1592,19 @@ final class NotchController {
 
   private func trackPeekSettings() {
     withObservationTracking {
-      _ = settings.peekDuration
       _ = settings.shortcutHintSeen
       _ = settings.answerQuestionsInNotch
       _ = settings.focusActive
+      _ = settings.wingsMarkOnly
+      _ = settings.hideIslandsWhileTerminalInFront
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
+        self.wings.markOnly = self.settings.wingsMarkOnly
+        self.wings.setFocusActive(self.settings.focusActive)
         self.dropHiddenIsland()
-        self.planner.permissionHold = self.settings.peekDuration.seconds
         self.applyQuestionMode()
+        self.refresh()
         self.updateKeyHints()
         self.trackPeekSettings()
       }
@@ -1490,13 +1615,13 @@ final class NotchController {
   /// to its terminal at once (and its answer peek with it).
   private func applyQuestionMode() {
     let mode = settings.questionMode
-    guard planner.questionMode != mode else { return }
-    planner.questionMode = mode
+    guard wings.questionMode != mode else { return }
+    wings.questionMode = mode
     guard mode == .terminalOnly, !store.questions.isEmpty else { return }
-    if let cur = planner.current, cur.kind == .attention, let sid = cur.sessionIDs.first,
+    if let cur = wings.current, cur.kind == .attention, let sid = cur.sessionIDs.first,
       store.question(for: sid) != nil
     {
-      planner.clear()
+      wings.clear()
     }
     store.releaseAllQuestions()
     refresh()
@@ -1549,6 +1674,7 @@ final class NotchController {
       togglePin: { [weak self] in self?.ui.pinned.toggle() },
       openSettings: { [weak self] in self?.openSettings() },
       expand: { [weak self] id in self?.expand(id, reason: .click) },
+      wingTap: { [weak self] id in self?.wingTap(id) },
       showCards: { [weak self] in
         guard let self, let first = self.store.pending.first else { return }
         self.selectCard(first.id)
@@ -1732,7 +1858,7 @@ final class NotchController {
         "island": .object([
           "top_width": .double(Double(i.topWidth)), "body_width": .double(Double(i.bodyWidth)),
           "height": .double(Double(i.height)),
-          "body_peek": .double(Double(s.state.bodyHeight[.peek] ?? -1)),
+          "wing_side": .double(Double(s.state.wingSide)),
           "body_expanded": .double(Double(s.state.bodyHeight[.expanded] ?? -1)),
           "band": .double(Double(s.state.geometry.bandHeight))
         ]),
@@ -1752,6 +1878,13 @@ final class NotchController {
     return .object([
       "surfaces": .array(surf), "active_display": activeID.map { .int(Int($0)) } ?? .null,
       "expanded_display": expandedID.map { .int(Int($0)) } ?? .null, "peek": peek,
+      "wings": ui.wings.map { w in
+        .object([
+          "style": .string(w.style.rawValue), "mark": .string(w.mark.rawValue),
+          "count": .int(w.count), "mark_only": .bool(wings.markOnly),
+          "marks": .array(wings.marks.map { .string($0.id) }),
+        ])
+      } ?? .null,
       "module_notes": .object(debugNotesFired.mapValues { .int($0) }),
       "display_mode": .string(settings.displayMode.rawValue),
       "density": .string(settings.density.rawValue), "pinned": .bool(ui.pinned),
@@ -1788,7 +1921,7 @@ final class NotchController {
       "shortcut_open": .bool(ui.shortcutOpen),
       "shortcut_hint": ui.shortcutHint.map { .string($0) } ?? .null,
       "peek_duration": .string(settings.peekDuration.rawValue),
-      "peek_until": planner.current.map { .double($0.until.timeIntervalSinceNow) } ?? .null,
+      "peek_until": wings.nextChange.map { .double($0.timeIntervalSinceNow) } ?? .null,
       "poll_timer": .bool(pollTimer != nil),
       "status_line": .array(store.statusLine.map {
         .object(["session": .string($0.sessionID), "state": .string($0.state.rawValue)])
@@ -1866,7 +1999,10 @@ final class NotchController {
     if json["shortcut_hint"] == .bool(true) { settings.shortcutHintSeen = false }
     if let d = json["peek_duration"]?.stringValue, let v = PeekDuration(rawValue: d) {
       settings.peekDuration = v
-      planner.permissionHold = v.seconds
+    }
+    if case .bool(let b)? = json["wings_mark_only"] {
+      settings.wingsMarkOnly = b
+      wings.markOnly = b
     }
     if json["open_settings"] == .bool(true) { openSettings() }
     // {"set_shortcut": {"role": "allow", "keys": [keyCode, carbonModifiers]}} (the recorder's
@@ -1933,7 +2069,9 @@ final class NotchController {
       switch mode {
       case "expanded": if let target { expand(target, reason: .click) }
       case "collapsed":
-        planner.clear()
+        // Debug: back to the bare notch, lingering marks included.
+        wings.clearAll()
+        debugDroppedMarks = Set(openMarks(at: Date()).map(\.id))
         collapse()
       default: break
       }

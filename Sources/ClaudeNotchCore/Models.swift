@@ -212,22 +212,6 @@ public struct PendingPermission: Sendable, Identifiable {
   /// There is more to see than the collapsed card shows.
   public var hasMore: Bool { needsExpansion || extra != nil }
 
-  /// Display columns of the peek's one-line text (monospaced 11.5 pt in a 392 pt line).
-  public static let peekLimit = 50
-
-  /// One line for the peek (head…tail when long).
-  public var peekText: String {
-    TextShortener.oneLine(fullText.isEmpty ? toolName : fullText, limit: Self.peekLimit)
-  }
-
-  /// The peek's one line shows the whole request (nothing folded, cut or elided, no written
-  /// content / edit behind it), so allowing from the peek is allowed. Otherwise the peek can
-  /// only open the panel.
-  public var fitsPeek: Bool {
-    extra == nil && !fullText.isEmpty && peekText == fullText
-      && ToolSummary.displayWidth(fullText) <= Self.peekLimit
-  }
-
   /// Rule text for the "Always" section (whole and sanitized), if a suggestion exists.
   public var alwaysDescription: String? {
     let pick = suggestions.first { $0["type"]?.stringValue == "addRules" } ?? suggestions.first

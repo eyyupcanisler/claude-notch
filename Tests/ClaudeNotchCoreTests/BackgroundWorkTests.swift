@@ -63,7 +63,7 @@ final class BackgroundWorkTests: XCTestCase {
       "In the background: a b", "one line")
   }
 
-  /// The main chat stops while its workflow runs: no "done" (island, chime, green), and the real
+  /// The main chat stops while its workflow runs: no "done" (wing, chime, done bar), and the real
   /// end comes with the Stop after the workflow woke the session.
   func testAStopThatLeavesAWorkflowRunningIsNotDone() {
     let store = SessionStore(now: { Date(timeIntervalSince1970: 1_000_000) })

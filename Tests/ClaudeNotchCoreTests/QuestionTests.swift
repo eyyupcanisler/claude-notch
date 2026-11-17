@@ -52,7 +52,7 @@ final class QuestionModeTests: XCTestCase {
     let defaults = scratch.defaults
     defer { scratch.remove() }
     XCTAssertEqual(QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)), .answerInNotch)
-    var planner = PeekPlanner()
+    var planner = WingPlanner()
     XCTAssertEqual(planner.questionMode, .answerInNotch)
     planner.receive(attention: "question", sessionID: "s1", at: Date())
     XCTAssertEqual(planner.current?.asking, false)
@@ -189,14 +189,14 @@ final class HeldQuestionTests: XCTestCase {
     XCTAssertTrue(store.questions.isEmpty)
   }
 
-  func testOriginalQuestionPeekKeepsTheAttentionTime() {
+  func testOriginalQuestionItemKeepsTheLongTime() {
     let t0 = Date(timeIntervalSince1970: 1000)
-    var p = PeekPlanner(permissionHold: 15)
+    var p = WingPlanner()
     p.receive(attention: "question", sessionID: "s1", at: t0)
     XCTAssertEqual(p.current?.kind, .attention)
     XCTAssertEqual(p.current?.asking, false)
-    XCTAssertFalse(p.dropAnswered { _ in false }, "only terminal-only peeks go with the question")
-    XCTAssertTrue(p.expire(at: t0.addingTimeInterval(PeekPlanner.attentionDuration)))
+    XCTAssertTrue(p.expire(at: t0.addingTimeInterval(NotchWings.longDuration)))
+    XCTAssertEqual(p.marks.first?.asking, false, "its mark opens the panel on a click")
   }
 }
 
@@ -327,26 +327,7 @@ final class QuestionNoticeTests: XCTestCase {
     XCTAssertTrue(store.sessions.isEmpty, "the async PreToolUse event reports it, not this route")
   }
 
-  // MARK: - Peek
 
-  func testQuestionPeekStaysLikeAPermissionPeek() {
-    let t0 = Date(timeIntervalSince1970: 1000)
-    var p = PeekPlanner(permissionHold: 15)
-    p.questionMode = .terminalOnly
-    p.receive(attention: "question", sessionID: "s1", at: t0)
-    XCTAssertEqual(p.current?.kind, .attention)
-    XCTAssertEqual(p.current?.asking, true)
-    XCTAssertFalse(p.expire(at: t0.addingTimeInterval(PeekPlanner.attentionDuration + 1)))
-    XCTAssertTrue(p.expire(at: t0.addingTimeInterval(15)))
-    // "Until answered" setting: until the session stops asking.
-    p.permissionHold = nil
-    p.receive(attention: "question", sessionID: "s1", at: t0)
-    XCTAssertEqual(p.current?.until, .distantFuture)
-    XCTAssertFalse(p.dropAnswered { _ in true })
-    XCTAssertNotNil(p.current)
-    XCTAssertTrue(p.dropAnswered { _ in false })
-    XCTAssertNil(p.current)
-  }
 
   /// Shorthand for `TerminalIslands.shows`: a session running in Ghostty by default.
   private func islandShows(
@@ -445,7 +426,7 @@ final class QuestionNoticeTests: XCTestCase {
   /// module notes and questions answered in the notch are never taken away.
   func testIslandOnScreenIsCheckedByWhatItShows() {
     let t0 = Date(timeIntervalSince1970: 1000)
-    var p = PeekPlanner(permissionHold: 15)
+    var p = WingPlanner()
     p.questionMode = .terminalOnly
     func kind(statusKind: String? = "waiting", heldInNotch: Bool = false) -> String? {
       p.current.flatMap {
@@ -478,15 +459,15 @@ final class QuestionNoticeTests: XCTestCase {
     XCTAssertNil(kind())
   }
 
-  func testPlanAndWaitingPeeksKeepTheirTime() {
+  func testPlanAndWaitingItemsAreNeverAsking() {
     let t0 = Date(timeIntervalSince1970: 1000)
     for attention in ["plan", "waiting"] {
-      var p = PeekPlanner(permissionHold: nil)
+      var p = WingPlanner()
       p.questionMode = .terminalOnly
       p.receive(attention: attention, sessionID: "s1", at: t0)
       XCTAssertEqual(p.current?.asking, false, attention)
-      XCTAssertFalse(p.dropAnswered { _ in false }, "only a question peek goes with its question")
-      XCTAssertTrue(p.expire(at: t0.addingTimeInterval(PeekPlanner.attentionDuration)), attention)
+      XCTAssertTrue(p.expire(at: t0.addingTimeInterval(NotchWings.longDuration)), attention)
     }
   }
+
 }

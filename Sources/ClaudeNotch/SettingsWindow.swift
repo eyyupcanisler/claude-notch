@@ -87,7 +87,11 @@ struct SettingsView: View {
           Picker("Status colors", selection: $settings.statusColors) {
             ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
           }
-          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs.")
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text, then shrinks to a small colored mark. On: only the mark. Nothing ever drops down over the page.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -224,7 +228,7 @@ struct SettingsView: View {
               .fixedSize(horizontal: false, vertical: true)
           }
           Toggle(
-            "Weather: in the panel band, an island when rain is near", isOn: $settings.weatherEnabled)
+            "Weather: in the panel band, a note beside the notch when rain is near", isOn: $settings.weatherEnabled)
           if settings.weatherEnabled {
             HStack {
               TextField(
@@ -260,7 +264,7 @@ struct SettingsView: View {
             Text(shelfHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Text("Module islands never get ahead of Claude notifications; while a Claude island is open they wait their turn.")
+          Text("Module notes never get ahead of Claude notifications; while a Claude wing is showing they wait their turn.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -269,25 +273,35 @@ struct SettingsView: View {
       .tabItem { Label("Modules", systemImage: "square.grid.2x2") }
       Form {
         Section("Notification") {
-          Picker("Keep permission requests visible", selection: $settings.peekDuration) {
+          Picker("Keep the panel open when a shortcut opens it", selection: $settings.peekDuration) {
             ForEach(PeekDuration.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(peekHelp).font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Answer Claude's questions in the notch", isOn: $settings.answerQuestionsInNotch)
           Text(settings.answerQuestionsInNotch
-            ? "Claude waits while a question is in the island: pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
-            : "The terminal asks at once; the island only tells you that Claude is asking and takes you to that tab. While that terminal is in front, no island drops down, and one already up goes away when you switch to it.")
+            ? "Claude waits while a question is held: click the notch to open the panel and pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
+            : "The terminal asks at once; the notch only tells you that Claude is asking and takes you to that tab. While that terminal is in front, no wing shows, and one already showing goes away when you switch to it; when you leave it unanswered, its small mark comes back.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle(
-            "Hide islands while their terminal is in front",
+            "Hide wings while their terminal is in front",
             isOn: $settings.hideIslandsWhileTerminalInFront)
-          Text("While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices drop no island, whichever of its tabs you are in: answer them in the terminal. An island already up goes away when you switch to that terminal. Requests still wait in the panel.")
+          Text("While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices show no wing beside the notch, whichever of its tabs you are in: answer them in the terminal. A wing already showing goes away when you switch to that terminal; if you leave it unanswered, its small mark comes back. Requests still wait in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-          Toggle("Focus is on: hide islands that only point to the terminal", isOn: $settings.focusActive)
-          Text("“Claude is asking you”, plan approval and waiting islands stay hidden; permission requests still drop down. macOS does not tell apps when a Focus such as Do Not Disturb starts, so two Shortcuts automations can switch this for you (see the README).")
+          Toggle("Focus is on: hide wings that only point to the terminal", isOn: $settings.focusActive)
+          Text("Wings for questions asked in the terminal, plan approvals and waiting notices stay hidden; permission requests still show beside the notch, and only they keep a mark there. macOS does not tell apps when a Focus such as Do Not Disturb starts, so two Shortcuts automations can switch this for you (see the README).")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text, then shrinks to a small colored mark. On: only the mark. Nothing ever drops down over the page.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Picker("Status colors", selection: $settings.statusColors) {
+            ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)
@@ -316,7 +330,7 @@ struct SettingsView: View {
             }
           }
           Toggle("Silent mode: only permission requests and questions", isOn: $settings.silentMode)
-          Text("Also toggled with 🔔 in the panel band. “Done” and module islands and their sounds stay quiet; everything still shows in the panel.")
+          Text("Also toggled with 🔔 in the panel band. “Done” and module wings and their sounds stay quiet; everything still shows in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Quiet hours", isOn: $settings.quietHours)
@@ -329,7 +343,7 @@ struct SettingsView: View {
                 ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
               }
             }
-            Text("No ClaudeNotch sound plays in this window; islands still drop.")
+            Text("No ClaudeNotch sound plays in this window; wings still show.")
               .font(.caption).foregroundStyle(.secondary)
           }
         }
@@ -427,9 +441,9 @@ struct SettingsView: View {
     // Names the line's color, so it follows the chosen palette (classic: the original text).
     switch settings.statusColors {
     case .classic:
-      return loc("When time runs out, the request waits in the amber line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+      return loc("A panel that \(allow) / \(deny) opened closes after this time. The request keeps waiting (hook timeout ~10 min): its mark stays beside the notch and its line under the notch stays amber. Hovering keeps the panel open. While only the mark shows, \(allow) / \(deny) first bring the request back; the second press decides.")
     case .colorblind:
-      return loc("When time runs out, the request waits in the yellow line under the notch (hook timeout ~10 min). Hovering keeps it open. Once it has closed, \(allow) / \(deny) first bring the request back; the second press decides.")
+      return loc("A panel that \(allow) / \(deny) opened closes after this time. The request keeps waiting (hook timeout ~10 min): its mark stays beside the notch and its line under the notch stays yellow. Hovering keeps the panel open. While only the mark shows, \(allow) / \(deny) first bring the request back; the second press decides.")
     }
   }
 

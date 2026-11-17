@@ -44,7 +44,8 @@ ClaudeNotch Google'a kendi OAuth istemcinle bağlanır (yalnız okuma). Bir kez:
 
 İstemci bilgisi ve jetonlar yalnız senin okuyabildiğin bir dosyada tutulur
 (`~/Library/Application Support/ClaudeNotch/google.json`, `0600`); JSON dosyasını depoya koyma. Toplantının Meet / Zoom
-bağlantısı varsa ada ve takvim kartı başlangıçtan 15 dk önce **Katıl** düğmesi gösterir.
+bağlantısı varsa paneldeki takvim kartı başlangıçtan 15 dk önce **Katıl** düğmesi gösterir
+(çentiğin yanındaki kanatlar yalnızca hatırlatır; tıklamak paneli açar).
 
 ## İndirerek kurma (en kolayı)
 
@@ -115,22 +116,29 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
 - **Kapalı:** oturum yoksa yalnızca donanım çentiği görünür, hiçbir şey çizilmez. Oturum varsa
   çentiğin hemen altında (2 pt boşluk) ortalı, 3 pt'lik bir **durum çizgisi** belirir: çentik
   genişliğinin iki yanından 24 pt içeride, oturum başına bir parça (en çok 6, sabit sırada).
-  Turuncu ışıltı: çalışıyor; amber nefes: sizi bekliyor (izin / soru / plan / girdi); yeşil:
-  görülmemiş "bitti" (gelişte bir kez parlar); kırmızı: hata; soluk beyaz: boşta. Hareketi
+  Renk yalnızca "sizi bekliyor" anlamına gelir. Düz gri ışıltı: çalışıyor; amber nefes: sizi
+  bekliyor (izin / soru / plan / girdi); açık gri (neredeyse beyaz): görülmemiş "bitti" (gelişte
+  bir kez parlar); kırmızı: hata; soluk beyaz: boşta. Hareketi
   azalt açıkken renkler durağandır. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
   dışındaki kısmında tıklamalar her zaman arkadaki menülere gider.
   Ayarlar > Genel > Görünüm > Durum renkleri > **Renk körlüğüne uygun** seçilirse renkler hemen
   kırmızı-yeşil renk körlüğünde de ayrışanlara döner ve her duruma bir biçim işareti eklenir:
-  camgöbeği `#22D3EE` kayan ışıltı = çalışıyor, sarı `#F0E442` yavaş nefes = sizi bekliyor, düz
-  mavi `#388BFD` = bitti, kesik (üç kısa çizgi) pembe-kırmızı `#FB7185` = hata, soluk beyaz =
-  boşta.
-- **Göz atma (peek):** izin, soru, bitti ve hata olayları çentikten aşağı doğru düz siyah bir
-  ada olarak düşer: bant içinde tam çentik genişliğinde, bandın hemen altında küçük iç bükey
-  kavislerle genişler (bitti / hata ~300 pt tek satır, izin ~380 pt iki satır + küçük
-  düğmeler). "Bitti" 2,5 sn kalır; izin isteği aşağıdaki [izin akışına](#izin-akışı-ve-kısayollar)
-  göre kalır. Üzerindeyken kapanmaz, sonra çizgiye geri döner (amber parça nefes almaya devam
-  eder). Metin tek satıra sığmıyorsa İzin ver yerine **Tümünü gör** çıkar. 1,5 sn içindeki
-  "bitti"ler birleştirilir ("2 oturum bitti").
+  gri `#8E8E8E` kayan ışıltı = çalışıyor, sarı `#F0E442` yavaş nefes = sizi bekliyor, açık gri
+  `#E8E8E8` = bitti, kesik (üç kısa çizgi) pembe-kırmızı `#FB7185` = hata, soluk beyaz = boşta.
+  İki paletle de yalnızca "sizi bekliyor" ve hata renklidir.
+- **Kanatlar (aşağı düşen ada yok):** izin, soru / plan / bekleme, bitti, hata ve modül
+  notları artık menü çubuğu bandının altına inmez; altındaki Chrome sekmeleri tıklanabilir
+  kalır. Çentik bandla aynı yükseklikte **yana doğru** büyür. İlk 4 sn sol kanat renkli bir
+  işaret ve kısa özet ("claude-notch çalıştırmak istiyor"), sağ kanat tek satır ayrıntı
+  (komut, sorunun ilk sözcükleri) gösterir; sonra kanatlar küçük bir renkli işarete (sol nokta,
+  sağda kalkan / ? / ! / onay işareti; birden çok bekleyen varsa sayı) daralır. İzin ve soru /
+  plan / bekleme işareti yanıtlanana, hata işareti görülene kadar kalır; bitti ve modül
+  notlarında işaret kalmaz. Odak açıkken yalnızca izin işareti kalır. Kanatlara tıklamak paneli
+  açar (yalnızca terminalde yanıtlanan soru, o terminal sekmesine götürür); çentiğin üzerine
+  gelmek paneli eskisi gibi açar. Ayarlar > Bildirimler > **Çentiğin yanında yalnızca küçük
+  bir işaret göster** (varsayılan: kapalı; Genel > Görünüm altında da var) 4 sn'lik metni hiç
+  göstermez ve işareti hemen çıkarır. Çentiksiz harici ekranlarda aynısı hap şeklinin iki
+  yanında olur.
 - **Panel:** yalnızca siz açtığınızda: çentik ya da çizgi üzerinde ~300 ms beklemek (hızlı
   geçişler yok sayılır), çentiğe tıklamak ya da ⌃⌥Space. 600 pt genişliğinde, ortalıdır ve açık
   kaldığı sürece kendi genişliği boyunca menü çubuğu bandını alır: çentiğin solunda iğne
@@ -181,28 +189,28 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   Gizlilik ve Güvenlik > Otomasyon açılır.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
   başkaysa onun menü çubuğunun ortasında 180 pt'lik siyah bir yapay çentik görünür ve aynı model
-  geçerlidir (altında durum çizgisi, peek ondan düşer, panel onun bandını alır). Ayarlar > Ekran: Otomatik / Sadece
+  geçerlidir (altında durum çizgisi, kanatlar onun iki yanından büyür, panel onun bandını alır). Ayarlar > Ekran: Otomatik / Sadece
   çentikli / Tümü.
 - Sağ tık: gerekiyorsa **Ghostty iznini ver**, **Ayarlar** (ekran, satır yoğunluğu,
-  kısayollar, izin isteğinin görünür kalma süresi, olay başına sesler, oturum açılışında
+  kısayollar, kısayolla açılan panelin açık kalma süresi, olay başına sesler, oturum açılışında
   başlat, kanca kurulumu), **Claude Code kancaları…**, **ClaudeNotch’tan çık**.
 
 ## İzin akışı ve kısayollar
 
-**İstek gelince:** ses (Ayarlar > Bildirim sesleri) ve çentikten izin adası düşer: araç,
-proje, tek satır komut, kalan süre halkası (hook'un ~590 sn'lik süresine doğru boşalır; son 2
-dakikada süre de yazılır), **Reddet ⌃⌥N** ve **İzin ver ⌃⌥Y** düğmeleri (düğmedeki tuşlar
-sizin ayarladığınız kısayollardır; kaydedilemeyen kısayolun tuşu gösterilmez). İlk kullanıma
-kadar adanın altında bir kez "⌃⌥Y izin ver · ⌃⌥N reddet" satırı görünür; kısayollardan biri ilk
-kez işe yarayınca kaybolur.
+**İstek gelince:** ses (Ayarlar > Bildirim sesleri) ve çentiğin iki yanında kanatlar açılır: sol
+kanatta "<proje> çalıştırmak istiyor", sağ kanatta tek satır komut. Kanatlarda düğme yoktur:
+**⌃⌥Y** (izin ver) ve **⌃⌥N** (reddet) her uygulamadan çalışır, ya da kanatlara tıklayıp paneli
+açar ve kartın düğmelerini (kalan süre halkası, kısayol tuşları) kullanırsınız. İmleç kanatların
+üzerine gelince "⌃⌥Y izin ver · ⌃⌥N reddet" ipucu çıkar. 4 sn sonra kanatlar, istek yanıtlanana
+kadar kalan küçük bir işarete daralır.
 
-**Ne kadar kalır:** yanıtlanmayan istek Ayarlar > Bildirim > "İzin isteği görünür kalsın"
-kadar kalır: **8 sn / 15 sn (varsayılan) / 30 sn / Yanıtlanana kadar**. İmleç üzerindeyken
-kapanmaz. Süre dolunca ada çizgiye geri çekilir, istek **bekler**: çizgideki parçası amber
-nefes alır, panelde kartı durur. İstek, siz çentikten ya da terminalden yanıtlayana veya
-hook'un ~590 sn'lik süresi dolana kadar yaşar (süre dolarsa terminaldeki pencere geçerli
-kalır; köprü hiçbir zaman kendiliğinden izin vermez). "Yanıtlanana kadar" seçiliyken açık bir
-izin adası, o sırada gelen "bitti" adalarını bekletir (çizgide yine görünürler).
+**Ne kadar kalır:** kanatlardaki metin 4 sn kalır, sonra istek **bekler**: işareti çentiğin
+yanında, çizgideki parçası amber nefes alır, panelde kartı durur. İstek, siz yanıtlayana (kısayol,
+panel ya da terminal) veya hook'un ~590 sn'lik süresi dolana kadar yaşar (süre dolarsa
+terminaldeki pencere geçerli kalır; köprü hiçbir zaman kendiliğinden izin vermez). Ayarlar >
+Bildirim > "Kısayol paneli açınca açık kalsın" (**8 sn / 15 sn (varsayılan) / 30 sn /
+Yanıtlanana kadar**) yalnızca kısayolla açılan panelin ne kadar açık kalacağını belirler; imleç
+üzerindeyken kapanmaz.
 
 **Global kısayollar** (Carbon `RegisterEventHotKey`; Erişilebilirlik izni gerekmez): her
 uygulamadan çalışır, odağı almaz, ClaudeNotch'u öne getirmez.
@@ -216,18 +224,18 @@ uygulamadan çalışır, odağı almaz, ClaudeNotch'u öne getirmez.
 
 Kurallar (tıklamalarla aynı tek karar yolunda uygulanır, yalnızca görünümde değil):
 
-- Yalnızca **ekranda gösterilen** isteğe uygulanır: adadaki istek ya da açık paneldeki kart.
-  Hiçbir istek gösterilmiyorsa (ada çizgiye dönmüşse) ilk ⌃⌥Y / ⌃⌥N en eski bekleyen isteğin
-  adasını geri getirir ve **başka hiçbir şey yapmaz**; karar, bekleme süresinden sonraki
-  basışta verilir.
-- Gösterilen metin tamamı görünmüyorsa (adada tek satıra sığmıyor, kartta "Tümünü göster"
-  kapalı ya da sonuna kadar okunmamış) ⌃⌥Y izin vermez, **tüm metni açar**: adadan panel o
+- Yalnızca **ekranda gösterilen** isteğe uygulanır: kanattaki istek ya da açık paneldeki kart.
+  Hiçbir istek gösterilmiyorsa (kanatlar yalnızca işarete daralmışsa) ilk ⌃⌥Y / ⌃⌥N en eski
+  bekleyen isteğin metnini 4 sn geri getirir ve **başka hiçbir şey yapmaz** ("yalnızca işaret"
+  açıkken bunun yerine paneli açar); karar, ikinci basışta verilir.
+- Gösterilen metin tamamı görünmüyorsa (kanatta tek satıra sığmıyor, kartta "Tümünü göster"
+  kapalı ya da sonuna kadar okunmamış) ⌃⌥Y izin vermez, **tüm metni açar**: kanatlardan panel o
   kartla açılır (anahtar pencere olmaz, imleç gelene kadar kapanmaz; imleç hiç gelmezse
-  görünür kalma süresi sonunda kapanır), kartta metin açılır; açık ama okunmamış metinde ⌃⌥Y
+  **Kısayol paneli açınca açık kalsın** süresi sonunda kapanır), kartta metin açılır; açık ama okunmamış metinde ⌃⌥Y
   bir sayfa kaydırır. Metnin sonunu gösteren sayfadan sonra 0,8 sn beklenir; izin ancak ondan
   sonraki ayrı bir basışla verilir (sayfalama ve izin aynı tuş ritmine düşmez). **Write / Edit /
   MultiEdit / NotebookEdit** isteklerinde yazılacak içerik ya da eski/yeni metin de bu "tüm
-  metne" dahildir: adada yalnızca dosya yolu görünse bile ⌃⌥Y önce içeriği açar. ⌃⌥N
+  metne" dahildir: kanatta yalnızca dosya yolu görünse bile ⌃⌥Y önce içeriği açar. ⌃⌥N
   kısaltılmış istekte de reddeder (reddetmek güvenlidir), ama yine yalnızca gösterilende.
 - **Riskli komutta** (yukarıdaki liste) ⌃⌥Y **0,6 sn basılı tutulmalıdır**: İzin ver
   düğmesindeki halka dolar, tuş bırakılınca dolmadan iptal olur. Kısa basış yalnızca düğmeyi
@@ -235,10 +243,10 @@ Kurallar (tıklamalarla aynı tek karar yolunda uygulanır, yalnızca görünüm
 - Tuş tekrarı yok sayılır: basılı tutulan kısayol bir kez karar verir, sonraki karar için tuş
   bırakılmalıdır. Bekleme süreleri geçerlidir: yeni ya da geri getirilen istek 0,8 sn, bir kart
   kalkınca ~0,5 sn kısayolları da kabul etmez. Panel açıldığında (⌃⌥Space, üzerine gelme ya da
-  tıklama) karttaki istek de yeni gösterilmiş sayılır ve 0,8 sn bekler; adadan açılan panel
-  adadaki isteği gösterir, başka birini değil.
-- Adadan verilen bir karardan sonra sıradaki bekleyen istek ~0,5 sn sonra düşer (aynı basışın
-  altına hiçbir zaman anında gelmez) ve yine 0,8 sn bekler.
+  tıklama) karttaki istek de yeni gösterilmiş sayılır ve 0,8 sn bekler; kanatlardan açılan panel
+  kanattaki isteği gösterir, başka birini değil.
+- Kanatlardan verilen bir karardan sonra sıradaki bekleyen istek ~0,5 sn sonra kanatlarda
+  görünür (aynı basışın altına hiçbir zaman anında gelmez) ve yine 0,8 sn bekler.
 - **"Her zaman"ın global kısayolu yoktur** (yalnızca tıklama ya da panel klavye kipinde ⌘⇧⏎).
 
 **Ayarlar > Kısayollar:** üç kısayol kaydedici (Paneli aç, İzin ver, Reddet). Düğmeye tıklayıp
@@ -265,7 +273,7 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
 - `auto` izin modunda `PermissionRequest` nadiren tetiklenir; bu yüzden onay kartları çoğunlukla
   `default` / `acceptEdits` oturumlarında görünür. "Bitti" ve "girdi bekliyor" bildirimleri her
   modda çalışır. Terminalde yanıtlamak her zaman mümkündür.
-- **Sessiz mod** (panel bandındaki 🔔): yalnız izin istekleri ve sorular adaya düşer ve ses
+- **Sessiz mod** (panel bandındaki 🔔): yalnız izin istekleri ve sorular kanatlarda görünür ve ses
   çıkarır. macOS Odak durumunu yalnızca Apple'ın yetki verdiği uygulamalara paylaştığı için
   Odak modu otomatik izlenmez; bu düğme onun yerine geçer.
 - `AskUserQuestion` çentikten yanıtlanabilir: `PreToolUse` kancası (eşleşen araç
@@ -276,16 +284,18 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   terminale bırakır (boş yanıt). Serbest metin ("Diğer") terminalde kalır. Bu kanca
   `scripts/install-hooks.sh` yeniden çalıştırılınca eklenir.
   Ayarlar > Bildirimler > **Claude’un sorularını çentikte yanıtla** kapatılırsa soru hiç
-  bekletilmez: terminal hemen sorar, çentik yalnızca "Claude size bir soru soruyor" adasıyla
-  haber verir ve adaya tıklamak o oturumun terminal sekmesine götürür. Soru geldiğinde o
+  bekletilmez: terminal hemen sorar, çentik yalnızca "<proje> soruyor:" kanatlarıyla
+  haber verir ve kanatlara tıklamak o oturumun terminal sekmesine götürür. Soru geldiğinde o
   terminal uygulaması (Ghostty, Terminal, iTerm2…; VS Code gibi bir düzenleyici değil) öndeyse
-  ada açılmaz: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür. Açık bir ada, o
-  terminale geçtiğinizde kapanır.
-- Ayarlar > Bildirimler > **Terminali öndeyken adaları gizle** (varsayılan: kapalı) açıksa, o
+  kanat görünmez: soru zaten gözünüzün önündedir, ⌃⌥J yine o sekmeye götürür. Görünen kanat, o
+  terminale geçtiğinizde kapanır; soru yanıtlanmadan terminalden ayrılırsanız küçük işareti
+  geri gelir.
+- Ayarlar > Bildirimler > **Terminali öndeyken kanatları gizle** (varsayılan: kapalı) açıksa, o
   oturumun terminal uygulaması (aynı liste; düzenleyici değil) öndeyken, hangi sekmesinde
-  olursanız olun izin istekleri, plan onayları ve "girdi bekliyor" bildirimleri için ada
-  açılmaz: terminalde yanıtlanır. Açık bir ada, o terminale geçtiğinizde kapanır. İstekler
-  panelde bekler; gizlenen ada sonradan kendiliğinden açılmaz.
+  olursanız olun izin istekleri, plan onayları ve "girdi bekliyor" bildirimleri için kanat
+  görünmez: terminalde yanıtlanır. Görünen kanat, o terminale geçtiğinizde kapanır. İstekler
+  panelde bekler; yanıtlanmadan bırakılan bir istek, o terminal önden çekilince küçük işaret
+  olarak geri gelir (4 sn'lik metin değil).
 - Ayarlar > Bildirimler > **Claude Code bildirim gönderince terminal zilini çal** (varsayılan:
   kapalı): Claude Code'un her `Notification` olayında (izin, soru, girdi bekleme; giriş onayı
   hariç) uygulama o oturumun tty'sine bir zil karakteri (BEL) yazar. Ghostty sekmeye bakılana
@@ -295,7 +305,7 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   `terminal_bell`) her bildirim iki kez çalar.
 - Sohbetin turu, başlattığı bir workflow ya da arka plan ajanı hâlâ çalışırken biterse
   (Claude Code bunu `Stop` kancasında listeler) oturum "çalışıyor" kalır ve "Arka planda: …"
-  yazar: bitti adası ya da sesi, "10 dk’dır sessiz" notu ve "girdinizi bekliyor" gelmez. Bitti,
+  yazar: bitti kanadı ya da sesi, "10 dk’dır sessiz" notu ve "girdinizi bekliyor" gelmez. Bitti,
   o iş dönüp tur gerçekten bitince gelir. Arka planda çalışan bir kabuk komutu ya da izleyici
   (geliştirme sunucusu, log takibi) bunu bekletmez.
 - `ExitPlanMode` (plan onayı) terminalde kalır: çentikte "Plan onayı bekliyor" görünür.
@@ -316,7 +326,7 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   inmez. "Her zaman" ⋯ açıldıktan ~0,8 sn sonra etkinleşir.
 - Oturumun claude süreci çıkınca (kill -9, sekme kapandı; süreç henüz toplanmamış bir zombi
   olsa bile) satır ve kartları hemen kalkar; 10 sn'lik yoklama yedek olarak çalışır.
-  Peek durağan imlecin altında açılırsa imleç hareket edene
+  Kanatlar durağan imlecin altında açılırsa imleç hareket edene
   kadar tıklamaları arkadaki pencereye geçirir.
 - Çentiksiz ekranda ve gösterecek bir şey yokken panel görünmezdir ve fareyi yakalamaz.
 - "Oturum açılışında başlat" ad-hoc imzalı uygulamalarda hata verebilir; uygulamayı
@@ -333,10 +343,11 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
 
 ## Rahatsız Etme (isteğe bağlı)
 
-Ayarlar > Bildirimler > **Odak açık: yalnızca terminali gösteren adaları gizle** (varsayılan:
-kapalı) açıkken "Claude size bir soru soruyor" (terminalde yanıtlanan sorular), plan onayı ve
-"girdi bekliyor" adaları hiçbir uygulamada açılmaz. İzin istekleri, çentikte yanıtlanan sorular
-ve biten işler yine görünür. macOS bir Odak başladığında uygulamalara haber vermez; macOS 26'da
+Ayarlar > Bildirimler > **Odak açık: yalnızca terminali gösteren kanatları gizle** (varsayılan:
+kapalı) açıkken "<proje> soruyor:" (terminalde yanıtlanan sorular), plan onayı ve
+"girdi bekliyor" kanatları hiçbir uygulamada görünmez. İzin istekleri, çentikte yanıtlanan
+sorular ve biten işler yine görünür (Odak açıkken çentiğin yanında yalnızca izin işareti
+kalır; durum çizgisi gerisini yine gösterir). macOS bir Odak başladığında uygulamalara haber vermez; macOS 26'da
 bunu iki Kestirmeler otomasyonu sizin yerinize açıp kapatabilir:
 
 1. Kestirmeler > Ayarlar > İleri Düzey: **Betikleri Çalıştırmaya İzin Ver**'i açın.

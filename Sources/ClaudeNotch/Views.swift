@@ -4,20 +4,16 @@ import SwiftUI
 
 enum DecisionSource: Sendable {
   case click
-  /// Peek button: only for a request whose whole text the peek shows (`fitsPeek`).
-  case peek
   case key
   /// Hold-to-allow completed on the panel's card.
   case hold
-  /// Hold-to-allow completed on the peek (peek rules and hold rules both apply).
-  case peekHold
-  /// Global shortcut (⌃⌥Y / ⌃⌥N): only on the request on screen, peek rules when in the peek.
+  /// Global shortcut (⌃⌥Y / ⌃⌥N): only on the request on screen; with the panel closed, the
+  /// wings' rules (allowing needs the whole request in the wing, `fitsWing`).
   case global
   /// Global allow shortcut held for the hold time on a risky request.
   case globalHold
 
-  var fromPeek: Bool { self == .peek || self == .peekHold }
-  var isHold: Bool { self == .hold || self == .peekHold || self == .globalHold }
+  var isHold: Bool { self == .hold || self == .globalHold }
   var isGlobal: Bool { self == .global || self == .globalHold }
 }
 
@@ -39,6 +35,8 @@ struct NotchActions {
   var togglePin: @MainActor () -> Void = {}
   var openSettings: @MainActor () -> Void = {}
   var expand: @MainActor (CGDirectDisplayID) -> Void = { _ in }
+  /// A click on the wings: the panel opens, or a terminal-only question's terminal comes up.
+  var wingTap: @MainActor (CGDirectDisplayID) -> Void = { _ in }
   /// Selects the oldest card (the "N permissions" chip).
   var showCards: @MainActor () -> Void = {}
   var bodyHeight: @MainActor (CGDirectDisplayID, NotchMode, CGFloat) -> Void = { _, _, _ in }
@@ -184,14 +182,17 @@ struct NotchRootView: View {
 
   var body: some View {
     let island = NotchMetrics.island(
-      mode, geometry: g, body: surface.bodyHeight, peekWidth: surface.peekWidth)
+      mode, geometry: g, body: surface.bodyHeight, wingSide: surface.wingSide)
     let shape = IslandShape(island, band: g.bandHeight)
     let segments = store.statusLine
     // A hidden synthetic pill draws nothing; the hardware notch is black anyway (the collapsed
     // shape stays inside the camera housing).
     let drawn = surface.visible && (g.hasNotch || mode != .collapsed || !segments.isEmpty)
     let windowW = NotchMetrics.windowWidth(screen: g.screenFrame.width)
-    let pillShown = mode == .collapsed && surface.visible && modules.timerPillVisible
+    // The status line and the timer stay while the wings are out (a mark can linger for long);
+    // on a screen without a menu bar the wings sit where the line would be, so it waits.
+    let lineMode = mode == .collapsed || (mode == .peek && g.bandHeight > 0)
+    let pillShown = lineMode && surface.visible && modules.timerPillVisible
       && (g.hasNotch || !segments.isEmpty)
     ZStack(alignment: .top) {
       NotchBackground(mode: mode, theme: theme, band: g.toolbarHeight)
@@ -204,7 +205,7 @@ struct NotchRootView: View {
         .opacity(drawn ? 1 : 0)
       VStack(spacing: 0) {
         bandRow(island)
-          .frame(width: island.topWidth, height: mode == .expanded ? g.toolbarHeight : g.bandHeight)
+          .frame(width: island.topWidth, height: bandRowHeight(island))
         bodyContent
           .frame(width: island.bodyWidth)
           .fixedSize(horizontal: false, vertical: true)
@@ -214,7 +215,7 @@ struct NotchRootView: View {
       StatusLineView(segments: segments, colors: settings.statusColors.colors)
         .frame(width: NotchMetrics.lineWidth(notch: g.notchWidth), height: NotchMetrics.lineHeight)
         .padding(.top, NotchMetrics.lineTop(g, pill: pillShown))
-        .opacity(mode == .collapsed && surface.visible && !segments.isEmpty ? 1 : 0)
+        .opacity(lineMode && surface.visible && !segments.isEmpty ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
       // The ears also flank an external screen's pill: the middle of a notchless menu bar is
@@ -237,18 +238,19 @@ struct NotchRootView: View {
           .transition(.opacity)
           .allowsHitTesting(false)
       }
-      if mode == .collapsed {
+      if mode == .collapsed || mode == .peek {
         // The notch and the line (and the timer pill) open the panel on click (clicking never
-        // makes it key).
+        // makes it key); with the wings out, the notch is part of the wings' button.
+        let tap = { mode == .peek ? actions.wingTap(g.displayID) : actions.expand(g.displayID) }
         Color.clear
           .frame(
             width: g.notchWidth,
             height: modules.timerPillVisible
               ? NotchMetrics.pillZoneDepth(g) : NotchMetrics.lineZoneDepth(g))
           .contentShape(Rectangle())
-          .onTapGesture { actions.expand(g.displayID) }
+          .onTapGesture { tap() }
           .accessibilityAddTraits(.isButton)
-          .accessibilityAction { actions.expand(g.displayID) }
+          .accessibilityAction { tap() }
       }
     }
     .environment(\.notchTheme, theme)
@@ -257,9 +259,24 @@ struct NotchRootView: View {
     .accessibilityLabel(NotchSignals(store: store).accessibilityText)
   }
 
+  private func bandRowHeight(_ island: IslandGeometry) -> CGFloat {
+    switch mode {
+    case .expanded: return g.toolbarHeight
+    case .peek: return island.height
+    case .collapsed: return g.bandHeight
+    }
+  }
+
   @ViewBuilder
   private func bandRow(_ island: IslandGeometry) -> some View {
-    if mode == .expanded {
+    if mode == .peek, let wings = ui.wings {
+      WingsView(
+        // No menu bar on this screen: only the mark (see `NotchController.wingsFit`).
+        display: wings,
+        text: g.bandHeight > 0 ? wings.item.flatMap { WingText.make($0, store: store) } : nil,
+        store: store, ui: ui, actions: actions, geometry: g, side: surface.wingSide,
+        height: island.height)
+    } else if mode == .expanded {
       ExpandedToolbar(
         store: store, ui: ui, settings: settings, modules: modules, actions: actions,
         notchWidth: g.notchWidth,
@@ -273,19 +290,9 @@ struct NotchRootView: View {
   @ViewBuilder
   private var bodyContent: some View {
     switch mode {
-    case .collapsed:
+    case .collapsed, .peek:
+      // The wings live in the band row: nothing is drawn below the band.
       Color.clear.frame(height: 0)
-    case .peek:
-      if let peek = ui.peek {
-        PeekBody(
-          store: store, ui: ui, peek: peek, displayID: g.displayID, actions: actions,
-          shelfPreview: peek.module.flatMap { n in
-            n.source == .shelf
-              ? modules.shelf.previews[String(n.id.dropFirst("shelf:".count))] : nil
-          })
-          .measuredHeight { actions.bodyHeight(g.displayID, .peek, $0) }
-          .transition(.opacity.animation(Motion.contentOut))
-      }
     case .expanded:
       ExpandedBody(
         store: store, ui: ui, settings: settings, modules: modules, actions: actions,
@@ -471,7 +478,9 @@ final class StatusLineLayerView: NSView {
     case .needs: return rgb(colors.needs)
     case .done: return rgb(colors.done)
     case .error: return rgb(colors.error)
-    case .idle: return NSColor.white.withAlphaComponent(0.22)
+    // Plain white: the faintness comes from the bar's opacity (`StatusPalette.lineOpacity`).
+    // Putting idleAlpha here too would apply it twice (0.22 x 0.22, an invisible bar).
+    case .idle: return NSColor.white
     }
   }
 
@@ -516,7 +525,7 @@ final class StatusLineLayerView: NSView {
     seg.glow.shadowRadius = 4
     seg.glow.shadowOpacity = state == .idle ? 0 : 1
     seg.glow.opacity = state == .idle ? 0 : 0.4
-    seg.bar.opacity = state == .done ? 0.7 : 1
+    seg.bar.opacity = Float(StatusPalette.lineOpacity(state))
     seg.shine.isHidden = state != .working || reduceMotion
     applyDashes(seg, state)
     CATransaction.commit()
@@ -537,7 +546,7 @@ final class StatusLineLayerView: NSView {
       }
     case .done where arrived:
       let flash = CAKeyframeAnimation(keyPath: "opacity")
-      flash.values = [0.7, 1, 1, 0.7]
+      flash.values = [0.4, 1, 1, 1]
       flash.keyTimes = [0, 0.12, 0.35, 1]
       flash.duration = 0.9
       seg.bar.add(flash, forKey: "flash")

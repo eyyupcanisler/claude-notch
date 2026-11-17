@@ -7,24 +7,24 @@ final class ModulesTests: XCTestCase {
   private let t0 = Date(timeIntervalSince1970: 100_000)
   private func at(_ s: TimeInterval) -> Date { t0.addingTimeInterval(s) }
 
-  // MARK: Peek planner
+  // MARK: Module notes in the wings
 
   private func note(_ id: String, valid: TimeInterval = 600) -> ModuleNote {
     ModuleNote(source: .calendar, id: id, title: id, validUntil: at(valid))
   }
 
   func testModuleNeverPreemptsClaudeAndWaits() {
-    var p = PeekPlanner()
+    var p = WingPlanner()
     p.receive(attention: "done", sessionID: "s", at: at(0))
     XCTAssertFalse(p.receive(module: note("m"), at: at(1)))
     XCTAssertEqual(p.current?.kind, .finished)
-    XCTAssertTrue(p.expire(at: at(3)))
-    XCTAssertEqual(p.current?.kind, .module, "the waiting note shows once the Claude peek is gone")
+    XCTAssertTrue(p.expire(at: at(NotchWings.longDuration)))
+    XCTAssertEqual(p.current?.kind, .module, "the waiting note shows once the Claude item is gone")
     XCTAssertEqual(p.current?.module?.id, "m")
   }
 
   func testClaudePeekReplacesModuleAtOnce() {
-    var p = PeekPlanner()
+    var p = WingPlanner()
     p.receive(module: note("m"), at: at(0))
     XCTAssertTrue(p.receive(attention: "permission", sessionID: "s", cardID: "c", at: at(1)))
     XCTAssertEqual(p.current?.kind, .permission)
@@ -32,7 +32,7 @@ final class ModulesTests: XCTestCase {
   }
 
   func testStaleWaitingNoteIsDropped() {
-    var p = PeekPlanner()
+    var p = WingPlanner()
     p.receive(attention: "permission", sessionID: "s", cardID: "c", at: at(0))
     p.receive(module: note("m", valid: 5), at: at(1))
     p.clear()
@@ -41,7 +41,7 @@ final class ModulesTests: XCTestCase {
   }
 
   func testClearAllDropsWaitingNote() {
-    var p = PeekPlanner()
+    var p = WingPlanner()
     p.receive(attention: "permission", sessionID: "s", cardID: "c", at: at(0))
     p.receive(module: note("m"), at: at(1))
     p.clearAll()
@@ -50,10 +50,10 @@ final class ModulesTests: XCTestCase {
   }
 
   func testModuleExpires() {
-    var p = PeekPlanner()
+    var p = WingPlanner()
     p.receive(module: note("m"), at: at(0))
-    XCTAssertFalse(p.expire(at: at(PeekPlanner.moduleDuration - 0.1)))
-    XCTAssertTrue(p.expire(at: at(PeekPlanner.moduleDuration)))
+    XCTAssertFalse(p.expire(at: at(NotchWings.longDuration - 0.1)))
+    XCTAssertTrue(p.expire(at: at(NotchWings.longDuration)))
     XCTAssertNil(p.current)
   }
 

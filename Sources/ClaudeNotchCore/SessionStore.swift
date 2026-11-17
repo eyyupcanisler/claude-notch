@@ -38,7 +38,7 @@ import Observation
 //                                    for allow / always, needsExpansion + the full-text view.
 //   denyAll(sessionID:)              Denies every card of a session at once.
 //   PendingPermission.risk           Risk reason from the raw command (hold-to-allow / ⌘⏎).
-//   PendingPermission.fitsPeek       The peek's one line is the whole request.
+//   PendingPermission.fitsWing       The right wing's one line is the whole request.
 //
 // Actions
 //   markSeen(sessionID:)             Row click / focus: clears unseen, waiting -> idle.
@@ -351,7 +351,7 @@ public final class SessionStore {
       session.waitsForBackground = !continuing.isEmpty
       if session.waitsForBackground {
         // A workflow or background agent still runs and wakes the session when it is back:
-        // not done yet (no island, chime or green); the Stop after it is the real end.
+        // not done yet (no wing, chime or done bar); the Stop after it is the real end.
         session.activity = nil
         setStatus(&session, .working(tool: BackgroundWork.summary(continuing)), at: t)
         break

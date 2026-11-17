@@ -4,7 +4,8 @@ import Foundation
 /// Which status colors the app draws (Settings > General > Appearance > Status colors).
 /// Stored under `defaultsKey`; a fresh install (nothing saved) is `classic`, the original look.
 public enum StatusColorScheme: String, CaseIterable, Sendable {
-  /// The original colors: Claude orange, amber, green, red; the error segment a solid bar.
+  /// The original look: amber and red for needs and error (error a solid bar), grey working and
+  /// near-white done.
   case classic
   /// Colors that stay apart for the common color-vision deficiencies, plus a shape sign per
   /// state (the error segment drawn as a broken bar).
@@ -39,11 +40,11 @@ public enum StatusColorScheme: String, CaseIterable, Sendable {
 public enum StatusPalette {
   /// One palette: the four status colors and how the error segment is drawn.
   public struct Colors: Sendable, Equatable {
-    /// Working (shimmer).
+    /// Working (neutral grey, shimmer).
     public let working: UInt32
     /// Needs you (breathing).
     public let needs: UInt32
-    /// Done, unseen (solid, flashes once on arrival).
+    /// Done, unseen (near-white, solid, flashes once on arrival).
     public let done: UInt32
     /// Error, unseen (static).
     public let error: UInt32
@@ -54,13 +55,61 @@ public enum StatusPalette {
     public var all: [UInt32] { [working, needs, done, error] }
   }
 
-  /// The original palette: Claude orange, amber, green, red; error is a solid bar.
-  public static let classic = Colors(
-    working: 0xD97757, needs: 0xFFB020, done: 0x34C759, error: 0xFF453A, errorDashed: false)
+  /// Color only signals "needs the user", in both palettes: working is a neutral grey and done a
+  /// near-white (no hue), brighter than idle (white at `idleAlpha`) and ordered
+  /// idle < working < done. Needs and error keep their colors.
+  public static let workingGrey: UInt32 = 0x8E8E8E
+  public static let doneWhite: UInt32 = 0xE8E8E8
 
-  /// Colorblind-friendly: cyan, yellow, blue, pink-red; error is a broken bar.
+  /// The original look for the states that need you: amber and red; error is a solid bar.
+  public static let classic = Colors(
+    working: workingGrey, needs: 0xFFB020, done: doneWhite, error: 0xFF453A, errorDashed: false)
+
+  /// Colorblind-friendly: yellow and pink-red; error is a broken bar.
   public static let colorblind = Colors(
-    working: 0x22D3EE, needs: 0xF0E442, done: 0x388BFD, error: 0xFB7185, errorDashed: true)
+    working: workingGrey, needs: 0xF0E442, done: doneWhite, error: 0xFB7185, errorDashed: true)
+
+  /// An idle status-line segment: white at this alpha over the black band (both palettes).
+  public static let idleAlpha: Double = 0.22
+
+  /// Opacity of a status-line segment's bar in `state` (before any animation). Idle is drawn as
+  /// white at `idleAlpha` and returns that alpha here.
+  public static func lineOpacity(_ state: LineState) -> Double {
+    // Done is opaque: at the old 0.7 the near-white would sink toward the working grey.
+    switch state {
+    case .idle: return idleAlpha
+    default: return 1
+    }
+  }
+
+  /// `hex` drawn at `opacity` over black, as the sRGB color you see (per-channel, rounded).
+  public static func onBlack(_ hex: UInt32, opacity: Double) -> UInt32 {
+    let a = max(0, min(1, opacity))
+    let c = components(hex)
+    func ch(_ v: Double) -> UInt32 { UInt32((v * a * 255).rounded()) }
+    return ch(c.red) << 16 | ch(c.green) << 8 | ch(c.blue)
+  }
+
+  /// The color a status-line segment in `state` shows over the black band (its palette color
+  /// at `lineOpacity`; idle is white at `idleAlpha`).
+  public static func lineColor(_ state: LineState, in colors: Colors) -> UInt32 {
+    let hex: UInt32
+    switch state {
+    case .working: hex = colors.working
+    case .needs: hex = colors.needs
+    case .done: hex = colors.done
+    case .error: hex = colors.error
+    case .idle: hex = 0xFFFFFF
+    }
+    return onBlack(hex, opacity: lineOpacity(state))
+  }
+
+  /// How far a color is from grey: the spread between its largest and smallest sRGB component
+  /// (0 = no hue at all, 1 = fully saturated).
+  public static func chroma(_ hex: UInt32) -> Double {
+    let c = components(hex)
+    return max(c.red, c.green, c.blue) - min(c.red, c.green, c.blue)
+  }
 
   /// The 0...1 sRGB components of a 0xRRGGBB value.
   public static func components(_ hex: UInt32) -> (red: Double, green: Double, blue: Double) {

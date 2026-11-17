@@ -85,31 +85,6 @@ final class V4Tests: XCTestCase {
     XCTAssertTrue(latch.pressed(at: t.addingTimeInterval(10 + GlobalKeyLatch.lostReleaseAfter)))
   }
 
-  // MARK: - P2 peek lifecycle
-
-  func testPermissionPeekDurationSetting() {
-    let t0 = Date(timeIntervalSince1970: 1000)
-    var p = PeekPlanner(permissionHold: 15)
-    p.receive(attention: "permission", sessionID: "a", cardID: "c1", at: t0)
-    XCTAssertFalse(p.expire(at: t0.addingTimeInterval(14.9)))
-    XCTAssertTrue(p.expire(at: t0.addingTimeInterval(15)))
-    // "Until answered": never expires on its own.
-    p.permissionHold = nil
-    p.receive(attention: "permission", sessionID: "a", cardID: "c1", at: t0)
-    XCTAssertFalse(p.expire(at: t0.addingTimeInterval(100_000)))
-    XCTAssertEqual(p.current?.until, .distantFuture)
-    // Re-shown for an older card (reveal / next card after a decision).
-    p.permissionHold = 8
-    p.show(cardID: "c0", sessionID: "b", at: t0)
-    XCTAssertEqual(p.current?.cardID, "c0")
-    XCTAssertEqual(p.current?.kind, .permission)
-    XCTAssertEqual(p.current?.until, t0.addingTimeInterval(8))
-    // Other kinds keep their own times.
-    var q = PeekPlanner(permissionHold: nil)
-    q.receive(attention: "done", sessionID: "a", at: t0)
-    XCTAssertTrue(q.expire(at: t0.addingTimeInterval(PeekPlanner.finishedDuration)))
-  }
-
   // MARK: - P4 discovery
 
   private func rec(
@@ -326,7 +301,7 @@ final class V4Tests: XCTestCase {
         ])),
       context: ctx) { _ in }
     XCTAssertNotNil(write.extra)
-    XCTAssertFalse(write.fitsPeek, "the peek shows only the path")
+    XCTAssertFalse(write.fitsWing, "the wing shows only the path")
     XCTAssertTrue(write.needsExpansion, "allowing needs the content on screen, to its end")
     let edit = store.addPermission(
       HookEvent(
@@ -335,7 +310,7 @@ final class V4Tests: XCTestCase {
           "file_path": .string("/a"), "old_string": .string("x"), "new_string": .string("y")
         ])),
       context: ctx) { _ in }
-    XCTAssertFalse(edit.fitsPeek)
+    XCTAssertFalse(edit.fitsWing)
     XCTAssertTrue(edit.needsExpansion)
   }
 

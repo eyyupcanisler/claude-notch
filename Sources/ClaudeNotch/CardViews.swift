@@ -135,7 +135,7 @@ struct PermissionCardView: View {
       MoreButton(open: ui.moreCardID == card.id) { actions.toggleMore(card.id) }
       AllowButton(
         card: card, gate: gate, ui: ui, decision: .allow, title: loc("Allow"),
-        keycap: ui.keyMode ? "⌘⏎" : ui.allowKey, source: .click, actions: actions)
+        keycap: ui.keyMode ? "⌘⏎" : ui.allowKey, actions: actions)
     }
   }
 }
@@ -257,7 +257,7 @@ struct MoreSection: View {
           Spacer(minLength: 4)
           AllowButton(
             card: card, gate: gate, ui: ui, decision: .always, title: loc("Always"),
-            keycap: ui.keyMode ? "⌘⇧⏎" : nil, source: .click, actions: actions, primary: false)
+            keycap: ui.keyMode ? "⌘⇧⏎" : nil, actions: actions, primary: false)
         }
         // The whole rule, never shortened: what is shown is what gets saved. A rule longer
         // than four lines scrolls, and "Always" waits until its end was on screen.
@@ -406,7 +406,6 @@ struct AllowButton: View {
   let decision: PermissionDecision
   let title: String
   var keycap: String?
-  let source: DecisionSource
   let actions: NotchActions
   var primary = true
   var compact = false
@@ -436,7 +435,7 @@ struct AllowButton: View {
         title: title, style: primary ? .primary : .secondary, keycap: keycap,
         enabled: enabled, compact: compact
       ) {
-        actions.decide(card.id, decision, source)
+        actions.decide(card.id, decision, .click)
       }
     }
   }
@@ -488,7 +487,7 @@ struct AllowButton: View {
       guard !Task.isCancelled, holding else { return }
       holding = false
       progress = 0
-      actions.decide(card.id, decision, source.fromPeek ? .peekHold : .hold)
+      actions.decide(card.id, decision, .hold)
     }
   }
 
