@@ -25,11 +25,16 @@ final class SettingsWindowController {
   private let settings: NotchSettings
   private let shortcuts: ShortcutBridge
   private let modules: ModuleCenter
+  private let accessibility: AccessibilityAccess
 
-  init(settings: NotchSettings, shortcuts: ShortcutBridge, modules: ModuleCenter) {
+  init(
+    settings: NotchSettings, shortcuts: ShortcutBridge, modules: ModuleCenter,
+    accessibility: AccessibilityAccess
+  ) {
     self.settings = settings
     self.shortcuts = shortcuts
     self.modules = modules
+    self.accessibility = accessibility
   }
 
   func close() {
@@ -40,8 +45,11 @@ final class SettingsWindowController {
   var windowNumber: Int? { window?.windowNumber }
 
   func show() {
+    // The grant may have changed in System Settings since the window last showed.
+    accessibility.refresh()
     if window == nil {
-      let view = SettingsView(settings: settings, shortcuts: shortcuts, modules: modules)
+      let view = SettingsView(
+        settings: settings, shortcuts: shortcuts, modules: modules, accessibility: accessibility)
       let hosting = NSHostingController(rootView: view)
       let w = NSWindow(contentViewController: hosting)
       w.title = loc("ClaudeNotch Settings")
@@ -62,6 +70,7 @@ struct SettingsView: View {
   @Bindable var settings: NotchSettings
   let shortcuts: ShortcutBridge
   let modules: ModuleCenter
+  let accessibility: AccessibilityAccess
   /// Bumped after a change so the "could not be registered" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
@@ -318,6 +327,22 @@ struct SettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)
           Text("Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Section("Instant updates (Accessibility)") {
+          HStack {
+            if accessibility.trusted {
+              Label("Accessibility permission granted", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            } else {
+              Label("Accessibility permission not granted", systemImage: "circle.dashed")
+                .foregroundStyle(.secondary)
+              Spacer()
+              Button("Allow Accessibility…") { accessibility.request() }
+            }
+          }
+          Text("Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }

@@ -57,9 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       showStartupError("\(error)")
     }
 
-    let controller = NotchController(store: store)
+    let accessibility = AccessibilityAccess()
+    let controller = NotchController(store: store, accessibility: accessibility)
     self.controller = controller
-    let monitor = SessionMonitor(store: store)
+    let monitor = SessionMonitor(store: store, accessibility: accessibility)
     self.monitor = monitor
     controller.onAttention = { [weak monitor] _, _ in monitor?.noteAttention() }
     controller.onExpand = { [weak monitor] in monitor?.refreshTabTitles() }
@@ -72,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     router.uiStateProvider = { [weak self] in
       guard let self, var ui = self.controller?.debugUIState().objectValue else { return .null }
       ui["ghostty_automation"] = self.monitor?.ghosttyAutomation.map { .int(Int($0)) } ?? .null
+      ui["seen"] = self.monitor?.debugSeenState ?? .null
       return .object(ui)
     }
     router.focusProvider = { [weak self] sessionID, dryRun in

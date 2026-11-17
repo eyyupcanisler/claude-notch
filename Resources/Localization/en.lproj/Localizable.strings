@@ -421,3 +421,8 @@
 "Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page." = "Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page.";
 "Open the panel on hover" = "Open the panel on hover";
 "Off: the notch still swells under the pointer, but only a click opens the panel." = "Off: the notch still swells under the pointer, but only a click opens the panel.";
+"Instant updates (Accessibility)" = "Instant updates (Accessibility)";
+"Accessibility permission granted" = "Accessibility permission granted";
+"Accessibility permission not granted" = "Accessibility permission not granted";
+"Allow Accessibility…" = "Allow Accessibility…";
+"Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else." = "Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else.";

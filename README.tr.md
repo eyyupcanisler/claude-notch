@@ -192,6 +192,14 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   amber kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
   penceresini açar (arka planda; çentik donmaz). Daha önce reddedildiyse Sistem Ayarları >
   Gizlilik ve Güvenlik > Otomasyon açılır.
+- **Bakınca görüldü (Ghostty; Erişilebilirlik isteğe bağlı):** bitmiş ya da bekleyen bir
+  sohbetin parçası, onun Ghostty sekmesine ya da bölmesine geçince temizlenir. Varsayılan olarak
+  Ghostty öndeyken ve böyle bir sohbet varken çentik Ghostty'ye odaktaki terminali 0,5 sn'de bir
+  ve her tıklamadan sonra sorar. Ayarlar > Bildirimler > **Anında güncelleme (Erişilebilirlik)**
+  > **Erişilebilirliğe izin ver…** ile uygulama bunun yerine Ghostty'nin odak, pencere ve başlık
+  değişikliklerini izler: parça geçtiğiniz anda temizlenir, 0,5 sn'lik kontrol ve tıklama
+  izleyicisi durur. İzin başka hiçbir şey için kullanılmaz; uygulama onu kendiliğinden istemez,
+  izin yoksa her şey eskisi gibi çalışır.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
   başkaysa onun menü çubuğunun ortasında 180 pt'lik siyah bir yapay çentik görünür ve aynı model
   geçerlidir (altında durum çizgisi, kanatlar onun iki yanından büyür, panel onun bandını alır). Ayarlar > Ekran: Otomatik / Sadece

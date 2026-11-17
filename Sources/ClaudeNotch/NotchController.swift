@@ -80,7 +80,7 @@ final class NotchController {
   /// The panel opened (tab titles are refreshed then).
   var onExpand: (@MainActor () -> Void)?
 
-  init(store: SessionStore) {
+  init(store: SessionStore, accessibility: AccessibilityAccess) {
     self.store = store
     menu = AppMenuController(
       openSettings: { [weak self] in self?.openSettings() },
@@ -111,7 +111,7 @@ final class NotchController {
         applyPreset: { [weak self] preset in self?.applyPreset(preset) ?? [:] },
         pause: { [weak self] paused in self?.pauseShortcuts(paused) },
         registered: { [weak self] role in self?.hotKeys?.isRegistered(role) ?? false }),
-      modules: modules)
+      modules: modules, accessibility: accessibility)
 
     rebuildSurfaces()
     store.onEffect = { [weak self] effect in self?.handle(effect) }
