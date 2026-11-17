@@ -546,12 +546,18 @@ final class NotchController {
 
   private func installMonitors() {
     let global = NSEvent.addGlobalMonitorForEvents(
-      matching: [.mouseMoved, .leftMouseDragged, .leftMouseUp]
-    ) { [weak self] _ in
+      matching: [.mouseMoved, .leftMouseDragged, .leftMouseUp, .leftMouseDown]
+    ) { [weak self] event in
       // Synchronous (monitors run on the main thread): the click-through state must not lag
       // the pointer by a Task hop, or a click just beside the notch lands on the panel.
       guard let self else { return }
-      MainActor.assumeIsolated { self.updatePointer() }
+      MainActor.assumeIsolated {
+        if event.type == .leftMouseDown {
+          self.missedPress(at: NSEvent.mouseLocation)
+        } else {
+          self.updatePointer()
+        }
+      }
     }
     let local = NSEvent.addLocalMonitorForEvents(
       matching: [.mouseMoved, .mouseEntered, .mouseExited]
@@ -1843,6 +1849,52 @@ final class NotchController {
     updatePointer()
   }
 
+  /// A press the global monitor saw, so it went to another app: the pointer reached the notch
+  /// and clicked before `updatePointer` let the panel take clicks. Only inside the notch's own
+  /// band (the menu bar there, where the press did nothing else) does it still act as a notch
+  /// press; below the band it may have hit the page, so it is left alone.
+  private func missedPress(at p: NSPoint) {
+    updatePointer()
+    for s in surfaces.values where s.state.mode != .expanded && s.pointerAtAppear == nil {
+      let g = s.state.geometry
+      let band = NSRect(
+        x: g.screenFrame.midX - g.notchWidth / 2, y: g.screenFrame.maxY - g.bandHeight,
+        width: g.notchWidth, height: g.bandHeight + 1)
+      guard band.contains(p) else { continue }
+      _ = press(at: p, on: s)
+      return
+    }
+  }
+
+  /// A left press on a collapsed notch (with its status line or timer pill) opens the panel; on
+  /// the wings or the notch between them it does what a wing click does. Anything else (ears,
+  /// the open panel) is left to the views.
+  private func press(at p: NSPoint, on s: NotchSurface) -> Bool {
+    let live = hasSessions
+    let pill = modules.timerPillVisible
+    let g = s.state.geometry
+    let cx = g.screenFrame.midX
+    let top = g.screenFrame.maxY
+    let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
+    let notch = NSRect(
+      x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
+    switch s.state.mode {
+    case .collapsed:
+      guard notch.contains(p), s.isLive(hasSessions: live, pill: pill) else { return false }
+      expand(s.displayID, reason: .click)
+      return true
+    case .peek:
+      let i = s.island
+      let wings = NSRect(
+        x: cx - i.topWidth / 2, y: top - i.height, width: i.topWidth, height: i.height)
+      guard wings.contains(p) || notch.contains(p) else { return false }
+      wingTap(s.displayID)
+      return true
+    case .expanded:
+      return false
+    }
+  }
+
   func installRightClick() {
     for s in surfaces.values where s.hostingView.onRightClick == nil {
       s.hostingView.onRightClick = { [weak self, weak s] in
@@ -1850,6 +1902,10 @@ final class NotchController {
         self.showMenu(on: s)
       }
       s.hostingView.onPointerMoved = { [weak self] in self?.updatePointer() }
+      s.hostingView.onPress = { [weak self, weak s] p in
+        guard let self, let s else { return false }
+        return self.press(at: p, on: s)
+      }
       s.hostingView.updateTrackingAreas()
     }
   }
