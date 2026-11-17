@@ -676,17 +676,11 @@ final class NotchController {
         if near {
           collapseTask?.cancel()
           collapseTask = nil
-        } else if !ui.pinned && !ui.keyMode && !ui.shortcutOpen && !debugFreeze
-          && collapseTask == nil
-        {
-          collapseTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled, let self else { return }
-            self.collapseTask = nil
-            guard !self.ui.pinned, !self.ui.keyMode, !self.ui.shortcutOpen, !self.debugFreeze
-            else { return }
-            self.collapse()
-          }
+        } else if !ui.pinned && !ui.keyMode && !ui.shortcutOpen && !debugFreeze {
+          // Closes the moment the pointer leaves (the 6 pt margin above forgives brushing the
+          // edge); it used to wait 400 ms first, which read as lag.
+          collapse()
+          return
         }
       }
     }
