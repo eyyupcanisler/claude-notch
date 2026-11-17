@@ -6,7 +6,8 @@ import XCTest
 
 /// The notch wings (docs/plans/2026-11-17-grey-working-and-notch-wings.md): no island drops
 /// down any more; the notch grows sideways at band height, long text for 4 s, then a small
-/// mark that lingers only while it stands for something the user still has to handle.
+/// mark that lingers only for what blocks Claude (permission, question, plan, waiting) until
+/// it is handled. Under a Focus only those show, and only as the mark.
 final class NotchWingsTests: XCTestCase {
   private let t0 = Date(timeIntervalSince1970: 200_000)
   private func at(_ s: TimeInterval) -> Date { t0.addingTimeInterval(s) }
@@ -118,15 +119,21 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertEqual(o.display(at: at(0))?.target?.asking, false)
   }
 
-  func testErrorMarkLingersUntilSeen() {
+  func testErrorShowsItsTextForFourSecondsThenLeavesNoMark() {
     var w = WingPlanner()
     w.receive(attention: "error", sessionID: "s1", at: at(0))
+    XCTAssertEqual(w.display(at: at(0))?.style, .long)
     XCTAssertEqual(w.display(at: at(0))?.mark, .error)
-    w.expire(at: at(long))
-    XCTAssertEqual(w.display(at: at(120))?.mark, .error)
-    XCTAssertEqual(w.display(at: at(120))?.style, .mark)
-    w.sync(open: w.marks.filter { $0.kind != .error })
-    XCTAssertNil(w.display(at: at(121)), "seen: gone")
+    XCTAssertTrue(w.expire(at: at(long)))
+    XCTAssertNil(w.display(at: at(long)), "an error does not block Claude: the bar shows it")
+    XCTAssertTrue(w.marks.isEmpty)
+    // Mark only: its mark for the 4 s, then nothing.
+    var m = WingPlanner(markOnly: true)
+    m.receive(attention: "error", sessionID: "s1", at: at(0))
+    XCTAssertEqual(m.display(at: at(1))?.style, .mark)
+    XCTAssertEqual(m.display(at: at(1))?.mark, .error)
+    m.expire(at: at(long))
+    XCTAssertNil(m.display(at: at(long)))
   }
 
   func testDoneAndModuleNotesLeaveNoMark() {
@@ -146,46 +153,89 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertNil(m.display(at: at(long)), "a module note vanishes after its 4 s")
   }
 
-  func testLingeringRulesByKindAndFocus() {
-    let off: [WingMarkKind: Bool] = [
-      .permission: true, .attention: true, .error: true, .done: false, .module: false,
-    ]
-    let on: [WingMarkKind: Bool] = [
-      .permission: true, .attention: false, .error: false, .done: false, .module: false,
+  /// Only what blocks Claude keeps a mark, with or without a Focus.
+  func testOnlyBlockingKindsLinger() {
+    let lingers: [WingMarkKind: Bool] = [
+      .permission: true, .attention: true, .error: false, .done: false, .module: false,
     ]
     for kind in WingMarkKind.allCases {
-      XCTAssertEqual(WingPlanner.lingers(kind, focusActive: false), off[kind], kind.rawValue)
-      XCTAssertEqual(WingPlanner.lingers(kind, focusActive: true), on[kind], kind.rawValue)
+      XCTAssertEqual(WingPlanner.lingers(kind), lingers[kind], kind.rawValue)
     }
   }
 
   // MARK: Focus on
 
-  func testFocusOnOnlyPermissionLingers() {
+  func testFocusOnShowsNothingForDoneErrorAndModuleNotes() {
     var w = WingPlanner(focusActive: true)
-    w.receive(attention: "error", sessionID: "e", at: at(0))
-    w.expire(at: at(long))
-    XCTAssertNil(w.display(at: at(long)), "error leaves no mark under Focus (the bar shows it)")
-    w.receive(attention: "question", sessionID: "q", at: at(10))
-    w.expire(at: at(10 + long))
-    XCTAssertNil(w.display(at: at(10 + long)), "a held question leaves no mark under Focus")
-    w.receive(attention: "permission", sessionID: "p", cardID: "c", at: at(20))
-    w.expire(at: at(20 + long))
-    XCTAssertEqual(w.display(at: at(20 + long))?.mark, .permission)
-    XCTAssertEqual(w.display(at: at(20 + long))?.count, 1)
+    XCTAssertFalse(w.receive(attention: "done", sessionID: "d", at: at(0)))
+    XCTAssertNil(w.display(at: at(0)), "done: bar only")
+    XCTAssertFalse(w.receive(attention: "error", sessionID: "e", at: at(1)))
+    XCTAssertNil(w.display(at: at(1)), "error: bar only")
+    XCTAssertFalse(w.receive(module: note("meeting"), at: at(2)))
+    XCTAssertNil(w.display(at: at(2)), "module note: nothing")
+    XCTAssertNil(w.current)
+    XCTAssertNil(w.pendingModule)
+    XCTAssertTrue(w.marks.isEmpty)
   }
 
-  func testTurningFocusOnDropsNonBlockingMarks() {
+  func testFocusOnShowsBlockingKindsOnlyAsAMarkUntilHandled() {
+    for attention in ["permission", "question", "plan", "waiting"] {
+      // The mark-only setting is off: under a Focus the long text never shows anyway.
+      var w = WingPlanner(markOnly: false, focusActive: true)
+      XCTAssertFalse(w.showsText)
+      let card = attention == "permission" ? "c1" : nil
+      XCTAssertTrue(w.receive(attention: attention, sessionID: "s1", cardID: card, at: at(0)))
+      let first = w.display(at: at(0))
+      XCTAssertEqual(first?.style, .mark, "no long text under Focus: \(attention)")
+      XCTAssertEqual(first?.mark, WingMarkKind.of(attention: attention), attention)
+      w.expire(at: at(long))
+      let later = w.display(at: at(600))
+      XCTAssertEqual(later?.style, .mark, attention)
+      XCTAssertEqual(later?.mark, WingMarkKind.of(attention: attention), "stays: \(attention)")
+      w.sync(open: [])
+      XCTAssertNil(w.display(at: at(601)), "handled: gone (\(attention))")
+    }
+  }
+
+  func testFocusOnShowsATerminalOnlyQuestionAsAMarkThatJumpsToTheTerminal() {
+    var w = WingPlanner(focusActive: true)
+    w.questionMode = .terminalOnly
+    w.receive(attention: "question", sessionID: "s1", at: at(0))
+    XCTAssertEqual(w.display(at: at(0))?.style, .mark)
+    w.expire(at: at(long))
+    XCTAssertEqual(w.display(at: at(long))?.target?.asking, true)
+  }
+
+  func testTurningFocusOnEndsANonBlockingItemAndKeepsBlockingMarks() {
     var w = WingPlanner()
     w.receive(attention: "error", sessionID: "e", at: at(0))
     w.receive(attention: "waiting", sessionID: "q", at: at(1))
     w.receive(attention: "permission", sessionID: "p", cardID: "c", at: at(2))
     w.expire(at: at(2 + long))
-    XCTAssertEqual(w.display(at: at(2 + long))?.count, 3)
+    XCTAssertEqual(w.display(at: at(2 + long))?.count, 2, "the error left no mark")
+    w.receive(attention: "done", sessionID: "d", at: at(10))
+    w.receive(module: note("m"), at: at(11))
+    XCTAssertEqual(w.display(at: at(11))?.item?.kind, .finished)
     w.setFocusActive(true)
     XCTAssertTrue(w.focusActive)
-    XCTAssertEqual(w.marks.map(\.kind), [.permission])
-    XCTAssertEqual(w.display(at: at(2 + long))?.count, 1)
+    XCTAssertNil(w.current, "the done text goes at once")
+    XCTAssertNil(w.pendingModule, "the waiting module note too")
+    XCTAssertEqual(w.marks.map(\.kind), [.attention, .permission])
+    let d = w.display(at: at(11))
+    XCTAssertEqual(d?.style, .mark)
+    XCTAssertEqual(d?.count, 2)
+  }
+
+  func testTurningFocusOnShrinksABlockingItemToItsMark() {
+    var w = WingPlanner()
+    w.receive(attention: "permission", sessionID: "p", cardID: "c", at: at(0))
+    XCTAssertEqual(w.display(at: at(0))?.style, .long)
+    w.setFocusActive(true)
+    XCTAssertEqual(w.display(at: at(0))?.style, .mark)
+    XCTAssertEqual(w.display(at: at(0))?.mark, .permission)
+    w.setFocusActive(false)
+    XCTAssertTrue(w.showsText)
+    XCTAssertEqual(w.display(at: at(1))?.style, .long, "Focus off: the text again")
   }
 
   // MARK: Several at once
@@ -212,25 +262,15 @@ final class NotchWingsTests: XCTestCase {
     w.receive(attention: "permission", sessionID: "s1", cardID: "c1", at: at(0))
     w.receive(attention: "error", sessionID: "s2", at: at(1))
     w.receive(attention: "question", sessionID: "s3", at: at(2))
-    w.receive(attention: "done", sessionID: "s4", at: at(3))
-    w.expire(at: at(3 + long))
-    let d = w.display(at: at(3 + long))
+    w.receive(attention: "plan", sessionID: "s5", at: at(3))
+    w.receive(attention: "done", sessionID: "s4", at: at(4))
+    w.expire(at: at(4 + long))
+    let d = w.display(at: at(4 + long))
     XCTAssertEqual(d?.style, .mark)
-    XCTAssertEqual(d?.count, 3, "done never lingers")
+    XCTAssertEqual(d?.count, 3, "done and error never linger")
     XCTAssertEqual(d?.badge, 3, "the right wing draws the count")
     XCTAssertEqual(d?.mark, .permission, "the most urgent mark is drawn, not the newest")
     XCTAssertNil(d?.target, "several: a click opens the panel")
-    // A question that came later outranks an older error.
-    var q = WingPlanner()
-    q.receive(attention: "error", sessionID: "s2", at: at(0))
-    q.receive(attention: "question", sessionID: "s3", at: at(1))
-    q.expire(at: at(1 + long))
-    XCTAssertEqual(q.display(at: at(1 + long))?.mark, .attention)
-    var e = WingPlanner()
-    e.receive(attention: "question", sessionID: "s3", at: at(0))
-    e.receive(attention: "error", sessionID: "s2", at: at(1))
-    e.expire(at: at(1 + long))
-    XCTAssertEqual(e.display(at: at(1 + long))?.mark, .attention, "the newer error does not win")
   }
 
   func testAnItemInItsPhaseDrawsItsOwnGlyphNotTheCount() {
@@ -248,7 +288,7 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertEqual(after?.badge, 2, "afterwards the count")
     // One lingering mark: its glyph, no count.
     var one = WingPlanner()
-    one.receive(attention: "error", sessionID: "s1", at: at(0))
+    one.receive(attention: "waiting", sessionID: "s1", at: at(0))
     one.expire(at: at(long))
     XCTAssertEqual(one.display(at: at(long))?.badge, 0)
   }
@@ -308,7 +348,8 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertEqual(d?.mark, .error, "an error in the batch colors the mark")
     XCTAssertEqual(w.nextChange, at(1 + long), "the merge restarts the 4 s")
     w.expire(at: at(1 + long))
-    XCTAssertEqual(w.marks.map(\.sessionID), ["s2"], "only the error lingers")
+    XCTAssertTrue(w.marks.isEmpty, "neither done nor error lingers")
+    XCTAssertNil(w.display(at: at(1 + long)))
   }
 
   // MARK: Module notes
@@ -402,13 +443,16 @@ final class NotchWingsTests: XCTestCase {
   }
 
   func testSyncLeavesOutKindsThatDoNotLinger() {
-    var w = WingPlanner(focusActive: true)
-    w.sync(open: [
-      WingMark(kind: .permission, sessionID: "s1", cardID: "c1", since: at(0)),
-      WingMark(kind: .attention, sessionID: "s2", since: at(0)),
-      WingMark(kind: .error, sessionID: "s3", since: at(0)),
-    ])
-    XCTAssertEqual(w.marks.map(\.kind), [.permission], "Focus on: only permission")
+    for focus in [false, true] {
+      var w = WingPlanner(focusActive: focus)
+      w.sync(open: [
+        WingMark(kind: .permission, sessionID: "s1", cardID: "c1", since: at(0)),
+        WingMark(kind: .attention, sessionID: "s2", since: at(0)),
+        WingMark(kind: .error, sessionID: "s3", since: at(0)),
+        WingMark(kind: .done, sessionID: "s4", since: at(0)),
+      ])
+      XCTAssertEqual(Set(w.marks.map(\.kind)), [.permission, .attention], "Focus \(focus)")
+    }
   }
 
   func testAHiddenMarkStaysAndShowsAgain() {
@@ -420,22 +464,22 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertEqual(w.marks.count, 1)
     XCTAssertEqual(w.display(at: at(20))?.mark, .permission, "back once the terminal is not")
     // Count and target are of the marks on screen.
-    w.receive(attention: "error", sessionID: "s2", at: at(30))
+    w.receive(attention: "waiting", sessionID: "s2", at: at(30))
     w.expire(at: at(30 + long))
     let d = w.display(at: at(40)) { $0.kind != .permission }
     XCTAssertEqual(d?.count, 1)
     XCTAssertEqual(d?.badge, 0)
-    XCTAssertEqual(d?.target?.kind, .error)
+    XCTAssertEqual(d?.target?.kind, .attention)
   }
 
   func testOpenMarkOfASession() {
     func mark(
-      _ status: String, unseen: Bool = true, held: Bool = false,
-      mode: QuestionMode = .answerInNotch, silent: Bool = false
+      _ status: String, held: Bool = false, mode: QuestionMode = .answerInNotch,
+      silent: Bool = false
     ) -> WingMark? {
       WingPlanner.openMark(
-        sessionID: "s1", statusKind: status, unseen: unseen, heldQuestion: held,
-        questionMode: mode, silent: silent, since: at(0))
+        sessionID: "s1", statusKind: status, heldQuestion: held, questionMode: mode,
+        silent: silent, since: at(0))
     }
     XCTAssertEqual(mark("question")?.kind, .attention)
     XCTAssertEqual(mark("question")?.asking, false)
@@ -444,8 +488,7 @@ final class NotchWingsTests: XCTestCase {
     XCTAssertEqual(mark("working", held: true)?.asking, false)
     XCTAssertEqual(mark("plan")?.kind, .attention)
     XCTAssertEqual(mark("waiting")?.kind, .attention)
-    XCTAssertEqual(mark("error")?.kind, .error)
-    XCTAssertNil(mark("error", unseen: false), "an error stays until seen")
+    XCTAssertNil(mark("error"), "an error does not block Claude: no mark, seen or not")
     XCTAssertNil(mark("done"), "done never lingers")
     XCTAssertNil(mark("working"))
     XCTAssertNil(mark("idle"))

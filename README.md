@@ -46,8 +46,10 @@ terminal, and keep a few handy tools one glance away.
   stays clickable. The notch grows sideways instead, at the same height ("wings"): for 4 s the
   left wing says who and what ("claude-notch wants to run") and the right wing the detail (the
   command, the question's first words), then both shrink to a small colored mark (a dot and a
-  shield, ?, ! or check; a count when several are waiting). Permission and question marks stay
-  until answered, an error mark until seen; done and module notes leave no mark. Settings →
+  shield, ?, ! or check; a count when several are waiting). Only what blocks Claude keeps its
+  mark: a permission request, question, plan approval or wait for input stays until handled;
+  done, errors and module notes leave none (the status line keeps them). Under a Focus only
+  those blocking ones show, and only as the mark (see below). Settings →
   *Bildirimler → Çentiğin yanında yalnızca küçük bir işaret göster* (Notifications → Show only a
   small mark beside the notch; also under General → Appearance; default off) skips the 4 s of
   text. Clicking the wings opens the panel (a terminal-only question jumps to its terminal);
@@ -176,16 +178,25 @@ jumps...), and **Varsayılana dön** (Reset to defaults) goes back to ⌃⌥. No
 you press one of them. The Hyper preset needs a tool that turns Caps Lock
 into ⌃⌥⇧⌘: Raycast (Settings → Advanced → Hyper Key), Hyperkey or Karabiner-Elements.
 
-## Do Not Disturb (optional)
+## Do Not Disturb and other Focus modes
 
-Settings → *Bildirimler → Odak açık: yalnızca terminali gösteren kanatları gizle* (Notifications →
-Focus is on: hide wings that only point to the terminal; default off) hides the wings of
-terminal-only questions ("<project> asks:"), plan approvals and "waiting for input" notices from
-every app. Permission requests, questions answered in the notch and finished runs still show (with a
-Focus on, only a permission request keeps a mark beside the notch; the status line still shows
-the rest). macOS
-does not tell apps when a Focus starts, so on macOS 26 two Shortcuts automations can switch it
-for you:
+ClaudeNotch follows macOS's own Focus state by itself: it reads
+`~/Library/DoNotDisturb/DB/Assertions.json` (every Focus that is on, Do Not Disturb or another,
+by hand or by a schedule, is a record there) and watches it for changes. The rules for the
+wings are two sentences:
+
+- **Focus off:** everything (permission requests, questions, plan approvals, waits for input,
+  finished runs, errors, module notes) shows its text for 4 s, or its mark at once with *Show
+  only a small mark*; afterwards only what blocks Claude (permission, question, plan, waiting)
+  keeps a mark, until you handle it.
+- **Focus on:** only what blocks Claude shows (in either question mode), and only as the small
+  mark, never the 4 s text; it stays until you handle it. Finished runs, errors and module
+  notes show nothing beside the notch; the status line still shows them.
+
+Settings → *Bildirimler → Odağı açık say* (Notifications → Treat Focus as on; default off) is a
+backup: Focus counts as on when macOS or this switch says so. If the app cannot read that file
+(missing, or blocked by privacy settings; the Notifications tab then says *macOS Odak durumu
+okunamıyor* (Can't read the macOS Focus state)), two Shortcuts automations can switch it for you:
 
 1. Shortcuts → Settings → Advanced: turn on **Allow Running Scripts**.
 2. Automation → New Automation → **Focus** → Do Not Disturb → **When Turning On**, Run
@@ -195,7 +206,9 @@ for you:
    ```
 3. A second automation for **When Turning Off**, with `-bool false` in the same command.
 
-The app reads the new value at once. Other Focus modes work the same way.
+The app reads the new value at once. Other Focus modes work the same way. With
+`CLAUDE_NOTCH_DEBUG=1`, `/debug/state` shows what the app sees under `ui.focus` (`file`: on /
+off / unknown, `file_readable`, `file_error` (why it can't be read), `shortcuts`, `on`).
 
 ## Google Calendar (optional)
 

@@ -176,8 +176,8 @@ final class NotchSettings {
   private(set) var sounds: [SoundEvent: Bool]
   /// Chosen macOS sound per event (missing: the event's default).
   private(set) var soundNames: [SoundEvent: String]
-  /// Silent mode (band 🔕): only permission requests and questions drop and sound. macOS
-  /// shares the Focus state only with apps Apple granted it to, so this is the user's switch.
+  /// Silent mode (band 🔕): only permission requests and questions drop and sound. This is the
+  /// user's own switch; a macOS Focus is read separately (`focusOn`).
   var silentMode: Bool {
     didSet { defaults.set(silentMode, forKey: "silentMode") }
   }
@@ -212,15 +212,21 @@ final class NotchSettings {
       defaults.set(hideIslandsWhileTerminalInFront, forKey: TerminalIslands.defaultsKey)
     }
   }
-  /// A Focus such as Do Not Disturb is on: the wings that only point to the terminal stay
-  /// hidden (off by default, the original: see `FocusIslands`). Shortcuts automations switch it
-  /// from outside; `reloadFocusActive` reads their value.
+  /// The backup Focus value: Shortcuts automations (or Settings > "Treat Focus as on") switch
+  /// it from outside; `reloadFocusActive` reads their value. Off by default. What the app acts
+  /// on is `focusOn`, which also follows macOS itself (`systemFocus`, see `FocusIslands`).
   var focusActive: Bool {
     didSet {
       guard focusActive != oldValue else { return }
       defaults.set(focusActive, forKey: FocusIslands.defaultsKey)
     }
   }
+  /// What macOS's Do Not Disturb store says (`SystemFocusWatcher`, never saved): `.unknown`
+  /// until it is read, and while it cannot be read.
+  var systemFocus: SystemFocusState = .unknown
+  /// A Focus counts as on: macOS says so or the backup value does (`FocusIslands.effective`).
+  /// Only what blocks Claude shows then, as a small mark.
+  var focusOn: Bool { FocusIslands.effective(system: systemFocus, shortcuts: focusActive) }
   /// The notch wings show only their small mark, never the 4 s of text first (off by default:
   /// see `NotchWings`). One stored value behind both Settings switches.
   var wingsMarkOnly: Bool {

@@ -4,7 +4,8 @@ import Foundation
 // Pure policy (no AppKit) for the notch "wings": an island no longer drops down under the
 // notch. The notch grows sideways at band height instead: for the first 4 s the wings are wide
 // and carry a short text (style "long"), then they shrink to a small colored mark (style
-// "mark"). Some marks linger until the user has handled what they stand for.
+// "mark"). Only the marks of what blocks Claude (permission, question, plan, waiting) linger,
+// until the user has handled them. Under a Focus only those show, and only as the mark.
 //
 // See docs/plans/2026-11-17-grey-working-and-notch-wings.md.
 
@@ -30,21 +31,21 @@ public enum NotchWings {
 // MARK: - Marks
 
 /// What a mark stands for. Its color: permission / attention = needs, error = error, done =
-/// done (light grey), module = the module's tint.
+/// done (light grey), module = the module's tint. Only permission and attention linger.
 public enum WingMarkKind: String, Sendable, CaseIterable {
   /// A permission request (glyph: shield).
   case permission
   /// A question, a plan to approve or a wait for input (glyph: "?").
   case attention
-  /// A turn that ended with an error (glyph: "!").
+  /// A turn that ended with an error (glyph: "!"). Never lingers (the status line keeps it).
   case error
   /// A finished turn (glyph: check). Never lingers.
   case done
   /// A module note. Never lingers.
   case module
 
-  /// The mark drawn when several linger: the highest wins (permission > attention > error >
-  /// done > module).
+  /// The mark drawn when several are on screen: the highest wins (permission > attention >
+  /// error > done > module; only the first two linger).
   public var urgency: Int {
     switch self {
     case .permission: return 4
@@ -141,21 +142,25 @@ public struct WingDisplay: Sendable, Equatable {
 /// Decides what the wings show. Pure state machine driven by the store's attention effects and
 /// module notes; replaces `PeekPlanner` in the app.
 ///
-/// - Every arrival has a 4 s phase (`NotchWings.longDuration`): long text, or its mark at once
-///   when `markOnly` is on. The newest Claude arrival takes that phase (a module note never
-///   replaces a Claude item: it waits, newest note wins, and shows once the phase is over).
+/// - Focus off: every arrival has a 4 s phase (`NotchWings.longDuration`): long text, or its
+///   mark at once when `markOnly` is on. The newest Claude arrival takes that phase (a module
+///   note never replaces a Claude item: it waits, newest note wins, and shows once the phase is
+///   over). After the phase a mark lingers only for what blocks Claude (`lingers`: permission,
+///   attention = question / plan / waiting) until it is handled; done, error and module notes
+///   leave none.
+/// - Focus on (`FocusIslands`): only what blocks Claude shows, and only as the mark (no long
+///   text, whatever `markOnly` says); the mark stays until handled. Done, error and module
+///   notes show nothing.
 /// - Done / error arrivals within `PeekPlanner.coalesceWindow` merge into one item.
-/// - After the phase a mark lingers when its kind does (`lingers`): with Focus off permission,
-///   attention and error; with Focus on only permission. Done and module notes never linger.
 /// - `sync` makes the marks match what is still open in the store (`openMark` per session, one
 ///   per pending card): a mark goes when its reason is gone (card answered, question
-///   answered, plan / waiting handled, error seen), and one is added for something that opened
-///   while the panel was up. A mark that is open but should not show right now (its terminal
-///   in front, see `TerminalIslands`) stays and is only hidden (`display(at:visible:)`).
+///   answered, plan / waiting handled), and one is added for something that opened while the
+///   panel was up. A mark that is open but should not show right now (its terminal in front,
+///   see `TerminalIslands`) stays and is only hidden (`display(at:visible:)`).
 public struct WingPlanner: Sendable {
   /// "Show only a small mark": no long text, the mark from the start.
   public var markOnly: Bool
-  /// A Focus is on (`FocusIslands`): only blocking marks (permission) linger.
+  /// A Focus is on (`FocusIslands`): only what blocks Claude shows, and only as the mark.
   public private(set) var focusActive: Bool
   /// The user's question setting: a question in terminal-only mode is an `asking` item / mark.
   public var questionMode: QuestionMode = .fallback
@@ -172,22 +177,28 @@ public struct WingPlanner: Sendable {
     self.focusActive = focusActive
   }
 
-  /// Whether a mark of `kind` stays after its 4 s phase.
-  public static func lingers(_ kind: WingMarkKind, focusActive: Bool) -> Bool {
-    if focusActive { return kind == .permission }
-    return kind == .permission || kind == .attention || kind == .error
+  /// Whether a mark of `kind` stays after its 4 s phase: only what blocks Claude (a permission
+  /// request; a question, plan or wait for input), with or without a Focus.
+  public static func lingers(_ kind: WingMarkKind) -> Bool {
+    kind == .permission || kind == .attention
   }
 
-  /// A Focus started or ended. Turning it on drops every lingering mark that no longer
-  /// lingers (all but permission).
+  /// The wings may carry their long text: neither "mark only" nor a Focus is on.
+  public var showsText: Bool { !markOnly && !focusActive }
+
+  /// A Focus started or ended. Turning it on ends an item that does not block Claude (done,
+  /// error, module note) at once and drops a waiting module note; a blocking item keeps its
+  /// phase, drawn as its mark. The lingering marks are all blocking ones and stay.
   public mutating func setFocusActive(_ on: Bool) {
     focusActive = on
-    marks.removeAll { !Self.lingers($0.kind, focusActive: on) }
+    guard on else { return }
+    pendingModule = nil
+    if let cur = current, !Self.lingers(Self.markKind(of: cur)) { current = nil }
   }
 
   /// Keeps `mark` after its phase when its kind lingers (one per id, the newest arrival).
   private mutating func addMark(_ mark: WingMark) {
-    guard Self.lingers(mark.kind, focusActive: focusActive) else { return }
+    guard Self.lingers(mark.kind) else { return }
     marks.removeAll { $0.id == mark.id }
     marks.append(mark)
   }
@@ -197,12 +208,13 @@ public struct WingPlanner: Sendable {
   }
 
   /// Feeds one attention effect ("permission", "question", "plan", "waiting", "done",
-  /// "error"). The app filters with `FocusIslands` / `TerminalIslands` first. Returns true when
-  /// the wings changed.
+  /// "error"). The app filters with `FocusIslands` / `TerminalIslands` first; under a Focus a
+  /// kind that does not block Claude is ignored here too. Returns true when the wings changed.
   @discardableResult
   public mutating func receive(
     attention: String, sessionID: String, cardID: String? = nil, at t: Date
   ) -> Bool {
+    guard FocusIslands.shows(kind: attention, focusActive: focusActive) else { return false }
     let kind = PeekPlanner.kind(for: attention)
     let asking = attention == "question" && questionMode == .terminalOnly
     addMark(
@@ -226,9 +238,11 @@ public struct WingPlanner: Sendable {
   }
 
   /// Feeds a module note. Shown at once unless a Claude item is in its phase; then it waits
-  /// (one slot, the newest wins). Returns true when the wings changed.
+  /// (one slot, the newest wins). Under a Focus it is dropped. Returns true when the wings
+  /// changed.
   @discardableResult
   public mutating func receive(module note: ModuleNote, at t: Date) -> Bool {
+    guard !focusActive else { return false }
     if let cur = current, cur.until > t, cur.kind != .module {
       pendingModule = note
       return false
@@ -282,13 +296,13 @@ public struct WingPlanner: Sendable {
   /// Makes the lingering marks match `open`, everything still waiting for the user (the app
   /// builds it from the store: `openMark` per session, one permission mark per pending card).
   /// A mark already there keeps its arrival time; a new one (opened while the panel was up,
-  /// or before launch) is added; a mark not in `open` goes. Kinds that do not linger now
+  /// or before launch) is added; a mark not in `open` goes. Kinds that do not linger
   /// (`lingers`) are left out. Returns true when the marks changed.
   @discardableResult
   public mutating func sync(open: [WingMark]) -> Bool {
     var next: [WingMark] = []
     var seen = Set<String>()
-    for var mark in open where Self.lingers(mark.kind, focusActive: focusActive) {
+    for var mark in open where Self.lingers(mark.kind) {
       guard seen.insert(mark.id).inserted else { continue }
       if let old = marks.first(where: { $0.id == mark.id }) { mark.since = old.since }
       next.append(mark)
@@ -301,12 +315,12 @@ public struct WingPlanner: Sendable {
 
   /// The lingering mark a session stands for now, from plain facts of the store; nil when it
   /// stands for none. A question held in the notch or asked in the terminal, a plan to approve
-  /// and a wait for input are `.attention` (`asking` for a terminal-only question); an error
-  /// the user has not seen is `.error`. Silent mode keeps only what needs an answer (questions;
-  /// permission marks come from the cards). Whether the kind lingers (Focus) is `sync`'s part.
+  /// and a wait for input are `.attention` (`asking` for a terminal-only question). An error,
+  /// seen or not, blocks nothing and has no mark (the status line keeps it). Silent mode keeps
+  /// only what needs an answer (questions; permission marks come from the cards).
   public static func openMark(
-    sessionID: String, statusKind: String, unseen: Bool, heldQuestion: Bool,
-    questionMode: QuestionMode, silent: Bool, since: Date
+    sessionID: String, statusKind: String, heldQuestion: Bool, questionMode: QuestionMode,
+    silent: Bool, since: Date
   ) -> WingMark? {
     if heldQuestion {
       return WingMark(kind: .attention, sessionID: sessionID, since: since)
@@ -318,16 +332,14 @@ public struct WingPlanner: Sendable {
         since: since)
     case "plan", "waiting":
       return silent ? nil : WingMark(kind: .attention, sessionID: sessionID, since: since)
-    case "error":
-      return silent || !unseen ? nil : WingMark(kind: .error, sessionID: sessionID, since: since)
     default:
       return nil
     }
   }
 
   /// The island kind whose rule (`TerminalIslands.shows`, `FocusIslands.shows`) decides
-  /// whether an open mark may show right now; nil for one that always shows (an error, a
-  /// question held in the notch). An attention mark takes its session's status kind, or
+  /// whether an open mark may show right now; nil for one that always shows (a question held
+  /// in the notch). An attention mark takes its session's status kind, or
   /// "question" when it is a terminal-only question.
   public static func islandKind(
     of mark: WingMark, statusKind: String?, heldQuestion: Bool
@@ -354,7 +366,8 @@ public struct WingPlanner: Sendable {
   }
 
   /// What the wings draw at `t` (nil: nothing, the notch is collapsed). `visible` hides an
-  /// open mark for now without dropping it (its terminal is in front).
+  /// open mark for now without dropping it (its terminal is in front). The item in its phase
+  /// is drawn as its mark when `showsText` is false ("mark only", or a Focus).
   public func display(
     at t: Date, visible: (WingMark) -> Bool = { _ in true }
   ) -> WingDisplay? {
@@ -365,7 +378,7 @@ public struct WingPlanner: Sendable {
         kind: kind, sessionID: cur.sessionIDs.last, cardID: cur.cardID, asking: cur.asking,
         since: cur.startedAt)
       return WingDisplay(
-        style: markOnly ? .mark : .long, item: cur, mark: kind, count: shown.count, target: own)
+        style: showsText ? .long : .mark, item: cur, mark: kind, count: shown.count, target: own)
     }
     guard
       let top = shown.max(by: { ($0.kind.urgency, $0.since) < ($1.kind.urgency, $1.since) })

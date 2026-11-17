@@ -91,7 +91,7 @@ struct SettingsView: View {
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
-          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text, then shrinks to a small colored mark. On: only the mark. Nothing ever drops down over the page.")
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -290,12 +290,20 @@ struct SettingsView: View {
           Text("While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices show no wing beside the notch, whichever of its tabs you are in: answer them in the terminal. A wing already showing goes away when you switch to that terminal; if you leave it unanswered, its small mark comes back. Requests still wait in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-          Toggle("Focus is on: hide wings that only point to the terminal", isOn: $settings.focusActive)
-          Text("Wings for questions asked in the terminal, plan approvals and waiting notices stay hidden; permission requests still show beside the notch, and only they keep a mark there. macOS does not tell apps when a Focus such as Do Not Disturb starts, so two Shortcuts automations can switch this for you (see the README).")
+          Toggle("Treat Focus as on", isOn: $settings.focusActive)
+          Text("A Focus such as Do Not Disturb is detected automatically. While one is on, only what blocks Claude shows beside the notch: permission requests, questions, plan approvals and waits for input, as a small mark until you handle them. Finished runs, errors and module notes show only in the status line. This switch is a backup that the Shortcuts automations in the README can turn on and off.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+          if settings.systemFocus == .unknown && !NotchSettings.isDemo {
+            Label(
+              "Can't read the macOS Focus state; use the Shortcuts automations in the README.",
+              systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.caption).foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+          }
           Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
-          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text, then shrinks to a small colored mark. On: only the mark. Nothing ever drops down over the page.")
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Picker("Status colors", selection: $settings.statusColors) {

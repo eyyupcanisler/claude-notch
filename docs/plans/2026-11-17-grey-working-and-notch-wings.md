@@ -60,7 +60,8 @@ Tests (written): see "Tests" below.
   module note) gets **4 s** (`NotchWings.longDuration`):
   - Style C (default): wide wings. Left: colored mark + who/what. Right: one-line detail.
   - Mark-only setting on: style A from the first frame.
-- After the 4 s, a mark **lingers** only when `WingPlanner.lingers(kind, focusActive:)` says so:
+- After the 4 s, a mark **lingers** only when `WingPlanner.lingers(kind, focusActive:)` says so
+  (superseded: see "2026-11-17 follow-up" below for the current rules):
 
   | Kind | Focus off | Focus on |
   |---|---|---|
@@ -492,3 +493,50 @@ Three reviews of the first implementation led to these changes:
    behavior no longer exists (permission hold time, priority over newer arrivals).
 7. **Strings.** The orphan keys of the deleted PeekViews.swift are gone. The two setting labels
    say "wings" instead of "islands", and the mark-only caption defines the word.
+
+## 2026-11-17 follow-up: Focus from macOS, two-sentence rules
+
+The user had Do Not Disturb on and still saw many wings: the app's Focus value came only from
+two Shortcuts automations, which the user had never made. The per-kind lifetime table above is
+also replaced. This section overrides the plan and "After review" where they differ.
+
+1. **Focus is read from macOS.** `SystemFocus.state(of:)` (Core, pure) reads
+   `~/Library/DoNotDisturb/DB/Assertions.json`: `.on` when any `data[*].storeAssertionRecords`
+   has a record (any Focus: manual, scheduled, any mode), `.off` when none has, `.unknown` when
+   the file is missing, unreadable or not the expected shape. `SystemFocusWatcher` (app) reads
+   it at launch, on kqueue events on the folder (atomic replace) and on the file (in-place
+   write, delete, rename; the file source is opened again after each event), every 30 s
+   (`SystemFocus.recheckInterval`) and after a wake. It reports a state only when it changes.
+2. **The Shortcuts value stays as a backup.** `FocusIslands.effective(system:shortcuts:)`:
+   Focus is on when the file says on or the stored `focusActive` is true; with `.unknown` only
+   the stored value counts. `NotchSettings.focusOn` is what the controller uses. The Settings
+   switch is now "Treat Focus as on"; a notice shows only while the file cannot be read.
+   `/debug/state` shows `ui.focus` (`on`, `shortcuts`, `file`, `file_readable`, `file_watched`,
+   `file_error`). One failed read after a known state is retried after 1 s before the state
+   turns `unknown`, so a half-written file does not flip Focus off for a moment.
+3. **The rules in two sentences.**
+   - Focus off: every kind shows its text for 4 s (or its mark at once with "mark only"); after
+     that only what blocks Claude (permission; question / plan / waiting) keeps a mark, until
+     handled. Errors no longer keep a mark (the status line keeps them); done and module notes
+     leave none.
+   - Focus on: only what blocks Claude shows (either question mode), only as the mark (no
+     long text, whatever "mark only" says), until handled. Done, error and module notes show
+     nothing.
+
+   Code: `FocusIslands.blockingKinds` and `shows(kind:focusActive:)` (the `questionMode`
+   argument is gone); `WingPlanner.lingers(_:)` (no Focus argument: permission and attention);
+   `WingPlanner.showsText`; `receive` ignores non-blocking kinds and module notes under a Focus;
+   `setFocusActive(true)` ends a non-blocking item and drops a waiting module note;
+   `openMark` no longer returns an "unseen error" mark (its `unseen` argument is gone). The
+   global shortcut's `reveal` opens the panel when the wings cannot carry text (`showsText`).
+
+   | Kind | Focus off | Focus on |
+   |---|---|---|
+   | permission | 4 s text, then mark until answered | mark until answered |
+   | attention (question / plan / waiting) | 4 s text, then mark until handled | mark until handled |
+   | error | 4 s text, no mark | nothing (status line) |
+   | done | 4 s text, no mark | nothing (status line) |
+   | module | 4 s text, no mark | nothing |
+
+Open: sounds still follow the sound settings and silent mode only; a Focus does not silence a
+"done" or "error" chime.

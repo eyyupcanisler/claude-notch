@@ -131,9 +131,11 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   kalır. Çentik bandla aynı yükseklikte **yana doğru** büyür. İlk 4 sn sol kanat renkli bir
   işaret ve kısa özet ("claude-notch çalıştırmak istiyor"), sağ kanat tek satır ayrıntı
   (komut, sorunun ilk sözcükleri) gösterir; sonra kanatlar küçük bir renkli işarete (sol nokta,
-  sağda kalkan / ? / ! / onay işareti; birden çok bekleyen varsa sayı) daralır. İzin ve soru /
-  plan / bekleme işareti yanıtlanana, hata işareti görülene kadar kalır; bitti ve modül
-  notlarında işaret kalmaz. Odak açıkken yalnızca izin işareti kalır. Kanatlara tıklamak paneli
+  sağda kalkan / ? / ! / onay işareti; birden çok bekleyen varsa sayı) daralır. Yalnızca
+  Claude’u bekleten şeylerin işareti kalır: izin, soru, plan ve bekleme işareti siz ilgilenene
+  kadar durur; bitti, hata ve modül notlarında işaret kalmaz (durum çizgisi onları gösterir).
+  Odak açıkken yalnızca bekleten şeyler görünür, o da yalnızca işaret olarak (aşağıda
+  Rahatsız Etme'ye bakın). Kanatlara tıklamak paneli
   açar (yalnızca terminalde yanıtlanan soru, o terminal sekmesine götürür); çentiğin üzerine
   gelmek paneli eskisi gibi açar. Ayarlar > Bildirimler > **Çentiğin yanında yalnızca küçük
   bir işaret göster** (varsayılan: kapalı; Genel > Görünüm altında da var) 4 sn'lik metni hiç
@@ -274,8 +276,8 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   `default` / `acceptEdits` oturumlarında görünür. "Bitti" ve "girdi bekliyor" bildirimleri her
   modda çalışır. Terminalde yanıtlamak her zaman mümkündür.
 - **Sessiz mod** (panel bandındaki 🔔): yalnız izin istekleri ve sorular kanatlarda görünür ve ses
-  çıkarır. macOS Odak durumunu yalnızca Apple'ın yetki verdiği uygulamalara paylaştığı için
-  Odak modu otomatik izlenmez; bu düğme onun yerine geçer.
+  çıkarır. macOS'un Odak durumu ise ayrıca kendiliğinden izlenir (aşağıda Rahatsız Etme'ye
+  bakın).
 - `AskUserQuestion` çentikten yanıtlanabilir: `PreToolUse` kancası (eşleşen araç
   `AskUserQuestion`) soruyu bekletir, çentikte seçenekler düğme olarak çıkar; seçip **Gönder**
   dendiğinde yanıt `updatedInput.answers` ile Claude Code'a döner (çoklu seçimde etiketler
@@ -341,14 +343,24 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   haftalık limiti izler; uyarılar ise yalnızca Ayarlar > Modüller > **Haftalık limit %80’e,
   sonra %95’e gelince uyar** açıksa (varsayılan: kapalı) haftalık limit için gelir.
 
-## Rahatsız Etme (isteğe bağlı)
+## Rahatsız Etme ve diğer Odak modları
 
-Ayarlar > Bildirimler > **Odak açık: yalnızca terminali gösteren kanatları gizle** (varsayılan:
-kapalı) açıkken "<proje> soruyor:" (terminalde yanıtlanan sorular), plan onayı ve
-"girdi bekliyor" kanatları hiçbir uygulamada görünmez. İzin istekleri, çentikte yanıtlanan
-sorular ve biten işler yine görünür (Odak açıkken çentiğin yanında yalnızca izin işareti
-kalır; durum çizgisi gerisini yine gösterir). macOS bir Odak başladığında uygulamalara haber vermez; macOS 26'da
-bunu iki Kestirmeler otomasyonu sizin yerinize açıp kapatabilir:
+ClaudeNotch macOS'un Odak durumunu kendisi izler: `~/Library/DoNotDisturb/DB/Assertions.json`
+dosyasını okur (açık olan her Odak, Rahatsız Etme ya da başkası, elle ya da zamanlamayla açılmış
+olsun, orada bir kayıttır) ve değişince yeniden okur. Kanatların kuralı iki cümledir:
+
+- **Odak kapalı:** her şey (izin istekleri, sorular, plan onayları, girdi beklemeleri, biten
+  işler, hatalar, modül notları) metnini 4 sn gösterir, **Çentiğin yanında yalnızca küçük bir
+  işaret göster** açıksa hemen işaretini; sonra yalnızca Claude’u bekleten şeyler (izin, soru,
+  plan, bekleme) siz ilgilenene kadar işaret bırakır.
+- **Odak açık:** yalnızca Claude’u bekleten şeyler görünür (iki soru modunda da), o da yalnızca
+  küçük işaret olarak, 4 sn'lik metin olmadan; siz ilgilenene kadar kalır. Biten işler, hatalar
+  ve modül notları çentiğin yanında hiç görünmez; durum çizgisi onları yine gösterir.
+
+Ayarlar > Bildirimler > **Odağı açık say** (varsayılan: kapalı) bir yedektir: macOS ya da bu
+düğme açık diyorsa Odak açık sayılır. Uygulama bu dosyayı okuyamıyorsa (dosya yok ya da gizlilik
+ayarları engelliyor; Bildirimler sekmesinde o zaman "macOS Odak durumu okunamıyor" yazar), düğmeyi
+iki Kestirmeler otomasyonu sizin yerinize açıp kapatabilir:
 
 1. Kestirmeler > Ayarlar > İleri Düzey: **Betikleri Çalıştırmaya İzin Ver**'i açın.
 2. Otomasyon > Yeni Otomasyon > **Odak** > Rahatsız Etme > **Açılırken**, Hemen Çalıştır. Şu
@@ -359,6 +371,8 @@ bunu iki Kestirmeler otomasyonu sizin yerinize açıp kapatabilir:
 3. **Kapanırken** için ikinci bir otomasyon; aynı komutta `-bool false`.
 
 Uygulama yeni değeri hemen okur. Diğer Odak modları da aynı şekilde bağlanır.
+`CLAUDE_NOTCH_DEBUG=1` ile `/debug/state`, uygulamanın gördüğünü `ui.focus` altında gösterir
+(`file`: on / off / unknown, `file_readable`, `file_error` (neden okunamadığı), `shortcuts`, `on`).
 
 ## Hata ayıklama
 

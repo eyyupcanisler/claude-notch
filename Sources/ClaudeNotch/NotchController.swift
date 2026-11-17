@@ -90,7 +90,7 @@ final class NotchController {
       self?.hotKeyEvent(role, pressed: pressed)
     }
     wings.markOnly = settings.wingsMarkOnly
-    wings.setFocusActive(settings.focusActive)
+    wings.setFocusActive(settings.focusOn)
     wings.questionMode = settings.questionMode
     registerShortcuts()
     modules.onNote = { [weak self] note in self?.moduleNote(note) }
@@ -347,15 +347,15 @@ final class NotchController {
   }
 
   /// Everything that still waits for the user, as marks (`WingPlanner.sync`): one per pending
-  /// permission card, and each session's question, plan, wait or unseen error
-  /// (`WingPlanner.openMark`). The planner keeps the arrival time of a mark it already has.
+  /// permission card, and each session's question, plan or wait (`WingPlanner.openMark`). The
+  /// planner keeps the arrival time of a mark it already has.
   private func openMarks(at now: Date) -> [WingMark] {
     var open = store.pending.map {
       WingMark(kind: .permission, sessionID: $0.sessionID, cardID: $0.id, since: $0.createdAt)
     }
     for session in store.sessions.values {
       if let mark = WingPlanner.openMark(
-        sessionID: session.id, statusKind: session.status.kind, unseen: session.unseen,
+        sessionID: session.id, statusKind: session.status.kind,
         heldQuestion: store.question(for: session.id) != nil,
         questionMode: settings.questionMode, silent: focusQuiet, since: now)
       {
@@ -368,8 +368,9 @@ final class NotchController {
   }
 
   /// Whether an open mark may show right now: hidden (not dropped) while its island would be,
-  /// e.g. its session's terminal is in front (`TerminalIslands`) or a Focus is on
-  /// (`FocusIslands`). It shows again once the user leaves that terminal, until it is handled.
+  /// e.g. its session's terminal is in front (`TerminalIslands`). It shows again once the user
+  /// leaves that terminal, until it is handled. (Every open mark blocks Claude, so a Focus
+  /// never hides one: `FocusIslands`.)
   private func markShows(_ mark: WingMark, front: String?) -> Bool {
     guard let sid = mark.sessionID else { return true }
     let kind = WingPlanner.islandKind(
@@ -876,8 +877,8 @@ final class NotchController {
 
   /// Nothing was on screen: bring the oldest request back (its text in the wings, or the
   /// panel's slot) and decide nothing. The next press decides once the new-card delay is over.
-  /// With "mark only" on, the wings would only bring back a mark (nothing to read), so the
-  /// panel opens on the request instead.
+  /// With "mark only" or a Focus on, the wings would only bring back a mark (nothing to read),
+  /// so the panel opens on the request instead.
   private func reveal(_ id: String) {
     guard let card = store.card(id: id) else { return }
     nextPeekTask?.cancel()
@@ -888,7 +889,7 @@ final class NotchController {
       ui.pagerArmedAt = max(ui.pagerArmedAt, Date().addingTimeInterval(SessionStore.armDelayNew))
       scheduleArmTick()
       refresh()
-    } else if wings.markOnly || !peekScreenHasBand {
+    } else if !wings.showsText || !peekScreenHasBand {
       openFull(id)
     } else {
       instantWings = true
@@ -1456,7 +1457,8 @@ final class NotchController {
   // MARK: - Effects
 
   /// A module note: shown unless the panel is open (its tiles show the same), never over a
-  /// Claude item in the wings (the planner queues it).
+  /// Claude item in the wings (the planner queues it), never under a Focus (the planner drops
+  /// it).
   private func moduleNote(_ note: ModuleNote) {
     debugNotesFired[note.source.rawValue, default: 0] += 1
     guard expandedID == nil, !focusQuiet else { return }
@@ -1484,7 +1486,7 @@ final class NotchController {
       return
     }
     onAttention?(sessionID, kind)
-    // A Focus is on: only what needs an answer (permission, question) interrupts.
+    // Silent mode: only what needs an answer (permission, question) interrupts.
     if focusQuiet && kind != "permission" && kind != "question" { return }
     if let e = SoundEvent(attention: kind), settings.soundEnabled(e) {
       settings.play(settings.soundName(e))
@@ -1499,15 +1501,14 @@ final class NotchController {
 
   /// Whether the island of attention `kind` for `sessionID` may be on screen while `front` (by
   /// default the current front app) is in front: hidden while the session's terminal is (see
-  /// `TerminalIslands`), and, for one that only points to the terminal, while a Focus is on
-  /// (see `FocusIslands`).
+  /// `TerminalIslands`), and, for one that does not block Claude (done, error), while a Focus
+  /// is on (see `FocusIslands`).
   private func islandShows(
     _ kind: String, for sessionID: String,
     front: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
   ) -> Bool {
     guard
-      FocusIslands.shows(
-        kind: kind, focusActive: settings.focusActive, questionMode: settings.questionMode)
+      FocusIslands.shows(kind: kind, focusActive: settings.focusOn)
     else { return false }
     let term = store.sessions[sessionID]?.termProgram
     return TerminalIslands.shows(
@@ -1518,14 +1519,25 @@ final class NotchController {
 
   /// Darwin notification token of `observeFocus` (kept for the app's lifetime).
   private var focusToken: Int32 = 0
+  /// Follows macOS's own Focus state (see `SystemFocus`).
+  private var systemFocusWatcher: SystemFocusWatcher?
 
-  /// A Shortcuts automation switched the Focus value (see `FocusIslands`): read it again. The
-  /// settings observer then takes away an island it hides. Demo instances keep their own.
+  /// Focus, two ways (see `FocusIslands`): macOS's own Do Not Disturb store, watched for
+  /// changes, and the backup value a Shortcuts automation writes (read again when it posts its
+  /// notification). The settings observer then takes away what a Focus hides. Demo instances
+  /// keep their own.
   private func observeFocus() {
     guard !NotchSettings.isDemo else { return }
     notify_register_dispatch(FocusIslands.notifyName, &focusToken, .main) { [weak self] _ in
       MainActor.assumeIsolated { self?.settings.reloadFocusActive() }
     }
+    let watcher = SystemFocusWatcher { [weak self] state in
+      guard let self else { return }
+      self.log("system focus \(state.rawValue)")
+      self.settings.systemFocus = state
+    }
+    systemFocusWatcher = watcher
+    watcher.start()
   }
 
   /// Optional: a Claude Code notification rings the session's terminal bell (see
@@ -1541,8 +1553,9 @@ final class NotchController {
   }
 
   /// An app came to the front (or a Focus started): the Claude item in the wings goes if it is
-  /// hidden now, e.g. its session's terminal is that app (see `TerminalIslands`, `FocusIslands`),
-  /// so switching to the terminal clears what it already shows. A lingering mark is only hidden
+  /// hidden now, e.g. its session's terminal is that app (see `TerminalIslands`; a Focus ends
+  /// a done / error / module item in `WingPlanner.setFocusActive`), so switching to the
+  /// terminal clears what it already shows. A lingering mark is only hidden
   /// while that terminal is in front (`markShows`): it shows again when the user leaves it,
   /// until what it stands for is handled. The long text never comes back by itself.
   private func dropHiddenIsland(
@@ -1594,14 +1607,14 @@ final class NotchController {
     withObservationTracking {
       _ = settings.shortcutHintSeen
       _ = settings.answerQuestionsInNotch
-      _ = settings.focusActive
+      _ = settings.focusOn
       _ = settings.wingsMarkOnly
       _ = settings.hideIslandsWhileTerminalInFront
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self else { return }
         self.wings.markOnly = self.settings.wingsMarkOnly
-        self.wings.setFocusActive(self.settings.focusActive)
+        self.wings.setFocusActive(self.settings.focusOn)
         self.dropHiddenIsland()
         self.applyQuestionMode()
         self.refresh()
@@ -1885,6 +1898,14 @@ final class NotchController {
           "marks": .array(wings.marks.map { .string($0.id) }),
         ])
       } ?? .null,
+      "focus": .object([
+        "on": .bool(settings.focusOn), "shortcuts": .bool(settings.focusActive),
+        "file": .string(settings.systemFocus.rawValue),
+        "file_readable": .bool(settings.systemFocus.readable),
+        "file_watched": .bool(systemFocusWatcher?.watching ?? false),
+        "file_error": systemFocusWatcher?.lastError.map { .string($0) } ?? .null,
+        "file_path": systemFocusWatcher.map { .string($0.path) } ?? .null,
+      ]),
       "module_notes": .object(debugNotesFired.mapValues { .int($0) }),
       "display_mode": .string(settings.displayMode.rawValue),
       "density": .string(settings.density.rawValue), "pinned": .bool(ui.pinned),

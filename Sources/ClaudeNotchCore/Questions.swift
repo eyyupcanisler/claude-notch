@@ -188,11 +188,16 @@ public enum TerminalIslands {
   }
 }
 
-/// Settings > Notifications > "Focus is on: hide islands that only point to the terminal".
-/// macOS does not tell apps when a Focus such as Do Not Disturb starts or ends, so two Shortcuts
-/// automations switch this (`command(on:)`): they store the Bool under `defaultsKey` (app
-/// domain) and post the Darwin notification `notifyName`, so the running app reads it at once.
-/// Nothing saved is off, the original behavior.
+/// A Focus such as Do Not Disturb. The app reads macOS's own state (`SystemFocus`) and, as a
+/// backup, a Bool that two Shortcuts automations (or Settings > Notifications > "Treat Focus as
+/// on") store under `defaultsKey` (app domain) while posting the Darwin notification
+/// `notifyName`, so the running app reads it at once (`command(on:)`). Focus counts as on when
+/// either says so (`effective`). Nothing saved is off.
+///
+/// Under a Focus only what blocks Claude shows (`shows`): a permission request, a question, a
+/// plan to approve or a wait for input, and only as the small mark (`WingPlanner`), until it is
+/// handled. Finished runs, errors and module notes show nothing beside the notch; the status
+/// line still has them.
 public enum FocusIslands {
   /// UserDefaults key (app domain), a Bool.
   public static let defaultsKey = "focusActive"
@@ -200,23 +205,25 @@ public enum FocusIslands {
   public static let notifyName = "com.eyyupcan.claudenotch.focus"
   /// What an install without a saved choice uses: off (the original).
   public static let fallback = false
+  /// The attention kinds that block Claude until the user acts: the only ones a Focus lets
+  /// through, in either question mode.
+  public static let blockingKinds: Set<String> = ["permission", "question", "plan", "waiting"]
 
   /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
   public static func active(stored: Any?) -> Bool {
     stored as? Bool ?? fallback
   }
 
-  /// Whether an island of attention `kind` shows while a Focus is on: the wings that only
-  /// point to the terminal stay hidden (a question in terminal-only question mode,
-  /// a plan approval, a wait for input). A permission request (answered in the notch too), a
-  /// question answered in the notch, finished runs and errors still show.
-  public static func shows(kind: String, focusActive: Bool, questionMode: QuestionMode) -> Bool {
-    guard focusActive else { return true }
-    switch kind {
-    case "question": return questionMode != .terminalOnly
-    case "plan", "waiting": return false
-    default: return true
-    }
+  /// Whether Focus counts as on: macOS says so, or the Shortcuts value does. A file the app
+  /// cannot read (`.unknown`) leaves the Shortcuts value alone in charge.
+  public static func effective(system: SystemFocusState, shortcuts: Bool) -> Bool {
+    system == .on || shortcuts
+  }
+
+  /// Whether an island of attention `kind` shows: without a Focus every kind does; under one
+  /// only the kinds in `blockingKinds`.
+  public static func shows(kind: String, focusActive: Bool) -> Bool {
+    !focusActive || blockingKinds.contains(kind)
   }
 
   /// The shell command a Shortcuts automation runs ("Run Shell Script") when a Focus turns on

@@ -390,25 +390,26 @@ final class QuestionNoticeTests: XCTestCase {
     }
   }
 
-  /// A Focus on hides only the islands that point to the terminal: a terminal-only question, a
-  /// plan approval, a wait for input. A permission request, a question answered in the notch,
-  /// finished runs and errors still show; a fresh install has no Focus.
-  func testFocusHidesOnlyIslandsThatPointToTheTerminal() {
+  /// A Focus on lets through only what blocks Claude: a permission request, a question
+  /// (whichever question mode), a plan approval, a wait for input. Finished runs, errors and
+  /// the "quiet" note show nothing (the status line still has them). A fresh install has no
+  /// Focus, and without one every kind shows.
+  func testFocusShowsOnlyWhatBlocksClaude() {
     XCTAssertFalse(FocusIslands.fallback)
     XCTAssertFalse(FocusIslands.active(stored: nil))
     XCTAssertFalse(FocusIslands.active(stored: "yes"), "not a Bool: the fallback")
     XCTAssertTrue(FocusIslands.active(stored: true))
-    func shows(_ kind: String, focus: Bool = true, _ mode: QuestionMode = .terminalOnly) -> Bool {
-      FocusIslands.shows(kind: kind, focusActive: focus, questionMode: mode)
+    XCTAssertEqual(FocusIslands.blockingKinds, ["permission", "question", "plan", "waiting"])
+    func shows(_ kind: String, focus: Bool = true) -> Bool {
+      FocusIslands.shows(kind: kind, focusActive: focus)
     }
-    for kind in ["question", "plan", "waiting"] {
-      XCTAssertFalse(shows(kind), kind)
+    for kind in ["permission", "question", "plan", "waiting"] {
+      XCTAssertTrue(shows(kind), "blocks Claude: \(kind) shows under Focus")
+      XCTAssertTrue(shows(kind, focus: false), kind)
+    }
+    for kind in ["done", "error", "quiet", ""] {
+      XCTAssertFalse(shows(kind), "does not block Claude: \(kind) hidden under Focus")
       XCTAssertTrue(shows(kind, focus: false), "no Focus: \(kind) shows")
-    }
-    XCTAssertTrue(shows("question", .answerInNotch), "answered in the notch: it shows")
-    XCTAssertFalse(shows("plan", .answerInNotch))
-    for kind in ["permission", "done", "error", "quiet"] {
-      XCTAssertTrue(shows(kind), "always shows: \(kind)")
     }
   }
 
