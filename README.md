@@ -27,13 +27,13 @@ terminal, and keep a few handy tools one glance away.
 
 - **Live status under the notch.** One thin segment per Claude Code session. With the default
   **Classic** colors: color means "needs you" and nothing else. Solid grey with a moving shine
-  while it works, amber with a slow fade when it needs you, near-white when it finished and you
+  while it works, amber with a slow fade when it needs you, blue when it finished and you
   have not looked yet (it flashes once on arrival), red on an error, faint white when idle.
   Settings → *Genel → Görünüm → Durum renkleri* → **Renk körlüğüne uygun** (General →
   Appearance → Status colors → Colorblind-friendly) switches at once to colors that stay apart for red-green color blindness, plus shape signs:
   grey `#8E8E8E` with a moving shine = working, yellow `#F0E442` with a slow fade = needs you,
-  near-white `#E8E8E8` = done, a broken pink-red `#FB7185` bar (three short dashes) = error,
-  faint white = idle; only needs-you and error are colored in both palettes, and the shapes
+  blue `#388BFD` = done (look at it), a broken pink-red `#FB7185` bar (three short dashes) = error,
+  faint white = idle; in both palettes color means something for you (needs you, error, a finished chat to look at), and the shapes
   tell the states apart even in grayscale. With Reduce Motion on, the shine and
   the fade stop, so working, needs you and done are told apart by color and brightness only.
 - **"Done" means done.** When the chat's turn ends while a workflow or background agent it

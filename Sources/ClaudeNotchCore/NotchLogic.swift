@@ -469,7 +469,7 @@ public enum LineState: String, Sendable {
   /// Card pending, question, plan approval or input request: amber (colorblind: yellow), a
   /// slow fade (breathing).
   case needs
-  /// Finished and not seen yet: light grey, near-white (both palettes), a solid steady bar.
+  /// Finished and not seen yet: blue (both palettes), a solid steady bar.
   case done
   /// Failed and not seen yet: red, a solid bar (colorblind: pink-red, a broken bar of three
   /// short dashes), static.

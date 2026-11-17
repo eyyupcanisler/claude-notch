@@ -96,7 +96,7 @@ struct SettingsView: View {
           Picker("Status colors", selection: $settings.statusColors) {
             ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
           }
-          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white.")
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Open the panel on hover", isOn: $settings.openOnHover)
@@ -322,7 +322,7 @@ struct SettingsView: View {
           Picker("Status colors", selection: $settings.statusColors) {
             ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
           }
-          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white.")
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)

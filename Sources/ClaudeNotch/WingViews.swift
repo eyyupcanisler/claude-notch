@@ -306,7 +306,7 @@ struct WingsView: View {
   }
 
   /// The mark's color: what needs the user is amber / yellow, an error red / pink, done the
-  /// near-white, a module note its module's tint.
+  /// blue, a module note its module's tint.
   static func color(_ d: WingDisplay, theme: NotchTheme) -> Color {
     switch d.mark {
     case .permission, .attention: return theme.needs

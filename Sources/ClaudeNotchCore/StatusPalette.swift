@@ -5,7 +5,7 @@ import Foundation
 /// Stored under `defaultsKey`; a fresh install (nothing saved) is `classic`, the original look.
 public enum StatusColorScheme: String, CaseIterable, Sendable {
   /// The original look: amber and red for needs and error (error a solid bar), grey working and
-  /// near-white done.
+  /// blue done.
   case classic
   /// Colors that stay apart for the common color-vision deficiencies, plus a shape sign per
   /// state (the error segment drawn as a broken bar).
@@ -44,7 +44,7 @@ public enum StatusPalette {
     public let working: UInt32
     /// Needs you (breathing).
     public let needs: UInt32
-    /// Done, unseen (near-white, solid, flashes once on arrival).
+    /// Done, unseen (blue, solid, flashes once on arrival).
     public let done: UInt32
     /// Error, unseen (static).
     public let error: UInt32
@@ -55,19 +55,19 @@ public enum StatusPalette {
     public var all: [UInt32] { [working, needs, done, error] }
   }
 
-  /// Color only signals "needs the user", in both palettes: working is a neutral grey and done a
-  /// near-white (no hue), brighter than idle (white at `idleAlpha`) and ordered
-  /// idle < working < done. Needs and error keep their colors.
+  /// Color only signals "needs the user", in both palettes: working is a neutral grey (brighter
+  /// than idle, white at `idleAlpha`); done (unseen) is blue, a chat to look at; needs and error
+  /// keep their colors. The blue stays apart from grey and yellow for red-green color blindness.
   public static let workingGrey: UInt32 = 0x8E8E8E
-  public static let doneWhite: UInt32 = 0xE8E8E8
+  public static let doneBlue: UInt32 = 0x388BFD
 
   /// The original look for the states that need you: amber and red; error is a solid bar.
   public static let classic = Colors(
-    working: workingGrey, needs: 0xFFB020, done: doneWhite, error: 0xFF453A, errorDashed: false)
+    working: workingGrey, needs: 0xFFB020, done: doneBlue, error: 0xFF453A, errorDashed: false)
 
   /// Colorblind-friendly: yellow and pink-red; error is a broken bar.
   public static let colorblind = Colors(
-    working: workingGrey, needs: 0xF0E442, done: doneWhite, error: 0xFB7185, errorDashed: true)
+    working: workingGrey, needs: 0xF0E442, done: doneBlue, error: 0xFB7185, errorDashed: true)
 
   /// An idle status-line segment: white at this alpha over the black band (both palettes).
   public static let idleAlpha: Double = 0.22
@@ -75,7 +75,7 @@ public enum StatusPalette {
   /// Opacity of a status-line segment's bar in `state` (before any animation). Idle is drawn as
   /// white at `idleAlpha` and returns that alpha here.
   public static func lineOpacity(_ state: LineState) -> Double {
-    // Done is opaque: at the old 0.7 the near-white would sink toward the working grey.
+    // Done is opaque, so its blue reads at full strength.
     switch state {
     case .idle: return idleAlpha
     default: return 1

@@ -119,7 +119,7 @@
 "Cloudy" = "Cloudy";
 "Collapse" = "Collapse";
 "Colorblind-friendly" = "Colorblind-friendly";
-"Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white." = "Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, only what needs you is colored: working is grey, done is near-white.";
+"Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey." = "Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey.";
 "Compact" = "Compact";
 "Completed" = "Completed";
 "Connect to this app" = "Connect to this app";

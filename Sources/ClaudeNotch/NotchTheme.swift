@@ -52,9 +52,9 @@ struct NotchTheme: Sendable {
       primaryFill: Color(hex: 0xF5F5F4), primaryText: Color(hex: 0x0B0B0C), grainOpacity: 1)
   }
 
-  /// The original look (grey / amber / near-white / red).
+  /// The original look (grey / amber / blue / red).
   static let classic = make(StatusPalette.classic)
-  /// Colorblind-friendly status colors (grey / yellow / near-white / pink-red).
+  /// Colorblind-friendly status colors (grey / yellow / blue / pink-red).
   static let colorblind = make(StatusPalette.colorblind)
 
   static func scheme(_ scheme: StatusColorScheme) -> NotchTheme {

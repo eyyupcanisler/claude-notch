@@ -117,15 +117,15 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   çentiğin hemen altında (2 pt boşluk) ortalı, 3 pt'lik bir **durum çizgisi** belirir: çentik
   genişliğinin iki yanından 24 pt içeride, oturum başına bir parça (en çok 6, sabit sırada).
   Renk yalnızca "sizi bekliyor" anlamına gelir. Düz gri ışıltı: çalışıyor; amber nefes: sizi
-  bekliyor (izin / soru / plan / girdi); açık gri (neredeyse beyaz): görülmemiş "bitti" (gelişte
+  bekliyor (izin / soru / plan / girdi); mavi: görülmemiş "bitti" (bakmanız gereken sohbet) (gelişte
   bir kez parlar); kırmızı: hata; soluk beyaz: boşta. Hareketi
   azalt açıkken renkler durağandır. Çizgi menü çubuğu bandına hiç taşmaz; bandın çentik
   dışındaki kısmında tıklamalar her zaman arkadaki menülere gider.
   Ayarlar > Genel > Görünüm > Durum renkleri > **Renk körlüğüne uygun** seçilirse renkler hemen
   kırmızı-yeşil renk körlüğünde de ayrışanlara döner ve her duruma bir biçim işareti eklenir:
-  gri `#8E8E8E` kayan ışıltı = çalışıyor, sarı `#F0E442` yavaş nefes = sizi bekliyor, açık gri
-  `#E8E8E8` = bitti, kesik (üç kısa çizgi) pembe-kırmızı `#FB7185` = hata, soluk beyaz = boşta.
-  İki paletle de yalnızca "sizi bekliyor" ve hata renklidir.
+  gri `#8E8E8E` kayan ışıltı = çalışıyor, sarı `#F0E442` yavaş nefes = sizi bekliyor, mavi
+  `#388BFD` = bitti (bakmanız gereken sohbet), kesik (üç kısa çizgi) pembe-kırmızı `#FB7185` = hata, soluk beyaz = boşta.
+  İki paletle de renk sizin için bir şey demektir: sizi bekliyor, hata ya da bakmanız gereken biten sohbet.
 - **Kanatlar (aşağı düşen ada yok):** izin, soru / plan / bekleme, bitti, hata ve modül
   notları artık menü çubuğu bandının altına inmez; altındaki Chrome sekmeleri tıklanabilir
   kalır. Çentik bandla aynı yükseklikte **yana doğru** büyür. İlk 4 sn sol kanat renkli bir
