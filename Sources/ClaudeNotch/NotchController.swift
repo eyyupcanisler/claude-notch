@@ -625,7 +625,9 @@ final class NotchController {
         if s.state.primed != primed {
           withAnimation(Motion.reduce ? nil : Motion.prime) { s.state.primed = primed }
         }
-        if fired, s.isLive(hasSessions: live, pill: pill) {
+        // Open-on-hover off: the dwell still primes the swell (the notch is clickable) but
+        // never opens the panel; the intent is left as is, so the swell holds while it rests.
+        if fired, settings.openOnHover, s.isLive(hasSessions: live, pill: pill) {
           s.intent.reset()
           expand(s.displayID, reason: .hover)
           return
@@ -643,7 +645,7 @@ final class NotchController {
         let fired = s.intent.update(
           point: p, at: now, minX: notchMinX, maxX: notchMaxX, top: top,
           bottom: top - g.notchHeight)
-        if fired {
+        if fired, settings.openOnHover {
           s.intent.reset()
           expand(s.displayID, reason: .hover)
           return

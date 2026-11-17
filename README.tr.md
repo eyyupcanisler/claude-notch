@@ -139,7 +139,8 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   Odak açıkken yalnızca bekleten şeyler görünür, o da yalnızca işaret olarak (aşağıda
   Rahatsız Etme'ye bakın). Kanatlara tıklamak paneli
   açar (yalnızca terminalde yanıtlanan soru, o terminal sekmesine götürür); çentiğin üzerine
-  gelmek paneli eskisi gibi açar. Ayarlar > Bildirimler > **Çentiğin yanında yalnızca küçük
+  gelmek paneli eskisi gibi açar (Ayarlar > Genel > Görünüm > **Üzerine gelince paneli aç**;
+  kapalıyken çentik imleç altında yalnızca hafifçe büyür, panel tıklayınca açılır). Ayarlar > Bildirimler > **Çentiğin yanında yalnızca küçük
   bir işaret göster** (varsayılan: kapalı; Genel > Görünüm altında da var) 4 sn'lik metni hiç
   göstermez ve işareti hemen çıkarır. Çentiksiz harici ekranlarda aynısı hap şeklinin iki
   yanında olur.

@@ -232,6 +232,11 @@ final class NotchSettings {
   var wingsMarkOnly: Bool {
     didSet { defaults.set(wingsMarkOnly, forKey: NotchWings.defaultsKey) }
   }
+  /// Resting the pointer on the notch opens the panel (on by default, the original). Off: the
+  /// notch still swells under the pointer to show it is clickable, but only a click opens it.
+  var openOnHover: Bool {
+    didSet { defaults.set(openOnHover, forKey: "openOnHover") }
+  }
   /// Claude Code notifications ring the session's terminal bell (off by default, the
   /// original: see `TerminalBell`).
   var terminalBell: Bool {
@@ -355,6 +360,7 @@ final class NotchSettings {
       TerminalIslands.hides(stored: defaults.object(forKey: TerminalIslands.defaultsKey))
     focusActive = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
     wingsMarkOnly = NotchWings.markOnly(stored: defaults.object(forKey: NotchWings.defaultsKey))
+    openOnHover = defaults.object(forKey: "openOnHover") as? Bool ?? true
     terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
     weeklyUsageAlerts =
       WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))

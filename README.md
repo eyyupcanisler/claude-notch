@@ -55,7 +55,8 @@ terminal, and keep a few handy tools one glance away.
   *Bildirimler → Çentiğin yanında yalnızca küçük bir işaret göster* (Notifications → Show only a
   small mark beside the notch; also under General → Appearance; default off) skips the 4 s of
   text. Clicking the wings opens the panel (a terminal-only question jumps to its terminal);
-  hovering the notch opens the panel as before.
+  hovering the notch opens the panel as before (Settings > General > Appearance > **Open the
+  panel on hover**; off: the notch only swells under the pointer, and a click opens it).
 - **Permission requests in the notch.** The wings show the command; allow or deny
   with **⌃⌥Y / ⌃⌥N** from any app, or click the wings to open the panel. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
   `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
