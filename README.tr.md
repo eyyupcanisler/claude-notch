@@ -129,8 +129,10 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
 - **Kanatlar (aşağı düşen ada yok):** izin, soru / plan / bekleme, bitti, hata ve modül
   notları artık menü çubuğu bandının altına inmez; altındaki Chrome sekmeleri tıklanabilir
   kalır. Çentik bandla aynı yükseklikte **yana doğru** büyür. İlk 4 sn sol kanat renkli bir
-  işaret ve kısa özet ("claude-notch çalıştırmak istiyor"), sağ kanat tek satır ayrıntı
-  (komut, sorunun ilk sözcükleri) gösterir; sonra kanatlar küçük bir renkli işarete (sol nokta,
+  işaret ve kısa özet, proje ve terminal sekmesinin adıyla ("claude-notch · Testleri düzelt
+  çalıştırmak istiyor"), sağ kanat tek satır ayrıntı (komut, sorunun ilk sözcükleri) gösterir;
+  kanat görünürken o sohbetin durum çizgisindeki parçası yanar (biraz daha kalın ve parlak);
+  sonra kanatlar küçük bir renkli işarete (sol nokta,
   sağda kalkan / ? / ! / onay işareti; birden çok bekleyen varsa sayı) daralır. Yalnızca
   Claude’u bekleten şeylerin işareti kalır: izin, soru, plan ve bekleme işareti siz ilgilenene
   kadar durur; bitti, hata ve modül notlarında işaret kalmaz (durum çizgisi onları gösterir).
@@ -356,6 +358,10 @@ olsun, orada bir kayıttır) ve değişince yeniden okur. Kanatların kuralı ik
 - **Odak açık:** yalnızca Claude’u bekleten şeyler görünür (iki soru modunda da), o da yalnızca
   küçük işaret olarak, 4 sn'lik metin olmadan; siz ilgilenene kadar kalır. Biten işler, hatalar
   ve modül notları çentiğin yanında hiç görünmez; durum çizgisi onları yine gösterir.
+
+Sesler de aynı kuralı izler: Odak açıkken yalnızca Claude’u bekleten şeylerin (izin istekleri,
+sorular, plan onayları, girdi beklemeleri) sesi çalar; biten işler, hatalar ve modül sesleri
+(zamanlayıcı, takvim hatırlatıcısı) sessizdir.
 
 Ayarlar > Bildirimler > **Odağı açık say** (varsayılan: kapalı) bir yedektir: macOS ya da bu
 düğme açık diyorsa Odak açık sayılır. Uygulama bu dosyayı okuyamıyorsa (dosya yok ya da gizlilik

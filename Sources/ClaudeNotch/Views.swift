@@ -212,7 +212,10 @@ struct NotchRootView: View {
       }
       .frame(width: windowW, height: NotchMetrics.windowHeight, alignment: .top)
       .clipShape(shape)
-      StatusLineView(segments: segments, colors: settings.statusColors.colors)
+      StatusLineView(
+        segments: segments, colors: settings.statusColors.colors,
+        // The chat the wings are about lights up, so the wing reads as that segment's.
+        lit: mode == .peek ? Set(ui.wings?.sessionIDs ?? []) : [])
         .frame(width: NotchMetrics.lineWidth(notch: g.notchWidth), height: NotchMetrics.lineHeight)
         .padding(.top, NotchMetrics.lineTop(g, pill: pillShown))
         .opacity(lineMode && surface.visible && !segments.isEmpty ? 1 : 0)
@@ -382,25 +385,33 @@ struct NotchSignals {
 /// where every state then reads without color. With Reduce Motion on, the shine and the fade
 /// stop, so working, needs you and done differ by color and brightness only. Core Animation
 /// runs the shimmer / breathing / flash in the render server, so an always-on line costs the
-/// app no frames.
+/// app no frames. While the wings are out, the segment of the chat they are about is lit
+/// (`lit`): 1.5 pt taller, growing downward, with a stronger halo in its own color, so the
+/// colors keep their meaning.
 struct StatusLineView: NSViewRepresentable {
   let segments: [LineSegment]
   let colors: StatusPalette.Colors
+  /// Sessions whose segment is lit (`WingDisplay.sessionIDs`).
+  var lit: Set<String> = []
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func makeNSView(context: Context) -> StatusLineLayerView { StatusLineLayerView() }
 
   func updateNSView(_ view: StatusLineLayerView, context: Context) {
-    view.update(segments, colors: colors, reduceMotion: reduceMotion)
+    view.update(segments, colors: colors, lit: lit, reduceMotion: reduceMotion)
   }
 }
 
 @MainActor
 final class StatusLineLayerView: NSView {
   private final class Segment {
+    /// The lit segment's halo (opacity 0 while not lit), under the glow.
+    let halo = CALayer()
     let glow = CALayer()
     let bar = CALayer()
     let shine = CAGradientLayer()
+    /// The wings are about this chat (`StatusLineView.lit`).
+    var lit = false
     /// Masks the bar into dashes while the state is `.error` and the palette draws error broken
     /// (nil otherwise).
     var dashMask: CAShapeLayer?
@@ -411,6 +422,23 @@ final class StatusLineLayerView: NSView {
   private var order: [LineSegment] = []
   private var reduceMotion = false
   private var colors = StatusPalette.classic
+
+  /// The lit segment: this much taller, growing downward from the line's top (the line stays
+  /// tied to the notch; nothing of the bar reaches more than 1.5 pt below today's).
+  static let litLift: CGFloat = 1.5
+  /// The lit segment's halo: the segment's own color, a tighter blur than the glow (4 pt) so
+  /// it brightens the bar rather than spreading further, at this opacity (idle: `litIdleHalo`,
+  /// a faint white bar should not turn into a bright one). It is a shadow only (no fill, shaped
+  /// by `shadowPath`) and breathes / flashes with the bar, so a lit "needs you" bar still pulses
+  /// and a lit "done" bar still flashes on arrival.
+  static let litHaloRadius: CGFloat = 3
+  static let litHalo: Float = 0.85
+  static let litIdleHalo: Float = 0.3
+  /// Lighting up: a strong ease-out, short (wings show many times a day). Going dark: quicker.
+  /// Reduce Motion: no growth, the halo only crossfades (`litFade`).
+  static let litIn = (duration: 0.2, curve: CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1))
+  static let litOut = (duration: 0.14, curve: CAMediaTimingFunction(name: .easeOut))
+  static let litFade = (duration: 0.16, curve: CAMediaTimingFunction(name: .easeOut))
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -428,7 +456,10 @@ final class StatusLineLayerView: NSView {
     place()
   }
 
-  func update(_ list: [LineSegment], colors: StatusPalette.Colors, reduceMotion: Bool) {
+  func update(
+    _ list: [LineSegment], colors: StatusPalette.Colors, lit: Set<String> = [],
+    reduceMotion: Bool
+  ) {
     // A palette switch (Settings) restyles every segment in place, without an arrival flash.
     let restyle = reduceMotion != self.reduceMotion || colors != self.colors
     self.reduceMotion = reduceMotion
@@ -436,18 +467,31 @@ final class StatusLineLayerView: NSView {
     order = list
     let ids = Set(list.map(\.sessionID))
     for (id, seg) in segments where !ids.contains(id) {
+      seg.halo.removeFromSuperlayer()
       seg.glow.removeFromSuperlayer()
       seg.bar.removeFromSuperlayer()
       segments.removeValue(forKey: id)
     }
+    var created: Set<String> = []
     for item in list {
+      if segments[item.sessionID] == nil { created.insert(item.sessionID) }
       let seg = segments[item.sessionID] ?? makeSegment(item.sessionID)
       if seg.state != item.state || restyle {
         let arrived = seg.state != nil && seg.state != item.state
         style(seg, item.state, arrived: arrived || seg.state == nil)
       }
     }
-    place()
+    var changed: Set<String> = []
+    for item in list {
+      guard let seg = segments[item.sessionID] else { continue }
+      let on = lit.contains(item.sessionID)
+      if seg.lit != on {
+        seg.lit = on
+        // A segment that only now arrives is placed lit at once (nothing to grow from).
+        if !created.contains(item.sessionID) { changed.insert(item.sessionID) }
+      }
+    }
+    place(animating: changed)
   }
 
   private func makeSegment(_ id: String) -> Segment {
@@ -462,6 +506,11 @@ final class StatusLineLayerView: NSView {
       NSColor.white.withAlphaComponent(0).cgColor
     ]
     seg.bar.addSublayer(seg.shine)
+    seg.halo.shadowOffset = .zero
+    seg.halo.shadowOpacity = 1
+    seg.halo.shadowRadius = Self.litHaloRadius
+    seg.halo.opacity = 0
+    layer?.addSublayer(seg.halo)
     layer?.addSublayer(seg.glow)
     layer?.addSublayer(seg.bar)
     segments[id] = seg
@@ -495,6 +544,7 @@ final class StatusLineLayerView: NSView {
       seg.bar.mask = nil
       seg.dashMask = nil
       seg.glow.shadowPath = nil
+      seg.halo.shadowPath = Self.pill(seg.halo.bounds)
       return
     }
     let mask = seg.dashMask ?? CAShapeLayer()
@@ -508,13 +558,25 @@ final class StatusLineLayerView: NSView {
     mask.frame = bounds
     mask.path = path
     seg.glow.shadowPath = path
+    seg.halo.shadowPath = path
     // The glow's own fill would show through the gaps; only its shadow (shaped by the path) stays.
     seg.glow.backgroundColor = nil
   }
 
+  /// A rounded bar shape filling `rect` (the halo's shadow outside the error dashes).
+  private static func pill(_ rect: CGRect) -> CGPath {
+    let r = min(rect.width, rect.height) / 2
+    return CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil)
+  }
+
   private func style(_ seg: Segment, _ state: LineState, arrived: Bool) {
     seg.state = state
-    for l in [seg.bar, seg.glow, seg.shine] { l.removeAllAnimations() }
+    // Only the state's own animations: a running light-up ("lit.*", `light`) keeps going.
+    for l in [seg.bar, seg.glow, seg.halo] {
+      l.removeAnimation(forKey: "breathe")
+      l.removeAnimation(forKey: "flash")
+    }
+    seg.shine.removeAnimation(forKey: "shimmer")
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     let c = color(state)
@@ -525,6 +587,7 @@ final class StatusLineLayerView: NSView {
     seg.glow.shadowRadius = 4
     seg.glow.shadowOpacity = state == .idle ? 0 : 1
     seg.glow.opacity = state == .idle ? 0 : 0.4
+    seg.halo.shadowColor = c.cgColor
     seg.bar.opacity = Float(StatusPalette.lineOpacity(state))
     seg.shine.isHidden = state != .working || reduceMotion
     applyDashes(seg, state)
@@ -544,6 +607,16 @@ final class StatusLineLayerView: NSView {
         breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         l.add(breathe, forKey: "breathe")
       }
+      // The halo (seen only while lit) breathes with them, as deep as the glow (to 0.3 of
+      // itself), so a lit bar keeps its pulse. Its `opacity` stays free for lighting up.
+      let breathe = CABasicAnimation(keyPath: "shadowOpacity")
+      breathe.fromValue = 1.0
+      breathe.toValue = 0.3
+      breathe.duration = 1.2
+      breathe.autoreverses = true
+      breathe.repeatCount = .infinity
+      breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+      seg.halo.add(breathe, forKey: "breathe")
     case .done where arrived:
       let flash = CAKeyframeAnimation(keyPath: "opacity")
       flash.values = [0.4, 1, 1, 1]
@@ -555,6 +628,12 @@ final class StatusLineLayerView: NSView {
       bloom.keyTimes = [0, 0.12, 0.35, 1]
       bloom.duration = 0.9
       seg.glow.add(bloom, forKey: "flash")
+      // A segment that finishes while lit flashes through its halo too.
+      let halo = CAKeyframeAnimation(keyPath: "shadowOpacity")
+      halo.values = flash.values
+      halo.keyTimes = flash.keyTimes
+      halo.duration = flash.duration
+      seg.halo.add(halo, forKey: "flash")
     default:
       break
     }
@@ -573,7 +652,9 @@ final class StatusLineLayerView: NSView {
     seg.shine.setValue(w, forKey: "sweepWidth")
   }
 
-  private func place() {
+  /// Lays the segments out. Those in `animating` just lit up or went dark: they move to their
+  /// new height and halo (`light`); the rest are set at once.
+  private func place(animating: Set<String> = []) {
     let n = order.count
     guard n > 0 else { return }
     let gap = NotchMetrics.lineSegmentGap
@@ -583,10 +664,24 @@ final class StatusLineLayerView: NSView {
     CATransaction.setDisableActions(true)
     for (i, item) in order.enumerated() {
       guard let seg = segments[item.sessionID] else { continue }
-      let frame = CGRect(x: CGFloat(i) * (w + gap), y: 0, width: w, height: h)
-      seg.bar.frame = frame
-      seg.glow.frame = frame
-      seg.shine.frame = CGRect(x: 0, y: 0, width: w, height: h)
+      let height = seg.lit ? h + Self.litLift : h
+      let frame = CGRect(x: CGFloat(i) * (w + gap), y: 0, width: w, height: height)
+      let halo: Float = seg.lit ? (seg.state == .idle ? Self.litIdleHalo : Self.litHalo) : 0
+      if animating.contains(item.sessionID) {
+        light(seg, frame: frame, halo: halo)
+      } else {
+        for l in [seg.bar, seg.glow] {
+          l.frame = frame
+          l.cornerRadius = height / 2
+        }
+        seg.halo.opacity = halo
+      }
+      // The halo takes its new shape at once: it only fades (`light`), and 1.5 pt under a
+      // 3 pt blur does not show.
+      seg.halo.frame = frame
+      seg.halo.shadowPath = Self.pill(seg.halo.bounds)
+      // Tall enough for the lit height; the bar clips it.
+      seg.shine.frame = CGRect(x: 0, y: 0, width: w, height: h + Self.litLift)
       if seg.state == .error, colors.errorDashed { applyDashes(seg, .error) }
       if seg.state == .working, !reduceMotion,
         (seg.shine.value(forKey: "sweepWidth") as? CGFloat) != w
@@ -595,6 +690,37 @@ final class StatusLineLayerView: NSView {
       }
     }
     CATransaction.commit()
+  }
+
+  /// A segment lighting up (or going dark): its bar and glow take `frame` (taller or back)
+  /// and the halo `halo` opacity (`place` sets the halo's shape). Each animation starts from
+  /// what is on screen now, so a wing that changes mid-way turns back without a jump. Lighting
+  /// up uses `litIn`, going dark `litOut`; with Reduce Motion the height is set at once and
+  /// only the halo fades.
+  private func light(_ seg: Segment, frame: CGRect, halo: Float) {
+    let up = seg.lit
+    let timing = reduceMotion ? Self.litFade : (up ? Self.litIn : Self.litOut)
+    func animate(_ l: CALayer, _ key: String, from: Any?) {
+      guard let from else { return }
+      let a = CABasicAnimation(keyPath: key)
+      a.fromValue = from
+      a.duration = timing.duration
+      a.timingFunction = timing.curve
+      l.add(a, forKey: "lit.\(key)")
+    }
+    for l in [seg.bar, seg.glow] {
+      let now = l.presentation() ?? l
+      let (bounds, position, radius) = (now.bounds, now.position, now.cornerRadius)
+      l.frame = frame
+      l.cornerRadius = frame.height / 2
+      guard !reduceMotion else { continue }
+      animate(l, "bounds", from: NSValue(rect: bounds))
+      animate(l, "position", from: NSValue(point: position))
+      animate(l, "cornerRadius", from: radius)
+    }
+    let from = (seg.halo.presentation() ?? seg.halo).opacity
+    seg.halo.opacity = halo
+    animate(seg.halo, "opacity", from: from)
   }
 }
 

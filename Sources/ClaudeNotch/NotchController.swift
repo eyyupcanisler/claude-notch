@@ -1488,7 +1488,10 @@ final class NotchController {
     onAttention?(sessionID, kind)
     // Silent mode: only what needs an answer (permission, question) interrupts.
     if focusQuiet && kind != "permission" && kind != "question" { return }
-    if let e = SoundEvent(attention: kind), settings.soundEnabled(e) {
+    // A Focus silences what does not block Claude (done, error), the same rule as the wings.
+    if FocusIslands.playsSound(kind: kind, focusActive: settings.focusOn),
+      let e = SoundEvent(attention: kind), settings.soundEnabled(e)
+    {
       settings.play(settings.soundName(e))
     }
     guard expandedID == nil, islandShows(kind, for: sessionID) else { return }

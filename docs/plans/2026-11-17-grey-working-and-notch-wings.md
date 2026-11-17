@@ -538,5 +538,33 @@ also replaced. This section overrides the plan and "After review" where they dif
    | done | 4 s text, no mark | nothing (status line) |
    | module | 4 s text, no mark | nothing |
 
-Open: sounds still follow the sound settings and silent mode only; a Focus does not silence a
-"done" or "error" chime.
+4. **Sounds follow the same rule (decided 2026-11-17).** Under a Focus only the kinds that block
+   Claude (`FocusIslands.blockingKinds`) play their sound; a "done" or "error" chime is silent.
+   `FocusIslands.playsSound(kind:focusActive:)` (Core, tested in `WingWhoTests`) gates the
+   attention sound in `NotchController.handle`, after silent mode and before the sound
+   settings. Module chimes (timer, calendar reminder in `ModuleCenter`) follow their notes,
+   which a Focus drops: `FocusIslands.playsModuleSound(focusActive:)` silences them under a
+   Focus. The terminal bell (`TerminalBell`, opt-in) is not gated by Focus: in Ghostty it is
+   the tab's 🔔 mark rather than a sound, and silent mode already limits it.
+
+## Which chat a wing is about (2026-11-17)
+
+The left text named only the project ("kutie-games asks:"), and several chats or tabs can share
+a project.
+
+1. **Tab title in the long text.** `WingLabel.tabPart(project:tabTitle:disambiguator:)` and
+   `WingLabel.label(project:tabPart:compose:fits:)` (Core, pure): "kutie-games · Fix reward
+   tiers asks:". The tab is `Session.tabTitle` (Ghostty's `name of terminal`, cleaned by
+   `TabTitle.clean`, applied by `SessionStore.applyTabTitles`), the same title the panel rows
+   show (`secondaryText`). No title, or one equal to the project, adds nothing; without a
+   title the old disambiguator (branch, tty) stays. When the sentence is wider than the widest
+   left wing (`WingMetrics.maxLongWidth`, measured with the 12 pt semibold font), the tab is
+   cut at its end with "…" (at least 3 characters), else only the project is named. A merged
+   finished item (several chats) keeps `PeekPlanner.finishedTitle`.
+2. **The chat's segment lights up.** `WingDisplay.sessionIDs`: the item's sessions while it is
+   up, else the most urgent shown mark's session. `StatusLineView(lit:)` draws those segments
+   1.5 pt taller (growing downward from the line's top) with an extra halo in the segment's
+   own color (a shadow only, blur 3 pt, opacity 0.85; idle 0.3, so a faint idle bar does not
+   read as done; it breathes and flashes with the bar, so a lit "needs you" bar still pulses),
+   in 0.2 s with a strong ease-out, back in 0.14 s. Reduce Motion: the height changes at once
+   and only the halo fades (0.16 s).

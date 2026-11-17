@@ -197,7 +197,7 @@ public enum TerminalIslands {
 /// Under a Focus only what blocks Claude shows (`shows`): a permission request, a question, a
 /// plan to approve or a wait for input, and only as the small mark (`WingPlanner`), until it is
 /// handled. Finished runs, errors and module notes show nothing beside the notch; the status
-/// line still has them.
+/// line still has them. Sounds follow the same rule (`playsSound`, `playsModuleSound`).
 public enum FocusIslands {
   /// UserDefaults key (app domain), a Bool.
   public static let defaultsKey = "focusActive"
@@ -224,6 +224,19 @@ public enum FocusIslands {
   /// only the kinds in `blockingKinds`.
   public static func shows(kind: String, focusActive: Bool) -> Bool {
     !focusActive || blockingKinds.contains(kind)
+  }
+
+  /// Whether the sound of attention `kind` plays: the same rule as the wings (`shows`). Under
+  /// a Focus only what blocks Claude (`blockingKinds`) sounds; a finished run or an error is
+  /// silent (the status line still shows it). Without a Focus the sound settings decide.
+  public static func playsSound(kind: String, focusActive: Bool) -> Bool {
+    shows(kind: kind, focusActive: focusActive)
+  }
+
+  /// Whether a module chime (timer done, calendar reminder) plays: not under a Focus, the same
+  /// rule as its note, which a Focus drops (`WingPlanner.receive(module:at:)`).
+  public static func playsModuleSound(focusActive: Bool) -> Bool {
+    !focusActive
   }
 
   /// The shell command a Shortcuts automation runs ("Run Shell Script") when a Focus turns on

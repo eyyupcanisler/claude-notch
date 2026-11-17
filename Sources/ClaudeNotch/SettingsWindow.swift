@@ -291,7 +291,7 @@ struct SettingsView: View {
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           Toggle("Treat Focus as on", isOn: $settings.focusActive)
-          Text("A Focus such as Do Not Disturb is detected automatically. While one is on, only what blocks Claude shows beside the notch: permission requests, questions, plan approvals and waits for input, as a small mark until you handle them. Finished runs, errors and module notes show only in the status line. This switch is a backup that the Shortcuts automations in the README can turn on and off.")
+          Text("A Focus such as Do Not Disturb is detected automatically. While one is on, only what blocks Claude shows beside the notch and makes a sound: permission requests, questions, plan approvals and waits for input, as a small mark until you handle them. Finished runs, errors and module notes show only in the status line; none of them makes a sound. This switch is a backup that the Shortcuts automations in the README can turn on and off.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
           if settings.systemFocus == .unknown && !NotchSettings.isDemo {

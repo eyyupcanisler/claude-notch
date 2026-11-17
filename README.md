@@ -44,8 +44,10 @@ terminal, and keep a few handy tools one glance away.
 - **Nothing drops down.** Permission requests, questions, plan approvals, finished runs, errors
   and module notes never expand below the menu-bar band, so what is under it (browser tabs)
   stays clickable. The notch grows sideways instead, at the same height ("wings"): for 4 s the
-  left wing says who and what ("claude-notch wants to run") and the right wing the detail (the
-  command, the question's first words), then both shrink to a small colored mark (a dot and a
+  left wing says who and what, with the project and the terminal tab's title ("claude-notch ·
+  Fix tests wants to run"), and the right wing the detail (the command, the question's first
+  words); that chat's segment of the status line lights up (a little taller and brighter)
+  while its wing shows. Then both shrink to a small colored mark (a dot and a
   shield, ?, ! or check; a count when several are waiting). Only what blocks Claude keeps its
   mark: a permission request, question, plan approval or wait for input stays until handled;
   done, errors and module notes leave none (the status line keeps them). Under a Focus only
@@ -192,6 +194,10 @@ wings are two sentences:
 - **Focus on:** only what blocks Claude shows (in either question mode), and only as the small
   mark, never the 4 s text; it stays until you handle it. Finished runs, errors and module
   notes show nothing beside the notch; the status line still shows them.
+
+Sounds follow the same rule: under a Focus only what blocks Claude plays its sound (permission
+requests, questions, plan approvals, waits for input); finished runs, errors and the module
+chimes (timer, calendar reminder) are silent.
 
 Settings → *Bildirimler → Odağı açık say* (Notifications → Treat Focus as on; default off) is a
 backup: Focus counts as on when macOS or this switch says so. If the app cannot read that file

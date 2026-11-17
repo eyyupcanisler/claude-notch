@@ -123,10 +123,14 @@ public struct WingDisplay: Sendable, Equatable {
   /// What a click acts on: the item's own mark while it is up, else the only lingering mark;
   /// nil with several (a click opens the panel). A target with `asking` goes to its terminal.
   public var target: WingMark?
+  /// The chats the wings are about right now, whose segments the status line lights: the
+  /// item's sessions while it is up (each one of a merged finished item), else the session of
+  /// the mark drawn (with a count, the most urgent one only). Empty for a module note.
+  public var sessionIDs: [String]
 
   public init(
     style: WingStyle, item: PeekItem?, mark: WingMarkKind, count: Int, badge: Int = 0,
-    target: WingMark?
+    target: WingMark?, sessionIDs: [String] = []
   ) {
     self.style = style
     self.item = item
@@ -134,6 +138,7 @@ public struct WingDisplay: Sendable, Equatable {
     self.count = count
     self.badge = badge
     self.target = target
+    self.sessionIDs = sessionIDs
   }
 }
 
@@ -378,14 +383,16 @@ public struct WingPlanner: Sendable {
         kind: kind, sessionID: cur.sessionIDs.last, cardID: cur.cardID, asking: cur.asking,
         since: cur.startedAt)
       return WingDisplay(
-        style: showsText ? .long : .mark, item: cur, mark: kind, count: shown.count, target: own)
+        style: showsText ? .long : .mark, item: cur, mark: kind, count: shown.count, target: own,
+        sessionIDs: cur.sessionIDs)
     }
     guard
       let top = shown.max(by: { ($0.kind.urgency, $0.since) < ($1.kind.urgency, $1.since) })
     else { return nil }
     return WingDisplay(
       style: .mark, item: nil, mark: top.kind, count: shown.count,
-      badge: shown.count > 1 ? shown.count : 0, target: shown.count == 1 ? shown[0] : nil)
+      badge: shown.count > 1 ? shown.count : 0, target: shown.count == 1 ? shown[0] : nil,
+      sessionIDs: top.sessionID.map { [$0] } ?? [])
   }
 
   /// The mark of an item in its phase (a merged finished item with an error is an error).
@@ -402,6 +409,80 @@ public struct WingPlanner: Sendable {
   /// is timed.
   public var nextChange: Date? {
     current?.until
+  }
+}
+
+// MARK: - Who, in the long text
+
+/// The long text's "who": the project and the terminal tab of the chat ("kutie-games · Fix
+/// reward tiers asks:"), so several chats of one project read apart in the wings. The tab is
+/// `Session.tabTitle` (Ghostty's tab name, cleaned by `TabTitle.clean`), the same title the
+/// panel's rows show. A merged item (several chats) keeps its own wording.
+public enum WingLabel {
+  /// A cut tab keeps at least this many characters (before "…"); with less room the label
+  /// names the project only.
+  public static let minTabCharacters = 3
+
+  /// What follows the project: the tab title, unless it is missing or is the project's own
+  /// name (case and surrounding spaces ignored). When the title alone does not tell chats of
+  /// the same project apart, the disambiguator (`SessionStore.disambiguator`: branch, tty...)
+  /// follows it; without a title the disambiguator alone (today's name). nil: nothing to add.
+  public static func tabPart(project: String, tabTitle: String?, disambiguator: String?)
+    -> String?
+  {
+    func useful(_ s: String?) -> String? {
+      guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty,
+        t.caseInsensitiveCompare(project.trimmingCharacters(in: .whitespacesAndNewlines))
+          != .orderedSame
+      else { return nil }
+      return t
+    }
+    let tab = useful(tabTitle)
+    let d = useful(disambiguator)
+    switch (tab, d) {
+    case (nil, let d): return d
+    case (let tab?, nil): return tab
+    case (let tab?, let d?): return d == tab ? tab : "\(tab) · \(d)"
+    }
+  }
+
+  /// The whole left label: `compose` turns a "who" into the sentence ("%@ asks:"). With a tab
+  /// part, "project · tab" when that fits (`fits`: the app measures it against the wing's
+  /// widest text); else the tab cut at its end ("Fix rewar…", whole characters, no trailing
+  /// space) to the longest that fits; else, with fewer than `minTabCharacters` left, the
+  /// project alone (the view truncates that one if even it does not fit).
+  public static func label(
+    project: String, tabPart: String?, compose: (String) -> String, fits: (String) -> Bool
+  ) -> String {
+    let plain = compose(project)
+    guard let tabPart, !tabPart.isEmpty else { return plain }
+    let whole = compose("\(project) · \(tabPart)")
+    if fits(whole) { return whole }
+    let chars = Array(tabPart)
+    func cut(_ n: Int) -> String? {
+      let head = String(chars.prefix(n)).trimmingCharacters(in: .whitespaces)
+      guard head.count >= minTabCharacters else { return nil }
+      return compose("\(project) · \(head)…")
+    }
+    // Longest cut that fits (wider with every character kept): binary search.
+    var lo = minTabCharacters
+    var hi = chars.count - 1
+    var best: String?
+    while lo <= hi {
+      let mid = (lo + hi) / 2
+      guard let text = cut(mid) else {
+        // Too few characters once its trailing spaces go: only a longer cut can do.
+        lo = mid + 1
+        continue
+      }
+      if fits(text) {
+        best = text
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    return best ?? plain
   }
 }
 

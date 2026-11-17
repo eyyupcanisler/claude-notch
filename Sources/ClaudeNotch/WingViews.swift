@@ -12,7 +12,7 @@ import SwiftUI
 /// value the view draws (`contentWidths`), so the shape is at its width from the first frame.
 @MainActor
 struct WingText: Equatable {
-  /// Left wing: who / what ("claude-notch wants to run").
+  /// Left wing: who / what ("claude-notch · Fix tests wants to run": project and terminal tab).
   var left: String
   /// Right wing: the detail, one line (the command, the question, a summary).
   var right: String?
@@ -45,31 +45,39 @@ struct WingText: Equatable {
       return permission(card, store: store)
     case .attention:
       guard let sid = item.sessionIDs.first, let session = store.sessions[sid] else { return nil }
-      let who = store.displayName(for: session)
       if let held = store.question(for: sid) {
-        return WingText(left: loc("\(who) asks:"), right: line(held.questions.first?.question, limit: 60))
+        return WingText(
+          left: who(session, store: store) { loc("\($0) asks:") },
+          right: line(held.questions.first?.question, limit: 60))
       }
       switch session.status {
       case .question(let text, _):
-        return WingText(left: loc("\(who) asks:"), right: line(text, limit: 60))
+        return WingText(
+          left: who(session, store: store) { loc("\($0) asks:") }, right: line(text, limit: 60))
       case .planApproval(let first):
-        return WingText(left: loc("\(who) has a plan to approve"), right: line(first))
+        return WingText(
+          left: who(session, store: store) { loc("\($0) has a plan to approve") },
+          right: line(first))
       case .waitingInput(let text):
         return WingText(
-          left: loc("\(who) is waiting for you"),
+          left: who(session, store: store) { loc("\($0) is waiting for you") },
           right: line(text) ?? loc("Claude is waiting for a reply"))
       default:
         // The status moved on within the 4 s: no stale detail.
         return WingText(
-          left: loc("\(who) is waiting for you"), right: loc("Claude is waiting for a reply"))
+          left: who(session, store: store) { loc("\($0) is waiting for you") },
+          right: loc("Claude is waiting for a reply"))
       }
     case .finished:
       guard item.sessionIDs.count == 1, let sid = item.sessionIDs.first else {
         let names = item.sessionIDs.map(name)
         return WingText(left: PeekPlanner.finishedTitle(names: names, errors: item.errorIDs.count))
       }
-      let who = name(sid)
-      let left = item.errorIDs.isEmpty ? loc("\(who) finished") : loc("\(who) stopped with an error")
+      let errored = !item.errorIDs.isEmpty
+      let compose: (String) -> String = {
+        errored ? loc("\($0) stopped with an error") : loc("\($0) finished")
+      }
+      let left = store.sessions[sid].map { who($0, store: store, compose) } ?? compose(name(sid))
       return WingText(left: left, right: line(store.sessions[sid]?.status.detail))
     case .module:
       guard let note = item.module else { return nil }
@@ -80,11 +88,38 @@ struct WingText: Equatable {
 
   /// The long text of a permission request: who wants to run / use what, and its one line.
   static func permission(_ card: PendingPermission, store: SessionStore) -> WingText {
-    let who = store.sessions[card.sessionID].map { store.displayName(for: $0) } ?? "Claude"
-    let left = card.toolName == "Bash"
-      ? loc("\(who) wants to run") : loc("\(who) wants to use \(card.toolName)")
+    let compose: (String) -> String = {
+      card.toolName == "Bash" ? loc("\($0) wants to run") : loc("\($0) wants to use \(card.toolName)")
+    }
+    let left = store.sessions[card.sessionID].map { who($0, store: store, compose) }
+      ?? compose("Claude")
     return WingText(
       left: left, right: card.wingText, mono: true, cardID: card.id, holdRing: card.risk != nil)
+  }
+
+  /// The left text of one chat: its project and terminal tab (`WingLabel`: the tab title the
+  /// panel's rows show, `Session.tabTitle`), the tab cut first so the whole sentence fits the
+  /// widest left wing (`WingMetrics.maxLongWidth`). A narrower screen still truncates the end.
+  static func who(
+    _ session: Session, store: SessionStore, _ compose: (String) -> String
+  ) -> String {
+    let part = WingLabel.tabPart(
+      project: session.project, tabTitle: session.tabTitle,
+      disambiguator: store.disambiguator(for: session))
+    return WingLabel.label(
+      project: session.project, tabPart: part, compose: compose, fits: fitsWidestLeft)
+  }
+
+  /// `left` (with its dot) fits a left wing at its widest.
+  static func fitsWidestLeft(_ left: String) -> Bool {
+    measure(left, leftFont) + dot + gap + 2 * WingMetrics.padding <= WingMetrics.maxLongWidth
+  }
+
+  static var leftFont: NSFont { .systemFont(ofSize: leftSize, weight: .semibold) }
+
+  /// Drawn width of `s` in `font`, rounded up, plus the 1 pt the text views need.
+  static func measure(_ s: String, _ font: NSFont) -> CGFloat {
+    ceil((s as NSString).size(withAttributes: [.font: font]).width) + 1
   }
 
   /// The right line (and the hold ring) fits its wing on `g`'s screen, nothing truncated.
@@ -94,12 +129,9 @@ struct WingText: Equatable {
 
   /// Widths of the left and right content (text plus the dot / ring), without padding.
   var contentWidths: (left: CGFloat, right: CGFloat) {
-    func width(_ s: String, _ font: NSFont) -> CGFloat {
-      ceil((s as NSString).size(withAttributes: [.font: font]).width) + 1
-    }
-    let left = width(left, .systemFont(ofSize: Self.leftSize, weight: .semibold)) + Self.dot + Self.gap
+    let left = Self.measure(left, Self.leftFont) + Self.dot + Self.gap
     var right = right.map {
-      width(
+      Self.measure(
         $0,
         mono
           ? .monospacedSystemFont(ofSize: Self.rightSize, weight: .regular)
