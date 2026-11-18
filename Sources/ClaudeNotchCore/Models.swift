@@ -125,6 +125,9 @@ public struct Session: Sendable, Identifiable, Equatable {
   /// keeps working until that work wakes it (see `BackgroundWork`). Cleared by the next Stop,
   /// prompt or session start.
   public var waitsForBackground = false
+  /// The user hid the chat (the row's hide button): it leaves the panel list and the status
+  /// line until it does something new (see `SessionStore.reveals`). The process keeps running.
+  public var hidden = false
 
   public init(
     id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,

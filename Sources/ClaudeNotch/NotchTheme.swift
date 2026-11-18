@@ -107,6 +107,10 @@ enum Grain {
 
 /// Motion tokens shared by every surface (Apple fluid springs: damping ratio + response).
 enum Motion {
+  /// A row leaving the list (hidden) or coming back from the "Hidden" line: an occasional
+  /// enter / exit, so a strong ease-out under 300 ms (the same curve as `NotchEnter`); a
+  /// second click mid-way re-targets from where the rows are.
+  static let rowHide = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
   /// Expand / collapse of the panel: quick, settling with the faintest overshoot.
   static let expand = Animation.spring(response: 0.3, dampingFraction: 0.9)
   /// The collapsed notch swelling under the pointer (instant acknowledgement).

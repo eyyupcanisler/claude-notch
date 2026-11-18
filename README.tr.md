@@ -185,9 +185,21 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   Kontrol, çift yönlü ve görünmez karakterler atılır, Claude Code'un baştaki dönen / durum
   simgesi (⠂ ◐ ✳) silinir, uzun adın ortası kısaltılır. İzin yoksa eski ayırt edici (dal, tty
   eki) kullanılır.
-- Satıra tıklamak o oturumun **sekmesini** öne getirir (Ghostty, Terminal, iTerm2 için tty ile;
-  diğer terminallerde yalnızca uygulama). Satır üzerindeki düğmeler: Odakla, Okundu, Son mesajı
-  kopyala. İlk odaklamada macOS Otomasyon izni ister.
+- Satırın herhangi bir yerine tıklamak o oturumun **sekmesini** öne getirir (Ghostty, Terminal,
+  iTerm2 için tty ile; diğer terminallerde yalnızca uygulama). İzin kartında ve çentikte
+  yanıtlanan soruda tıklama yalnızca kendi düğmelerine gider. Sekmeye ulaşılamazsa (kapanmışsa
+  ya da terminal yanıt vermediyse) panel bunu sohbetin başlığıyla söyler; yalnızca terminal
+  uygulamasını öne getirip susmaz. Satır üzerindeki düğmeler: Son mesajı kopyala, Okundu,
+  Gizle, Odakla. İlk odaklamada macOS Otomasyon izni ister. Panel her açılışta kendi
+  seviyesinin en önüne geçer; aynı seviyedeki başka bir uygulamanın penceresi (ör. Superwhisper)
+  onu örtüp tıklamalarını alamaz.
+- **Sohbeti gizle:** satırın üzerine gelip üstü çizili göze tıklayın; sohbet panelden ve durum
+  çizgisinden çıkar, terminali ve süreci olduğu gibi kalır. Yeni bir şey olunca kendiliğinden
+  geri gelir: içine yazdığınızda, bir tur bittiğinde ya da hata verdiğinde, ya da sizi
+  beklediğinde (izin isteği, soru, plan onayı). Claude Code’un turdan bir dakika sonra gelen
+  "girdi bekleniyor" bildirimi onu geri getirmez. Sizi bekleyen bir sohbet gizlenemez.
+  Satırların altındaki **Gizli** satırı gizlenen sohbetleri başlıklarıyla listeler: birine
+  tıklamak onu geri getirir, **Hepsini göster** hepsini.
 - **Ghostty iznini ver:** Otomasyon izni henüz sorulmadıysa ya da reddedildiyse panel bandında
   amber kilit simgesi ve sağ tık menüsünde "Ghostty iznini ver…" görünür. Tıklamak macOS izin
   penceresini açar (arka planda; çentik donmaz). Daha önce reddedildiyse Sistem Ayarları >
@@ -390,6 +402,15 @@ Uygulama yeni değeri hemen okur. Diğer Odak modları da aynı şekilde bağlan
 (`file`: on / off / unknown, `file_readable`, `file_error` (neden okunamadığı), `shortcuts`, `on`).
 
 ## Hata ayıklama
+
+Çentikteki bir tıklama hiçbir şey yapmıyor gibi görünürse birleşik günlük nerede durduğunu
+söyler: basış panele mi ulaştı yoksa başka bir uygulamaya mı gitti, ve terminale her atlama
+nasıl bitti (`terminal`, `directory`, Apple Event hata koduyla `tab_missed`, ...). Günlükte
+sohbet adı ya da yol yoktur.
+
+```sh
+log show --last 1h --style compact --predicate 'subsystem == "com.eyyupcan.claudenotch"'
+```
 
 `/debug/*` uçları kartları onaylayabildiği için **varsayılan olarak kapalıdır** (404). Yalnızca
 `CLAUDE_NOTCH_DEBUG=1` ile başlatılan uygulamada açılır (soket yine yalnızca sizin kullanıcınıza

@@ -515,10 +515,11 @@ extension SessionStore {
     }
   }
 
-  /// One segment per session in tab order (a segment never moves when its session changes
-  /// state); with more than `maxLineSegments` sessions the most urgent ones are shown.
+  /// One segment per shown session in tab order (a segment never moves when its session
+  /// changes state; hidden chats have none); with more than `maxLineSegments` sessions the
+  /// most urgent ones are shown.
   public var statusLine: [LineSegment] {
-    var picked = tabOrdered.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
+    var picked = displayOrder.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
     if picked.count > Self.maxLineSegments {
       let rank = Dictionary(uniqueKeysWithValues: picked.enumerated().map { ($1.sessionID, $0) })
       let key = { (x: LineSegment) in (x.state.priority, rank[x.sessionID] ?? 0) }
@@ -549,8 +550,9 @@ extension SessionStore {
   }
 
   /// The panel list: same order as the terminal tabs (`tabOrdered`), whatever the status; the
-  /// status shows on the row (`group(of:)`), it does not move the row.
-  public var displayOrder: [Session] { tabOrdered }
+  /// status shows on the row (`group(of:)`), it does not move the row. Hidden chats are left
+  /// out (see `hiddenSessions`).
+  public var displayOrder: [Session] { tabOrdered.filter { !$0.hidden } }
 
   /// Ghostty tab order (by tty, see `applyTabOrder`); sessions not in a known tab follow, in
   /// creation order.

@@ -148,6 +148,25 @@ public final class SessionStore {
     disambiguator(for: s).map { "\(s.project) · \($0)" } ?? s.project
   }
 
+  /// Tab title Claude Code shows before a chat has a name; it names no chat.
+  static let genericTabTitle = "Claude Code"
+
+  /// The chat's own title: its terminal tab's title (Claude Code names the tab after the chat,
+  /// e.g. "BTY book QR code mismatch"), nil while the tab is unknown or still unnamed.
+  public func chatTitle(for s: Session) -> String? {
+    guard let title = s.tabTitle?.trimmingCharacters(in: .whitespaces), !title.isEmpty,
+      title != Self.genericTabTitle
+    else { return nil }
+    return title
+  }
+
+  /// How the panel names a chat in a sentence or a chip: "project · chat title", or the
+  /// project with its disambiguator when the chat has no title yet.
+  public func chatLabel(for s: Session) -> String {
+    guard let title = chatTitle(for: s) else { return displayName(for: s) }
+    return title == s.project ? title : "\(s.project) · \(title)"
+  }
+
   /// Secondary text of a row: the terminal tab title (when known), plus the disambiguator when
   /// the title alone does not tell same-project sessions apart.
   public func secondaryText(for s: Session) -> String? {
@@ -197,8 +216,9 @@ public final class SessionStore {
     sessions.values.reduce(0) { $0 + ($1.isDoneUnseen ? 1 : 0) }
   }
 
+  /// Shown sessions that work (a hidden chat is out of sight, also in the counts).
   public var workingCount: Int {
-    sessions.values.reduce(0) { $0 + ($1.status.isWorking ? 1 : 0) }
+    sessions.values.reduce(0) { $0 + ($1.status.isWorking && !$1.hidden ? 1 : 0) }
   }
 
   public var anyWorking: Bool { workingCount > 0 }
@@ -207,7 +227,7 @@ public final class SessionStore {
   /// question / plan / input request). The ears, chips and header spark use this.
   public var activeWorkingCount: Int {
     sessions.values.reduce(0) { n, s in
-      n + (s.status.isWorking && !needsAttention(s) ? 1 : 0)
+      n + (s.status.isWorking && !needsAttention(s) && !s.hidden ? 1 : 0)
     }
   }
 
@@ -237,6 +257,56 @@ public final class SessionStore {
   public var jumpTarget: String? {
     JumpTarget.sessionID(
       permissionSessionIDs: pending.map(\.sessionID), sessions: Array(sessions.values))
+  }
+
+  // MARK: - Hidden chats
+
+  /// Chats the user hid, in tab order (the panel's "Hidden" line).
+  public var hiddenSessions: [Session] { tabOrdered.filter(\.hidden) }
+
+  /// Any chat the panel and the status line show (hidden ones do not count).
+  public var hasVisibleSessions: Bool { sessions.values.contains { !$0.hidden } }
+
+  /// Whether the row may offer "Hide": never while the chat needs the user (a card, a held
+  /// question, a question / plan / input wait, an unseen error), so nothing that blocks Claude
+  /// can be hidden.
+  public func canHide(_ s: Session) -> Bool {
+    !needsAttention(s) && question(for: s.id) == nil
+  }
+
+  /// Hides the chat until it does something new (`reveals`). Also marks it seen, so a hidden
+  /// chat never counts as an unseen "done". False when it is unknown or needs the user.
+  @discardableResult
+  public func hide(sessionID: String) -> Bool {
+    guard let s = sessions[sessionID], canHide(s) else { return false }
+    markSeen(sessionID: sessionID)
+    sessions[sessionID]?.hidden = true
+    return true
+  }
+
+  /// Brings one hidden chat back.
+  public func unhide(sessionID: String) {
+    guard sessions[sessionID]?.hidden == true else { return }
+    sessions[sessionID]?.hidden = false
+  }
+
+  /// Brings every hidden chat back.
+  public func unhideAll() {
+    for (id, s) in sessions where s.hidden { sessions[id]?.hidden = false }
+  }
+
+  /// Whether event `name` (applied, leaving `session` in its new state) is "something new" that
+  /// brings a hidden chat back: the user typed in it or started a session there, a turn really
+  /// ended (done or failed), or it needs the user now. Tool calls of a running turn, subagents,
+  /// a compaction (also the idle one Claude Code runs on its own) and the "waiting for your
+  /// input" notice a minute after a turn are not: a hidden chat stays hidden through those.
+  static func reveals(_ name: String, source: String?, session: Session) -> Bool {
+    switch name {
+    case "SessionStart": return source != "compact"
+    case "UserPromptSubmit", "StopFailure", "PermissionRequest": return true
+    case "Stop": return !session.waitsForBackground
+    default: return session.needsAttention
+    }
   }
 
   // MARK: - Derived: permission queue
@@ -381,6 +451,16 @@ public final class SessionStore {
       // Claude Code's "waiting for your input" while a workflow it started still runs: the
       // session is not waiting for the user, so no status change, card flush or bell.
       if e.notificationType == "idle_prompt", session.waitsForBackground { break }
+      // A hidden chat waiting for its next prompt is exactly what the user hid: no "needs
+      // you" state (it would light up a segment nobody can see), no bell. A turn that ended
+      // without a Stop (Esc) still settles: working / quiet becomes idle, so the chat neither
+      // counts as working nor turns "quiet" later, and comes back idle when shown.
+      if e.notificationType == "idle_prompt", session.hidden {
+        if session.status.isWorking || session.status == .quiet {
+          setStatus(&session, .idle, at: t)
+        }
+        break
+      }
       handleNotification(e, session: &session, at: t)
       if TerminalBell.rings(notificationType: e.notificationType) {
         emit(.bell(sessionID: e.sessionID, notificationType: e.notificationType))
@@ -401,6 +481,9 @@ public final class SessionStore {
       return
     default:
       return
+    }
+    if session.hidden, Self.reveals(e.name, source: e.source, session: session) {
+      session.hidden = false
     }
     session.lastUpdate = t
     sessions[e.sessionID] = session
@@ -484,6 +567,9 @@ public final class SessionStore {
     for placeholder in discoveredMatches(context) where placeholder.id != session.id {
       if isNew { session.startedAt = min(session.startedAt, placeholder.startedAt) }
       if session.termProgram == nil { session.termProgram = placeholder.termProgram }
+      // The user hid the placeholder: the hook session that replaces it stays hidden (the
+      // event that adopted it may still reveal it, see `reveals`).
+      if isNew, placeholder.hidden { session.hidden = true }
       sessions.removeValue(forKey: placeholder.id)
       exitWatches.removeValue(forKey: placeholder.id)?.watch.cancel()
     }
@@ -561,6 +647,8 @@ public final class SessionStore {
     adoptDiscovered(context, into: &session, isNew: isNew)
     session.lastUpdate = t
     session.unseen = false
+    // A permission request blocks Claude: a hidden chat comes back.
+    session.hidden = false
     sessions[e.sessionID] = session
     let tool = e.toolName ?? "?"
     let key = CallKey.make(sessionID: e.sessionID, toolName: tool, input: e.toolInput)
@@ -635,6 +723,8 @@ public final class SessionStore {
       agentID: e.agentID, questions: qs, toolInput: input, createdAt: now(),
       reply: PermissionReply(reply))
     questions.append(q)
+    // A held question blocks Claude: a hidden chat comes back.
+    unhide(sessionID: e.sessionID)
     return q
   }
 
@@ -765,7 +855,8 @@ public final class SessionStore {
         t.timeIntervalSince(s.lastUpdate) >= Self.quietAfter
       {
         setStatus(&u, .quiet, at: t)
-        emit(.attention(sessionID: id, kind: "quiet"))
+        // No "quiet for 10 min" note for a chat the user hid.
+        if !s.hidden { emit(.attention(sessionID: id, kind: "quiet")) }
       }
       u.agents = u.agents.filter { t.timeIntervalSince($0.value.lastSeen) < Self.agentStaleAfter }
       if u != s { sessions[id] = u }
@@ -830,6 +921,7 @@ public final class SessionStore {
         "term": opt(s.termProgram), "tty": opt(s.tty),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
         "discovered": .bool(s.isDiscovered), "tab_title": opt(s.tabTitle),
+        "hidden": .bool(s.hidden),
         "secondary": opt(secondaryText(for: s)),
         "disambiguator": opt(disambiguator(for: s)),
         "status": .string(s.status.kind), "label": .string(s.status.label),

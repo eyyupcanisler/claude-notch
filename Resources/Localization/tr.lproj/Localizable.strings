@@ -426,3 +426,16 @@
 "Accessibility permission not granted" = "Erişilebilirlik izni verilmedi";
 "Allow Accessibility…" = "Erişilebilirliğe izin ver…";
 "Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else." = "İsteğe bağlı. İzin yokken Ghostty öndeyken çentik odaktaki sekmeyi 0,5 sn’de bir kontrol eder; bitmiş ya da bekleyen bir sohbet, ona geçince yine çabucak temizlenir. İzin varken çentik Ghostty’deki sekme ve bölme geçişlerini olduğu anda duyar: güncellemeler anında gelir ve 0,5 sn’lik kontrol durur. İzin başka hiçbir şey için kullanılmaz.";
+
+/* Hiding a chat, and a jump that did not reach its tab. */
+"Hide until it does something new" = "Yeni bir şey olana kadar gizle";
+"Hidden" = "Gizli";
+"Hidden chats" = "Gizlenen sohbetler";
+"Show all" = "Hepsini göster";
+"Show this chat again" = "Bu sohbeti yeniden göster";
+"Show %@ again" = "Yeniden göster: %@";
+" (error %@)" = " (hata %@)";
+"Couldn’t switch to “%@” in %@%@. Its tab may be closed." = "%2$@ içinde “%1$@” sohbetine geçilemedi%3$@. Sekmesi kapanmış olabilir.";
+"Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed." = "%@ içinde sohbetin sekmesine geçilemedi%@. Sekmesi kapanmış olabilir.";
+"Can’t tell which terminal “%@” runs in" = "“%@” sohbetinin hangi terminalde çalıştığı anlaşılamadı";
+"Can’t tell which terminal this chat runs in" = "Bu sohbetin hangi terminalde çalıştığı anlaşılamadı";

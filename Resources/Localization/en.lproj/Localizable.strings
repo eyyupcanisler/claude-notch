@@ -426,3 +426,16 @@
 "Accessibility permission not granted" = "Accessibility permission not granted";
 "Allow Accessibility…" = "Allow Accessibility…";
 "Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else." = "Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else.";
+
+/* Hiding a chat, and a jump that did not reach its tab. */
+"Hide until it does something new" = "Hide until it does something new";
+"Hidden" = "Hidden";
+"Hidden chats" = "Hidden chats";
+"Show all" = "Show all";
+"Show this chat again" = "Show this chat again";
+"Show %@ again" = "Show %@ again";
+" (error %@)" = " (error %@)";
+"Couldn’t switch to “%@” in %@%@. Its tab may be closed." = "Couldn’t switch to “%@” in %@%@. Its tab may be closed.";
+"Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed." = "Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed.";
+"Can’t tell which terminal “%@” runs in" = "Can’t tell which terminal “%@” runs in";
+"Can’t tell which terminal this chat runs in" = "Can’t tell which terminal this chat runs in";

@@ -29,6 +29,11 @@ struct NotchActions {
   var selectCard: @MainActor (String) -> Void = { _ in }
   var focus: @MainActor (String) -> Void = { _ in }
   var markSeen: @MainActor (String) -> Void = { _ in }
+  /// Hides a chat until it does something new (row button); `unhide` / `unhideAll` bring hidden
+  /// chats back (the "Hidden" line).
+  var hide: @MainActor (String) -> Void = { _ in }
+  var unhide: @MainActor (String) -> Void = { _ in }
+  var unhideAll: @MainActor () -> Void = {}
   var markAllSeen: @MainActor () -> Void = {}
   var copyMessage: @MainActor (String) -> Void = { _ in }
   var denyAll: @MainActor (String) -> Void = { _ in }

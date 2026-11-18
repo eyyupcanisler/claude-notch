@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import ClaudeNotchCore
 import Observation
 import notify
+import os
 import SwiftUI
 
 /// Owns the surfaces (one per screen), decides the mode of each (collapsed / peek / expanded),
@@ -50,6 +51,10 @@ final class NotchController {
   private var dwellTask: Task<Void, Never>?
   private var armTask: Task<Void, Never>?
   private var hintTask: Task<Void, Never>?
+  /// After a chat is hidden or shown again the rows shift under a still pointer: until this
+  /// time a click on a row (jump, hide) is dropped, so the second click of a double-click never
+  /// hides or opens the chat that slid into place (`store.removalArmDelay`, as for cards).
+  private var rowClicksArmedAt = Date.distantPast
   private var pollTimer: Timer?
   private var screenTimer: Timer?
   private var monitors: [Any] = []
@@ -157,7 +162,9 @@ final class NotchController {
   // MARK: - Surfaces
 
   /// Any session exists: the status line is drawn and the notch / pill reacts.
-  private var hasSessions: Bool { !store.sessions.isEmpty }
+  /// Any chat the status line shows (hidden chats do not count: with only those, the notch
+  /// behaves as with no sessions).
+  private var hasSessions: Bool { store.hasVisibleSessions }
 
   private func makeRoot(_ state: SurfaceState) -> NotchRootView {
     NotchRootView(
@@ -310,6 +317,10 @@ final class NotchController {
       }
       if s.state.mode != mode || s.state.visible != visible {
         if mode == .peek && s.state.mode != .peek { s.pointerAtAppear = NSEvent.mouseLocation }
+        // Each time it opens, the panel goes to the front of its window level: another app's
+        // window at the same level (Superwhisper's sits right under the notch) ordered front
+        // since launch would otherwise cover it and take its clicks.
+        if mode != .collapsed && s.state.mode != mode { s.panel.orderFrontRegardless() }
         changes.append((s.state, mode, visible))
         log("mode \(id) \(s.state.mode.rawValue)->\(mode.rawValue) wings=\(ui.wings?.style.rawValue ?? "-")")
       }
@@ -397,7 +408,9 @@ final class NotchController {
         ids.contains(String(entry.key.drop(while: { $0 != ":" }).dropFirst()))
       }
     }
-    if let s = ui.selectedSessionID, store.sessions[s] == nil { ui.selectedSessionID = nil }
+    if let s = ui.selectedSessionID, store.sessions[s] == nil || store.sessions[s]?.hidden == true {
+      ui.selectedSessionID = nil
+    }
   }
 
   private func schedulePeekExpiry() {
@@ -1680,9 +1693,33 @@ final class NotchController {
         self?.ui.selectedSessionID = self?.store.card(id: id)?.sessionID
       },
       focus: { [weak self] sid in
-        Task { @MainActor in _ = await self?.focus(sessionID: sid) }
+        guard let self, self.rowClicksArmed() else { return }
+        Task { @MainActor in _ = await self.focus(sessionID: sid) }
       },
       markSeen: { [weak self] sid in self?.store.markSeen(sessionID: sid) },
+      hide: { [weak self] sid in
+        guard let self, self.rowClicksArmed() else { return }
+        clickLog.notice("hide \(String(sid.prefix(8)), privacy: .public)")
+        withAnimation(Motion.reduce ? nil : Motion.rowHide) {
+          if self.store.hide(sessionID: sid) { self.disarmRowClicks() }
+        }
+      },
+      unhide: { [weak self] sid in
+        guard let self, self.rowClicksArmed() else { return }
+        withAnimation(Motion.reduce ? nil : Motion.rowHide) {
+          self.store.unhide(sessionID: sid)
+          self.refreezeShownOrder()
+        }
+        self.disarmRowClicks()
+      },
+      unhideAll: { [weak self] in
+        guard let self, self.rowClicksArmed() else { return }
+        withAnimation(Motion.reduce ? nil : Motion.rowHide) {
+          self.store.unhideAll()
+          self.refreezeShownOrder()
+        }
+        self.disarmRowClicks()
+      },
       markAllSeen: { [weak self] in
         guard let self else { return }
         for s in self.store.sessions.values where s.unseen { self.store.markSeen(sessionID: s.id) }
@@ -1738,6 +1775,26 @@ final class NotchController {
     settingsWindow?.show()
   }
 
+  /// Whether a click on a row may act now (see `rowClicksArmedAt`); a dropped one is logged.
+  private func rowClicksArmed() -> Bool {
+    guard Date() >= rowClicksArmedAt else {
+      clickLog.notice("row click dropped: the rows just moved")
+      return false
+    }
+    return true
+  }
+
+  /// A chat shown again while the list is frozen goes back to its tab position, not to the
+  /// end of the frozen list (`applyFrozen` puts unknown ids last, maybe under the fade).
+  private func refreezeShownOrder() {
+    guard ui.frozenOrder != nil else { return }
+    ui.frozenOrder = store.displayOrder.map(\.id)
+  }
+
+  private func disarmRowClicks() {
+    rowClicksArmedAt = Date().addingTimeInterval(store.removalArmDelay)
+  }
+
   /// Jumps to the session's terminal, clears its unseen state, shows a hint on failure.
   func focus(sessionID: String) async -> FocusOutcome {
     guard let session = store.sessions[sessionID] else { return .failed }
@@ -1751,7 +1808,7 @@ final class NotchController {
       previousApp = nil
       if wasKey || ui.keyMode { collapse() }
     }
-    showHint(outcome.hint)
+    showHint(outcome.hint(chat: store.chatLabel(for: session)))
     return outcome
   }
 
@@ -1848,6 +1905,14 @@ final class NotchController {
   /// band (the menu bar there, where the press did nothing else) does it still act as a notch
   /// press; below the band it may have hit the page, so it is left alone.
   private func missedPress(at p: NSPoint) {
+    // A press over an open panel that went to another app: something covered the panel or it
+    // was letting clicks through. The log says which (see `clickLog`).
+    for s in surfaces.values where s.state.mode == .expanded {
+      if s.boundingRect(hasSessions: hasSessions).contains(p) {
+        clickLog.notice(
+          "press at \(Int(p.x)),\(Int(p.y)) over the open panel went to another app (ignores clicks: \(s.panel.ignoresMouseEvents), front app: \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-", privacy: .public))")
+      }
+    }
     updatePointer()
     for s in surfaces.values where s.state.mode != .expanded && s.pointerAtAppear == nil {
       let g = s.state.geometry
@@ -1864,6 +1929,8 @@ final class NotchController {
   /// the wings or the notch between them it does what a wing click does. Anything else (ears,
   /// the open panel) is left to the views.
   private func press(at p: NSPoint, on s: NotchSurface) -> Bool {
+    clickLog.notice(
+      "press at \(Int(p.x)),\(Int(p.y)) on the panel, mode \(s.state.mode.rawValue, privacy: .public)")
     let live = hasSessions
     let pill = modules.timerPillVisible
     let g = s.state.geometry
@@ -2109,6 +2176,9 @@ final class NotchController {
       settings.displayMode = v
     }
     if let p = json["pin"], case .bool(let b) = p { ui.pinned = b }
+    // {"hide": "<session id>"} / {"unhide_all": true}: the row's hide button and "Show all".
+    if let id = json["hide"]?.stringValue { store.hide(sessionID: id) }
+    if json["unhide_all"] == .bool(true) { store.unhideAll() }
     if let a = json["active_display"] {
       if case .int(let v) = a {
         forcedActiveID = CGDirectDisplayID(v)

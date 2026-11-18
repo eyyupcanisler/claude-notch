@@ -149,6 +149,8 @@ struct ExpandedBody: View {
   @State private var topHeight: CGFloat = 0
   /// Height of the module tiles under the rows (0 when none show).
   @State private var stripHeight: CGFloat = 0
+  /// Height of the "Hidden" line under the rows (0 when no chat is hidden).
+  @State private var hiddenHeight: CGFloat = 0
   /// Measured natural height of the rows (nil until the first layout; an estimate is used
   /// meanwhile: a zero-height ScrollView would never lay out its content to report a size).
   @State private var measuredRows: CGFloat?
@@ -173,8 +175,10 @@ struct ExpandedBody: View {
   private var rowsBudget: CGFloat {
     let body = NotchMetrics.maxHeight - bandHeight
     let strip = stripHeight > 0 ? stripHeight + Self.spacing : 0
+    let hidden = hiddenHeight > 0 ? hiddenHeight + Self.spacing : 0
     return max(
-      44, body - topHeight - strip - Self.spacing - Self.topPadding - Self.bottomPadding)
+      44,
+      body - topHeight - strip - hidden - Self.spacing - Self.topPadding - Self.bottomPadding)
   }
 
   var body: some View {
@@ -203,7 +207,8 @@ struct ExpandedBody: View {
             .padding(.horizontal, 4)
             .notchEnter(1)
         }
-        if all.isEmpty {
+        // Only hidden chats left: the "Hidden" line says so, not "No active sessions".
+        if all.isEmpty && store.hiddenSessions.isEmpty {
           EmptyStateView().notchEnter(1)
         }
         // The selected card sits in a fixed slot: paging swaps the card in place, so the pager
@@ -242,6 +247,12 @@ struct ExpandedBody: View {
             withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(id, anchor: .center) }
           }
         }
+      }
+      if !store.hiddenSessions.isEmpty {
+        HiddenChatsLine(store: store, actions: actions)
+          .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hiddenHeight = $0 }
+          .onDisappear { hiddenHeight = 0 }
+          .transition(.opacity)
       }
       ModuleStrip(modules: modules, settings: settings)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stripHeight = $0 }
@@ -416,6 +427,15 @@ struct SessionRow: View {
 
   private var selected: Bool { ui.keyMode && ui.selectedSessionID == session.id }
 
+  /// The whole row is a jump target (see the tap gesture in `body`).
+  private var rowJumps: Bool {
+    switch kind {
+    case .card: return false
+    case .compact, .rich:
+      return !store.hasPending(for: session.id) && store.question(for: session.id) == nil
+    }
+  }
+
   var body: some View {
     Group {
       switch kind {
@@ -431,7 +451,8 @@ struct SessionRow: View {
           }
           Group {
             if hover {
-              RowActions(session: session, actions: actions).transition(.opacity)
+              RowActions(session: session, actions: actions, canHide: store.canHide(session))
+                .transition(.opacity)
             } else {
               DotElapsed(mode: elapsedMode, color: elapsedColor)
             }
@@ -465,6 +486,11 @@ struct SessionRow: View {
       }
     }
     .contentShape(Rectangle())
+    // A click anywhere on the row jumps to its terminal tab (the buttons inside keep their own
+    // action). Not the body of a permission card or of a question answered here: a click that
+    // misses one of their buttons must not leave for the terminal. Their title line still
+    // jumps, as it always did (`header`).
+    .gesture(TapGesture().onEnded { actions.focus(session.id) }, including: rowJumps ? .all : .subviews)
     .onHover { hover = $0 }
     // A shelf chip dropped here: copied, and this session's tab comes forward (⌃V pastes it).
     .onDrop(of: [.item], isTargeted: $dropTarget) { _ in actions.dropShelf(session.id) }
@@ -579,7 +605,7 @@ struct SessionRow: View {
       }
       if trailing {
         if hover {
-          RowActions(session: session, actions: actions)
+          RowActions(session: session, actions: actions, canHide: store.canHide(session))
             .transition(.opacity)
         } else {
           Elapsed(session: session)
@@ -773,6 +799,8 @@ struct TerminalAsk: View {
 struct RowActions: View {
   let session: Session
   let actions: NotchActions
+  /// Offer "Hide" (never while the chat needs the user, see `SessionStore.canHide`).
+  var canHide = false
 
   private var message: String? {
     switch session.status {
@@ -791,8 +819,87 @@ struct RowActions: View {
       if session.unseen || session.status.kind == "waiting" {
         RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
       }
+      // An eye crossed out, not a cross: the chat is only out of sight, its terminal and its
+      // process stay (a cross would read as closing it).
+      if canHide {
+        RowIconButton(icon: "eye.slash", label: loc("Hide until it does something new")) {
+          actions.hide(session.id)
+        }
+      }
       RowIconButton(icon: "arrow.up.forward.app", label: loc("Focus")) { actions.focus(session.id) }
     }
+  }
+}
+
+/// Under the rows while chats are hidden: "Hidden" and each hidden chat by its title (a click
+/// brings that one back), then "Show all".
+struct HiddenChatsLine: View {
+  let store: SessionStore
+  let actions: NotchActions
+  @Environment(\.notchTheme) private var theme
+
+  /// Chips shown by title; more are counted ("+2").
+  static let maxChips = 3
+
+  var body: some View {
+    let hidden = store.hiddenSessions
+    HStack(spacing: 6) {
+      Image(systemName: "eye.slash")
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(theme.tertiary)
+      Text("Hidden")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(theme.tertiary)
+        .fixedSize()
+      ForEach(hidden.prefix(Self.maxChips)) { s in
+        HiddenChip(title: store.chatLabel(for: s)) { actions.unhide(s.id) }
+      }
+      if hidden.count > Self.maxChips {
+        Text("+\(hidden.count - Self.maxChips)")
+          .font(.system(size: 11, weight: .medium)).monospacedDigit()
+          .foregroundStyle(theme.tertiary)
+          .fixedSize()
+      }
+      Spacer(minLength: 4)
+      Button(action: actions.unhideAll) {
+        Text("Show all")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(theme.secondary)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .fixedSize()
+    }
+    .frame(height: 22)
+    .padding(.horizontal, 4)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(loc("Hidden chats"))
+  }
+}
+
+/// One hidden chat in the "Hidden" line, by its title; a click shows it again.
+struct HiddenChip: View {
+  let title: String
+  let action: () -> Void
+  @State private var hover = false
+  @Environment(\.notchTheme) private var theme
+
+  var body: some View {
+    Button(action: action) {
+      Text(title)
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(hover ? theme.ink : theme.secondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .padding(.horizontal, 7)
+        .frame(maxWidth: 170, minHeight: 20, maxHeight: 20)
+        .background(Capsule().fill(hover ? theme.faint : theme.faint.opacity(0.6)))
+        .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .onHover { hover = $0 }
+    .help(loc("Show this chat again"))
+    .accessibilityLabel(loc("Show \(title) again"))
   }
 }
 

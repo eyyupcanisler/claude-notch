@@ -1,6 +1,13 @@
 import AppKit
 import ClaudeNotchCore
 import CoreServices
+import os
+
+/// Clicks on the notch and jumps to terminals, in the unified log (`log show --last 1h
+/// --predicate 'subsystem == "com.eyyupcan.claudenotch"'`): when a click "does nothing", this
+/// shows whether it reached the panel and where the jump stopped. No chat names or paths, only
+/// a session id prefix, outcomes, codes and coordinates.
+let clickLog = Logger(subsystem: "com.eyyupcan.claudenotch", category: "click")
 
 enum Terminals {
   static let bundleIDs: [String: String] = [
@@ -48,40 +55,77 @@ enum Terminals {
 
   /// Brings the session's terminal forward: the exact tab by tty (only while the claude pid
   /// still owns that tty), then for Ghostty the only terminal in the session's directory, then
-  /// the app itself. -1743 maps to `.notAuthorized` (the app is still activated).
+  /// the app itself. -1743 maps to `.notAuthorized` (the app is still activated). When a tab
+  /// script ran and none found the tab, the result is `.tabMissed` (the app is in front, the
+  /// chat is not), never a silent `.activatedApp`.
   @MainActor
   static func focus(_ session: Session, probe: ProcessProbe) async -> FocusOutcome {
+    let sid = String(session.id.prefix(8))
+    let started = Date()
     guard let term = session.termProgram, let bundleID = bundleIDs[term] else {
+      clickLog.notice(
+        "jump \(sid, privacy: .public): unknown terminal \(session.termProgram ?? "nil", privacy: .public)")
       return .unknownTerminal
     }
     let kind = TerminalKind(termProgram: term)
     var result: FocusOutcome?
+    var triedTab = false
+    var code: Int?
+    var steps: [String] = []
     if isRunning(bundleID) {
-      if let tty = session.tty, let pid = session.pid, probe.owns(pid: pid, tty: tty),
-        let script = kind.focusScript(tty: tty)
-      {
-        let r = await AppleScriptRunner.run(script)
-        if r.errorCode == FocusOutcome.errNotPermitted {
-          result = .notAuthorized(app: kind.appName)
-        } else if r.output == "focused" {
-          result = .focusedTerminal
+      if let tty = session.tty, let pid = session.pid {
+        if !probe.owns(pid: pid, tty: tty) {
+          steps.append("tty: pid \(pid) no longer owns \(tty)")
+        } else if let script = kind.focusScript(tty: tty) {
+          triedTab = true
+          let r = await AppleScriptRunner.run(script)
+          steps.append("tty \(tty): \(r.output ?? "-") code \(r.errorCode.map(String.init) ?? "-")")
+          if r.errorCode == FocusOutcome.errNotPermitted {
+            result = .notAuthorized(app: kind.appName)
+          } else if r.output == "focused" {
+            result = .focusedTerminal
+          } else {
+            code = r.errorCode
+          }
         }
+      } else {
+        steps.append("tty: none")
       }
       if result == nil, kind == .ghostty,
         let script = TerminalScript.ghosttyFocus(directory: session.cwd)
       {
         let r = await AppleScriptRunner.run(script)
+        steps.append("directory: \(r.output ?? "-") code \(r.errorCode.map(String.init) ?? "-")")
         if r.errorCode == FocusOutcome.errNotPermitted {
           result = .notAuthorized(app: kind.appName)
         } else if r.output == "focused" {
           result = .focusedByDirectory
+        } else if r.output == "notfound" || r.errorCode != nil {
+          // Only a proven miss counts: "ambiguous" (several tabs in that directory) means the
+          // tabs exist, so it stays the plain app activation it always was.
+          triedTab = true
+          if code == nil { code = r.errorCode }
         }
       }
+    } else {
+      steps.append("\(kind.appName) not running")
     }
     // The script's own `activate` may be ignored for an accessory app: LaunchServices too.
     let app = await activate(termProgram: term)
-    if let result { return result }
-    return app == .activated ? .activatedApp : .failed
+    let outcome: FocusOutcome
+    if let result {
+      outcome = result
+    } else if app != .activated {
+      outcome = .failed
+    } else if triedTab {
+      outcome = .tabMissed(app: kind.appName, code: code)
+    } else {
+      outcome = .activatedApp
+    }
+    let ms = Int(Date().timeIntervalSince(started) * 1000)
+    clickLog.notice(
+      "jump \(sid, privacy: .public) \(term, privacy: .public): \(outcome.kind, privacy: .public) in \(ms) ms [\(steps.joined(separator: "; "), privacy: .public)]")
+    return outcome
   }
 
   /// tty of Ghostty's focused terminal (raw Apple Event, no AppleScript). Only call when
