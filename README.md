@@ -97,9 +97,12 @@ terminal, and keep a few handy tools one glance away.
   Code itself is set to ring the bell (`preferredNotifChannel`: `terminal_bell`), each
   notification rings twice.
 - **The panel.** Hover the notch: every session with its status, the turn's elapsed time in
-  dot-matrix digits, a rhythm strip of its tool calls, subagents, and context left. Click
-  anywhere on a row to jump to its Ghostty / Terminal / iTerm2 tab (a permission card, or a
-  question you answer in the notch, keeps its clicks for its own buttons). If the tab cannot
+  dot-matrix digits, a rhythm strip of its tool calls, subagents, and context left. Each row
+  leads with the chat's title (its terminal tab's title, known for Ghostty) and shows the
+  project after it in grey; a chat without a title yet shows the project first. Click
+  anywhere on a row to jump to its Ghostty / Terminal / iTerm2 tab, and the panel closes so
+  the tab is in sight (a pinned panel stays open; a permission card, or a question you answer
+  in the notch, keeps its clicks for its own buttons). If the tab cannot
   be reached (it was closed, or the terminal did not answer), the panel says so with the
   chat's title instead of only bringing the terminal app forward. The panel comes to the
   front each time it opens, so another app's window at the same level cannot cover it.
@@ -107,11 +110,12 @@ terminal, and keep a few handy tools one glance away.
   status line, and its terminal and process stay as they are. It comes back by itself when it
   does something new: you type in it, a turn ends or fails, or it needs you (a permission
   request, a question, a plan approval). Claude Code's "waiting for your input" notice a minute
-  after a turn does not bring it back. A chat that needs you cannot be hidden. Under the rows,
+  after a turn does not bring it back. A chat with a permission request, a question, a plan approval or an unread error cannot be hidden; one only waiting for its next prompt can. Under the rows,
   **Hidden** lists the hidden chats by title: click one to show it again, or **Show all**.
 - **Small tools, all optional:** Pomodoro / focus timer (it grows out of the notch while it
   runs), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
-  Spotify cover and controls, a clipboard shelf with pinning, weather, plan usage, battery,
+  Spotify cover and controls, a clipboard shelf with pinning (one folded line in the panel:
+  click it to see the copied items), weather, plan usage, battery,
   quiet hours and a silent mode.
 - **Light on the machine.** Event-driven: no polling loops while idle, ~40 MB with the panel
   closed. Works on external displays too (a pill stands in for the notch).

@@ -217,7 +217,7 @@ struct ExpandedBody: View {
         if let card, let session = slotSession {
           SessionRow(
             session: session, kind: .card(card.id), store: store, ui: ui, actions: actions,
-            title: store.displayName(for: session),
+            title: store.chatLabel(for: session),
             contextLeft: modules.usage.contextLeft[session.id])
             .notchEnter(1)
         }
@@ -230,7 +230,7 @@ struct ExpandedBody: View {
               ForEach(Array(rows.enumerated()), id: \.element.id) { i, session in
                 SessionRow(
                   session: session, kind: kinds[i], store: store, ui: ui, actions: actions,
-                  title: store.displayName(for: session),
+                  title: store.chatLabel(for: session),
                   contextLeft: modules.usage.contextLeft[session.id])
                   .notchEnter(min(i + 2, 8))
               }
@@ -254,7 +254,7 @@ struct ExpandedBody: View {
           .onDisappear { hiddenHeight = 0 }
           .transition(.opacity)
       }
-      ModuleStrip(modules: modules, settings: settings)
+      ModuleStrip(modules: modules, settings: settings, ui: ui)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stripHeight = $0 }
     }
     .padding(.horizontal, 10)
@@ -427,6 +427,12 @@ struct SessionRow: View {
 
   private var selected: Bool { ui.keyMode && ui.selectedSessionID == session.id }
 
+  /// Hover swaps the time for the row's buttons only when there is one to show (the row itself
+  /// jumps to the terminal, so a chat that is asking may have none).
+  private var hasRowActions: Bool {
+    RowActions.hasAny(session: session, canHide: store.canHide(session))
+  }
+
   /// The whole row is a jump target (see the tap gesture in `body`).
   private var rowJumps: Bool {
     switch kind {
@@ -450,7 +456,7 @@ struct SessionRow: View {
             .padding(.leading, 20)
           }
           Group {
-            if hover {
+            if hover && hasRowActions {
               RowActions(session: session, actions: actions, canHide: store.canHide(session))
                 .transition(.opacity)
             } else {
@@ -509,6 +515,9 @@ struct SessionRow: View {
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(title), \(statusText)")
+    // The row itself is the way to its terminal (a click anywhere, or the title line of a card);
+    // VoiceOver gets the same jump as the row's action.
+    .accessibilityAction(named: Text("Focus")) { actions.focus(session.id) }
   }
 
   nonisolated static let compactHeight: CGFloat = 62
@@ -575,13 +584,16 @@ struct SessionRow: View {
   private func header(trailing: Bool) -> some View {
     HStack(spacing: 8) {
       StatusDot(session: session, pending: store.hasPending(for: session.id))
+      // The chat's title leads, the project follows in grey (`SessionStore.rowNames`).
+      let names = store.rowNames(for: session)
       HStack(spacing: 6) {
-        Text(session.project)
+        Text(names.primary)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(theme.ink)
           .lineLimit(1)
+          .truncationMode(.tail)
           .layoutPriority(2)
-        if let d = store.secondaryText(for: session) {
+        if let d = names.secondary {
           Text(d)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.tertiary)
@@ -604,7 +616,7 @@ struct SessionRow: View {
           .help("\(Int(left.rounded()))% of the context window left")
       }
       if trailing {
-        if hover {
+        if hover && hasRowActions {
           RowActions(session: session, actions: actions, canHide: store.canHide(session))
             .transition(.opacity)
         } else {
@@ -802,21 +814,33 @@ struct RowActions: View {
   /// Offer "Hide" (never while the chat needs the user, see `SessionStore.canHide`).
   var canHide = false
 
-  private var message: String? {
-    switch session.status {
-    case .done(let m), .error(let m): return m
+  private var message: String? { Self.message(session) }
+
+  private static func message(_ s: Session) -> String? {
+    switch s.status {
+    case .done(let m), .error(let m): return m.isEmpty ? nil : m
     default: return nil
     }
   }
 
+  private static func marksRead(_ s: Session) -> Bool {
+    s.unseen || s.status.kind == "waiting"
+  }
+
+  /// Whether the row has any of these buttons (there is no "go to the chat" button: the row
+  /// itself does that).
+  static func hasAny(session s: Session, canHide: Bool) -> Bool {
+    message(s) != nil || marksRead(s) || canHide
+  }
+
   var body: some View {
     HStack(spacing: 2) {
-      if let message, !message.isEmpty {
+      if let message {
         RowIconButton(icon: "doc.on.doc", label: loc("Copy the last message")) {
           actions.copyMessage(session.id)
         }
       }
-      if session.unseen || session.status.kind == "waiting" {
+      if Self.marksRead(session) {
         RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
       }
       // An eye crossed out, not a cross: the chat is only out of sight, its terminal and its
@@ -826,7 +850,6 @@ struct RowActions: View {
           actions.hide(session.id)
         }
       }
-      RowIconButton(icon: "arrow.up.forward.app", label: loc("Focus")) { actions.focus(session.id) }
     }
   }
 }
@@ -852,7 +875,9 @@ struct HiddenChatsLine: View {
         .foregroundStyle(theme.tertiary)
         .fixedSize()
       ForEach(hidden.prefix(Self.maxChips)) { s in
-        HiddenChip(title: store.chatLabel(for: s)) { actions.unhide(s.id) }
+        HiddenChip(names: store.rowNames(for: s), label: store.chatLabel(for: s)) {
+          actions.unhide(s.id)
+        }
       }
       if hidden.count > Self.maxChips {
         Text("+\(hidden.count - Self.maxChips)")
@@ -877,20 +902,32 @@ struct HiddenChatsLine: View {
   }
 }
 
-/// One hidden chat in the "Hidden" line, by its title; a click shows it again.
+/// One hidden chat in the "Hidden" line: its title, the project after it in grey (as on the
+/// row); a click shows it again.
 struct HiddenChip: View {
-  let title: String
+  let names: (primary: String, secondary: String?)
+  let label: String
   let action: () -> Void
   @State private var hover = false
   @Environment(\.notchTheme) private var theme
 
   var body: some View {
     Button(action: action) {
-      Text(title)
-        .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(hover ? theme.ink : theme.secondary)
-        .lineLimit(1)
-        .truncationMode(.tail)
+      HStack(spacing: 4) {
+        Text(names.primary)
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(hover ? theme.ink : theme.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+          .layoutPriority(1)
+        if let second = names.secondary {
+          Text(second)
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(theme.tertiary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+      }
         .padding(.horizontal, 7)
         .frame(maxWidth: 170, minHeight: 20, maxHeight: 20)
         .background(Capsule().fill(hover ? theme.faint : theme.faint.opacity(0.6)))
@@ -899,7 +936,7 @@ struct HiddenChip: View {
     .buttonStyle(.plain)
     .onHover { hover = $0 }
     .help(loc("Show this chat again"))
-    .accessibilityLabel(loc("Show \(title) again"))
+    .accessibilityLabel(loc("Show \(label) again"))
   }
 }
 

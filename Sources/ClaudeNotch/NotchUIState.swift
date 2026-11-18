@@ -22,6 +22,9 @@ final class NotchUIState {
   var peek: PeekItem?
   /// Keeps the expanded panel open (header pin).
   var pinned = false
+  /// The clipboard shelf in the panel is open (its chips show); folded to one line otherwise.
+  /// Folds again whenever the panel closes (`collapse`).
+  var shelfOpen = false
   /// The panel is key (opened with the hotkey): keyboard shortcuts apply.
   var keyMode = false
   var selectedCardID: String?

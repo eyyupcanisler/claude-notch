@@ -6,6 +6,7 @@ import SwiftUI
 struct ModuleStrip: View {
   let modules: ModuleCenter
   let settings: NotchSettings
+  let ui: NotchUIState
 
   private var showCalendar: Bool {
     settings.calendarEnabled && (modules.nextEvent != nil || modules.calendarAccess == .denied)
@@ -26,7 +27,7 @@ struct ModuleStrip: View {
   var body: some View {
     if showCalendar || showTimer || showSpotify || showShelf {
       VStack(spacing: 8) {
-        if showShelf { ShelfRow(shelf: modules.shelf) }
+        if showShelf { ShelfRow(shelf: modules.shelf, ui: ui) }
         if showSpotify { SpotifyTile(spotify: modules.spotify) }
         if showCalendar || showTimer {
           HStack(spacing: 8) {
@@ -533,46 +534,85 @@ struct SeekBar: View {
 /// × removes it. Buttons only: a right click in the panel opens the app menu.
 struct ShelfRow: View {
   let shelf: ShelfModule
+  /// Folded to one line until clicked (`ui.shelfOpen`): the shelf is used now and then, and its
+  /// chips took about 90 pt of every panel. It folds again whenever the panel closes.
+  let ui: NotchUIState
+  private var open: Bool { ui.shelfOpen }
   @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let chipHeight: CGFloat = 58
+
+  private var count: Int { shelf.pinned.count + shelf.shelf.items.count }
+
+  private func toggle() {
+    // An occasional open / close of a section: strong ease-out under 300 ms.
+    withAnimation(reduceMotion ? nil : Motion.rowHide) { ui.shelfOpen.toggle() }
+  }
 
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
     VStack(alignment: .leading, spacing: 6) {
-      HStack {
+      HStack(spacing: 6) {
+        Image(systemName: "doc.on.clipboard")
+          .font(.system(size: 9.5, weight: .semibold))
+          .foregroundStyle(theme.tertiary)
         Text("SHELF")
           .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
           .foregroundStyle(theme.tertiary)
-        Text("click: copy · drag: drop")
-          .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
+        Text(String(count))
+          .font(.system(size: 9.5, weight: .semibold)).monospacedDigit()
+          .foregroundStyle(theme.tertiary.opacity(0.8))
+        if open {
+          Text("click: copy · drag: drop")
+            .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
+            .transition(.opacity)
+        }
         Spacer()
-        Button("Clear") { shelf.clear() }
-          .help("Pinned items stay")
-          .buttonStyle(.plain)
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(theme.secondary)
+        if open {
+          Button("Clear") { shelf.clear() }
+            .help("Pinned items stay")
+            .buttonStyle(.plain)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(theme.secondary)
+            .transition(.opacity)
+        }
+        Image(systemName: "chevron.right")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(theme.tertiary)
+          .rotationEffect(.degrees(open ? 90 : 0))
       }
-      ScrollView(.horizontal) {
-        HStack(spacing: 6) {
-          ForEach(shelf.pinned) { item in
-            ShelfChip(item: item, shelf: shelf)
-          }
-          if !shelf.pinned.isEmpty && !shelf.shelf.items.isEmpty {
-            Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40)
-          }
-          ForEach(shelf.shelf.items) { item in
-            ShelfChip(item: item, shelf: shelf)
+      .frame(height: 14)
+      // The whole line opens / folds the shelf ("Clear" keeps its own click).
+      .contentShape(Rectangle())
+      .onTapGesture { toggle() }
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits(.isButton)
+      .accessibilityLabel(open ? loc("Hide the shelf") : loc("Show the shelf"))
+      .accessibilityAction { toggle() }
+      if open {
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) {
+            ForEach(shelf.pinned) { item in
+              ShelfChip(item: item, shelf: shelf)
+            }
+            if !shelf.pinned.isEmpty && !shelf.shelf.items.isEmpty {
+              Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40)
+            }
+            ForEach(shelf.shelf.items) { item in
+              ShelfChip(item: item, shelf: shelf)
+            }
           }
         }
+        .scrollIndicators(.never)
+        .transition(.opacity)
       }
-      .scrollIndicators(.never)
     }
     .padding(.horizontal, 10)
-    .padding(.vertical, 8)
+    .padding(.vertical, open ? 8 : 6)
     .background(
       shape.fill(theme.raised)
-        .overlay(CornerGlow(color: Color(hex: 0xC3A8FF), strength: 0.28, radius: 160))
+        .overlay(CornerGlow(color: Color(hex: 0xC3A8FF), strength: open ? 0.28 : 0.12, radius: 160))
         .clipShape(shape))
     .overlay(shape.strokeBorder(theme.hairline, lineWidth: 0.5))
   }

@@ -160,11 +160,23 @@ public final class SessionStore {
     return title
   }
 
-  /// How the panel names a chat in a sentence or a chip: "project · chat title", or the
+  /// A row's two names. The chat's title leads (bold) and the project follows (grey), with
+  /// the disambiguator when the project's title alone does not tell same-project chats apart:
+  /// ("voice-clip-word-check", "tofu"). A chat without a title yet keeps the project in front
+  /// and the tab title / disambiguator behind (`secondaryText`).
+  public func rowNames(for s: Session) -> (primary: String, secondary: String?) {
+    guard let title = chatTitle(for: s) else { return (s.project, secondaryText(for: s)) }
+    var second = s.project
+    if let d = disambiguator(for: s), d != title { second += " · " + d }
+    return title == second ? (title, nil) : (title, second)
+  }
+
+  /// How the panel names a chat in a sentence or a chip: "chat title · project", or the
   /// project with its disambiguator when the chat has no title yet.
   public func chatLabel(for s: Session) -> String {
-    guard let title = chatTitle(for: s) else { return displayName(for: s) }
-    return title == s.project ? title : "\(s.project) · \(title)"
+    guard chatTitle(for: s) != nil else { return displayName(for: s) }
+    let names = rowNames(for: s)
+    return names.secondary.map { "\(names.primary) · \($0)" } ?? names.primary
   }
 
   /// Secondary text of a row: the terminal tab title (when known), plus the disambiguator when
@@ -267,11 +279,20 @@ public final class SessionStore {
   /// Any chat the panel and the status line show (hidden ones do not count).
   public var hasVisibleSessions: Bool { sessions.values.contains { !$0.hidden } }
 
-  /// Whether the row may offer "Hide": never while the chat needs the user (a card, a held
-  /// question, a question / plan / input wait, an unseen error), so nothing that blocks Claude
-  /// can be hidden.
+  /// Whether the row may offer "Hide": never while a permission card, a held question, a
+  /// question / plan approval, a permission prompt or dialog in the terminal, or an unseen
+  /// error waits, so nothing that blocks Claude can be hidden. The idle "waiting for input"
+  /// can (`waitsForPrompt`): it is the chat waiting for its next prompt, the most common
+  /// long-dead state, and looking at it already turns it idle (`markSeen`), as hiding does.
   public func canHide(_ s: Session) -> Bool {
-    !needsAttention(s) && question(for: s.id) == nil
+    guard !hasPending(for: s.id), question(for: s.id) == nil, !s.status.isBlocking else {
+      return false
+    }
+    switch s.status {
+    case .error: return !s.unseen
+    case .waitingInput: return s.waitsForPrompt
+    default: return true
+    }
   }
 
   /// Hides the chat until it does something new (`reveals`). Also marks it seen, so a hidden
@@ -524,8 +545,10 @@ public final class SessionStore {
       case .question, .planApproval:
         guard t.timeIntervalSince(session.statusSince) > Self.mismatchGrace else { return }
         setStatus(&session, .waitingInput(text), at: t)
+        session.waitsForPrompt = true
       default:
         setStatus(&session, .waitingInput(text), at: t)
+        session.waitsForPrompt = true
       }
     case "agent_needs_input", "elicitation_dialog", "elicitation_url_dialog":
       setStatus(&session, .waitingInput(text), at: t)
@@ -586,6 +609,7 @@ public final class SessionStore {
 
   private func setStatus(_ s: inout Session, _ status: SessionStatus, at t: Date) {
     if status.kind != "question" && status.kind != "plan" { askingCall[s.id] = nil }
+    s.waitsForPrompt = false
     if s.status.kind != status.kind { s.statusSince = t }
     s.status = status
     s.unseen = false

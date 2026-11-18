@@ -64,6 +64,57 @@ final class HiddenChatTests: XCTestCase {
     XCTAssertEqual(store.displayOrder.map(\.id), ["a"])
   }
 
+  /// The chat waiting for its next prompt (the idle notice after a turn) can be hidden; hiding
+  /// turns the wait idle, as looking at it does.
+  func testAChatWaitingForItsNextPromptCanBeHidden() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart"), context: ctx())
+    store.handleEvent(ev("UserPromptSubmit"), context: ctx())
+    store.handleEvent(ev("Notification", notification: "idle_prompt"), context: ctx())
+    XCTAssertEqual(store.sessions["a"]?.status.kind, "waiting")
+    XCTAssertTrue(store.canHide(store.sessions["a"]!))
+    XCTAssertTrue(store.hide(sessionID: "a"))
+    XCTAssertEqual(store.sessions["a"]?.status, .idle)
+    XCTAssertEqual(store.attentionCount, 0)
+  }
+
+  /// "Claude needs your permission" in the terminal (no card) blocks Claude: no hiding.
+  func testAPermissionPromptWaitBlocksHiding() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart"), context: ctx())
+    store.handleEvent(ev("UserPromptSubmit"), context: ctx())
+    store.handleEvent(ev("Notification", notification: "permission_prompt"), context: ctx())
+    XCTAssertEqual(store.sessions["a"]?.status.kind, "waiting")
+    XCTAssertFalse(store.canHide(store.sessions["a"]!))
+    XCTAssertFalse(store.hide(sessionID: "a"))
+    for type in ["agent_needs_input", "elicitation_dialog"] {
+      store.handleEvent(ev("UserPromptSubmit"), context: ctx())
+      store.handleEvent(ev("Notification", notification: type), context: ctx())
+      XCTAssertFalse(store.hide(sessionID: "a"), type)
+    }
+  }
+
+  /// The idle wait turns into a blocking one when a permission prompt follows: no hiding then.
+  func testTheIdleWaitFlagDoesNotOutliveItsWait() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart"), context: ctx())
+    store.handleEvent(ev("Notification", notification: "idle_prompt"), context: ctx())
+    XCTAssertEqual(store.sessions["a"]?.waitsForPrompt, true)
+    store.handleEvent(ev("UserPromptSubmit"), context: ctx())
+    XCTAssertEqual(store.sessions["a"]?.waitsForPrompt, false)
+    store.handleEvent(ev("Notification", notification: "permission_prompt"), context: ctx())
+    XCTAssertFalse(store.canHide(store.sessions["a"]!))
+  }
+
+  func testAnUnseenErrorBlocksHiding() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart"), context: ctx())
+    store.handleEvent(ev("StopFailure"), context: ctx())
+    XCTAssertFalse(store.hide(sessionID: "a"))
+    store.markSeen(sessionID: "a")
+    XCTAssertTrue(store.hide(sessionID: "a"), "a seen error can go")
+  }
+
   func testAPermissionCardBlocksHiding() {
     let store = SessionStore(probe: alive)
     store.handleEvent(ev("SessionStart"), context: ctx())
@@ -288,7 +339,40 @@ final class HiddenChatTests: XCTestCase {
     store.applyTabTitles(["/dev/ttys001": "BTY book QR code mismatch"])
     let s = store.sessions["a"]!
     XCTAssertEqual(store.chatTitle(for: s), "BTY book QR code mismatch")
-    XCTAssertEqual(store.chatLabel(for: s), "proj · BTY book QR code mismatch")
+    XCTAssertEqual(store.chatLabel(for: s), "BTY book QR code mismatch · proj")
+  }
+
+  /// The row leads with the chat's title and puts the project behind it in grey; a chat with
+  /// no title yet keeps the project in front.
+  func testRowNamesPutTheChatTitleFirst() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart"), context: ctx())
+    var names = store.rowNames(for: store.sessions["a"]!)
+    XCTAssertEqual(names.primary, "proj")
+    XCTAssertNil(names.secondary)
+
+    store.applyTabTitles(["/dev/ttys001": "Claude Code"])
+    names = store.rowNames(for: store.sessions["a"]!)
+    XCTAssertEqual(names.primary, "proj", "an unnamed chat keeps the project in front")
+    XCTAssertEqual(names.secondary, "Claude Code")
+
+    store.applyTabTitles(["/dev/ttys001": "voice-clip-word-check"])
+    names = store.rowNames(for: store.sessions["a"]!)
+    XCTAssertEqual(names.primary, "voice-clip-word-check")
+    XCTAssertEqual(names.secondary, "proj")
+  }
+
+  /// Two chats in one project with the same title: the project part tells them apart.
+  func testRowNamesKeepTheDisambiguatorWithTheProject() {
+    let store = SessionStore(probe: alive)
+    store.handleEvent(ev("SessionStart", "a"), context: ctx("/dev/ttys001", 500))
+    store.handleEvent(ev("SessionStart", "b"), context: ctx("/dev/ttys002", 600))
+    store.applyTabTitles(["/dev/ttys001": "Fix tests", "/dev/ttys002": "Fix tests"])
+    let a = store.rowNames(for: store.sessions["a"]!)
+    let b = store.rowNames(for: store.sessions["b"]!)
+    XCTAssertEqual(a.primary, "Fix tests")
+    XCTAssertEqual(a.secondary, "proj · s001")
+    XCTAssertEqual(b.secondary, "proj · s002")
   }
 }
 
@@ -301,11 +385,11 @@ final class TabMissedTests: XCTestCase {
   }
 
   func testHintsNameTheChat() {
-    let missed = FocusOutcome.tabMissed(app: "Ghostty", code: nil).hint(chat: "Kitai · BTY")
-    XCTAssertEqual(missed, "Couldn’t switch to “Kitai · BTY” in Ghostty. Its tab may be closed.")
-    let coded = FocusOutcome.tabMissed(app: "Ghostty", code: -1712).hint(chat: "Kitai · BTY")
+    let missed = FocusOutcome.tabMissed(app: "Ghostty", code: nil).hint(chat: "BTY · Kitai")
+    XCTAssertEqual(missed, "Couldn’t switch to “BTY · Kitai” in Ghostty. Its tab may be closed.")
+    let coded = FocusOutcome.tabMissed(app: "Ghostty", code: -1712).hint(chat: "BTY · Kitai")
     XCTAssertEqual(
-      coded, "Couldn’t switch to “Kitai · BTY” in Ghostty (error -1712). Its tab may be closed.")
+      coded, "Couldn’t switch to “BTY · Kitai” in Ghostty (error -1712). Its tab may be closed.")
     XCTAssertEqual(
       FocusOutcome.tabMissed(app: "Ghostty", code: nil).hint,
       "Couldn’t switch to the chat’s tab in Ghostty. Its tab may be closed.")

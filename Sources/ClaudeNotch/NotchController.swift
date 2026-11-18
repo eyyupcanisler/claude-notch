@@ -519,6 +519,7 @@ final class NotchController {
     ui.frozenOrder = nil
     ui.frozenRich = []
     ui.moreCardID = nil
+    ui.shelfOpen = false
     for s in surfaces.values { s.intent.reset() }
     if wasKey { restoreFocus() }
     refresh()
@@ -1806,7 +1807,11 @@ final class NotchController {
       // The terminal is now frontmost on purpose: collapsing must not re-activate the app
       // that was frontmost when the hotkey was pressed.
       previousApp = nil
-      if wasKey || ui.keyMode { collapse() }
+      // The open panel covers the top of the screen, the terminal's tab bar included: left
+      // open, the tab changed behind it and the click looked dead. It closes once the chat is
+      // reached, so its tab is in sight (a pinned panel stays; a missed jump keeps the panel
+      // open for its hint).
+      if wasKey || ui.keyMode || (expandedID != nil && !ui.pinned) { collapse() }
     }
     showHint(outcome.hint(chat: store.chatLabel(for: session)))
     return outcome
@@ -2179,6 +2184,12 @@ final class NotchController {
     // {"hide": "<session id>"} / {"unhide_all": true}: the row's hide button and "Show all".
     if let id = json["hide"]?.stringValue { store.hide(sessionID: id) }
     if json["unhide_all"] == .bool(true) { store.unhideAll() }
+    // {"shelf_open": true|false}; {"shelf_add_file": "/abs/path"} adds a file without the
+    // clipboard (as a file dropped on the panel does).
+    if case .bool(let b)? = json["shelf_open"] { ui.shelfOpen = b }
+    if let path = json["shelf_add_file"]?.stringValue, path.hasPrefix("/") {
+      modules.shelf.addFiles([URL(fileURLWithPath: path)])
+    }
     if let a = json["active_display"] {
       if case .int(let v) = a {
         forcedActiveID = CGDirectDisplayID(v)

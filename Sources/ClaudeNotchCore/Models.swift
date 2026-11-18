@@ -128,6 +128,10 @@ public struct Session: Sendable, Identifiable, Equatable {
   /// The user hid the chat (the row's hide button): it leaves the panel list and the status
   /// line until it does something new (see `SessionStore.reveals`). The process keeps running.
   public var hidden = false
+  /// The current "waiting for input" is only Claude Code's idle notice (waiting for the next
+  /// prompt), not a permission prompt or a dialog in the terminal: the chat may be hidden.
+  /// Cleared by every status change.
+  public var waitsForPrompt = false
 
   public init(
     id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,

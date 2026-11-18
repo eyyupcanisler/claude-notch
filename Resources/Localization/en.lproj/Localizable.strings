@@ -439,3 +439,7 @@
 "Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed." = "Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed.";
 "Can’t tell which terminal “%@” runs in" = "Can’t tell which terminal “%@” runs in";
 "Can’t tell which terminal this chat runs in" = "Can’t tell which terminal this chat runs in";
+
+/* The folded clipboard shelf. */
+"Show the shelf" = "Show the shelf";
+"Hide the shelf" = "Hide the shelf";

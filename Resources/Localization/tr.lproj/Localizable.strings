@@ -439,3 +439,7 @@
 "Couldn’t switch to the chat’s tab in %@%@. Its tab may be closed." = "%@ içinde sohbetin sekmesine geçilemedi%@. Sekmesi kapanmış olabilir.";
 "Can’t tell which terminal “%@” runs in" = "“%@” sohbetinin hangi terminalde çalıştığı anlaşılamadı";
 "Can’t tell which terminal this chat runs in" = "Bu sohbetin hangi terminalde çalıştığı anlaşılamadı";
+
+/* The folded clipboard shelf. */
+"Show the shelf" = "Rafı göster";
+"Hide the shelf" = "Rafı gizle";

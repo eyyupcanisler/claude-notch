@@ -180,24 +180,26 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
 - **Sekme adı (Ghostty):** Ghostty için Otomasyon izni **zaten verilmişse** (uygulama izni
   kendiliğinden sormaz) panel açılınca ve oturum varken ~15 sn'de bir, iki ham Apple Event
   `get` isteğiyle (her terminalin `tty` ve `name` değeri; AppleScript derlenmez) sekme adları
-  okunur. Ad satırın ikincil
-  metni olur ve aynı projedeki oturumları ayırt eder (ad da aynıysa dal / tty eki eklenir).
+  okunur. Ad sohbetin başlığıdır: satırda kalın olarak önde durur, proje adı ardından gri
+  yazılır; henüz başlığı olmayan sohbette proje önde kalır. Ad aynı projedeki oturumları da
+  ayırt eder (ad da aynıysa projenin yanına dal / tty eki eklenir).
   Kontrol, çift yönlü ve görünmez karakterler atılır, Claude Code'un baştaki dönen / durum
   simgesi (⠂ ◐ ✳) silinir, uzun adın ortası kısaltılır. İzin yoksa eski ayırt edici (dal, tty
   eki) kullanılır.
 - Satırın herhangi bir yerine tıklamak o oturumun **sekmesini** öne getirir (Ghostty, Terminal,
-  iTerm2 için tty ile; diğer terminallerde yalnızca uygulama). İzin kartında ve çentikte
+  iTerm2 için tty ile; diğer terminallerde yalnızca uygulama) ve panel kapanır, sekme görünür
+  olur (sabitlenmiş panel açık kalır). İzin kartında ve çentikte
   yanıtlanan soruda tıklama yalnızca kendi düğmelerine gider. Sekmeye ulaşılamazsa (kapanmışsa
   ya da terminal yanıt vermediyse) panel bunu sohbetin başlığıyla söyler; yalnızca terminal
   uygulamasını öne getirip susmaz. Satır üzerindeki düğmeler: Son mesajı kopyala, Okundu,
-  Gizle, Odakla. İlk odaklamada macOS Otomasyon izni ister. Panel her açılışta kendi
+  Gizle (sekmeye geçmek için satırın kendisine tıklanır). İlk odaklamada macOS Otomasyon izni ister. Panel her açılışta kendi
   seviyesinin en önüne geçer; aynı seviyedeki başka bir uygulamanın penceresi (ör. Superwhisper)
   onu örtüp tıklamalarını alamaz.
 - **Sohbeti gizle:** satırın üzerine gelip üstü çizili göze tıklayın; sohbet panelden ve durum
   çizgisinden çıkar, terminali ve süreci olduğu gibi kalır. Yeni bir şey olunca kendiliğinden
   geri gelir: içine yazdığınızda, bir tur bittiğinde ya da hata verdiğinde, ya da sizi
   beklediğinde (izin isteği, soru, plan onayı). Claude Code’un turdan bir dakika sonra gelen
-  "girdi bekleniyor" bildirimi onu geri getirmez. Sizi bekleyen bir sohbet gizlenemez.
+  "girdi bekleniyor" bildirimi onu geri getirmez. İzin isteği, soru, plan onayı ya da okunmamış hatası olan bir sohbet gizlenemez; yalnızca bir sonraki istemi bekleyen sohbet gizlenebilir.
   Satırların altındaki **Gizli** satırı gizlenen sohbetleri başlıklarıyla listeler: birine
   tıklamak onu geri getirir, **Hepsini göster** hepsini.
 - **Ghostty iznini ver:** Otomasyon izni henüz sorulmadıysa ya da reddedildiyse panel bandında
@@ -356,7 +358,9 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
 - Çentiksiz ekranda ve gösterecek bir şey yokken panel görünmezdir ve fareyi yakalamaz.
 - "Oturum açılışında başlat" ad-hoc imzalı uygulamalarda hata verebilir; uygulamayı
   `/Applications` altına taşıyın.
-- **Raf** (Ayarlar > Modüller): sabitlenmemiş öğeler geçici klasörde durur, raf kapatılınca ya
+- **Raf** (Ayarlar > Modüller): panelde tek satıra katlanmış durur (RAF ve öğe sayısı); satıra
+  tıklayınca kopyalanan öğeler açılır, panel her açılışta yeniden katlanır. Sabitlenmemiş
+  öğeler geçici klasörde durur, raf kapatılınca ya
   da uygulama yeniden başlayınca silinir; sabitlenenler diskte kalır. İsteğe bağlı iki ayar:
   **Sabitlenmemiş öğeleri sil** 1 / 3 / 7 gün sonra (varsayılan: Hiçbir zaman) ve **Raf
   kapatılınca sabitlenenleri de sil** (varsayılan: kapalı).
@@ -434,7 +438,9 @@ görsel testler içindir. `POST /debug/key {"global": "allow"|"deny"|"panel", "p
 `up` arası basılı tutmaktır). `POST /debug/ui` ayrıca `{"shortcut_hint": true}` (ilk kullanım
 satırını geri getirir), `{"peek_duration": "8"|"15"|"30"|"answered"}`, `{"set_shortcut":
 {"role": "allow", "keys": [tuş kodu, Carbon değiştiricileri]}}`, `{"reset_shortcuts": true}`,
-`{"open_settings": true}` / `{"close_settings": true}` alır. `POST /debug/discover` hemen bir
+`{"open_settings": true}` / `{"close_settings": true}`, `{"hide": "<oturum id>"}` /
+`{"unhide_all": true}` (satırdaki gizle düğmesi / "Hepsini göster"), `{"shelf_open": true}`
+(katlı rafı açar) ve `{"shelf_add_file": "/tam/yol"}` (panoya dokunmadan rafa dosya ekler) alır. `POST /debug/discover` hemen bir
 süreç taraması yapar ve oturumları döndürür. `POST /debug/focus` (`{"session_id": "…", "dry_run": true}`) odaklama betiğini ve
 Otomasyon durumunu döndürür; `dry_run` olmadan gerçekten odaklar.
 
