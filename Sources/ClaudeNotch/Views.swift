@@ -35,7 +35,6 @@ struct NotchActions {
   var unhide: @MainActor (String) -> Void = { _ in }
   var unhideAll: @MainActor () -> Void = {}
   var markAllSeen: @MainActor () -> Void = {}
-  var copyMessage: @MainActor (String) -> Void = { _ in }
   var denyAll: @MainActor (String) -> Void = { _ in }
   var togglePin: @MainActor () -> Void = {}
   var openSettings: @MainActor () -> Void = {}

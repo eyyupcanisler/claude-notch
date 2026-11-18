@@ -802,15 +802,6 @@ struct RowActions: View {
   /// Offer "Hide" (never while the chat needs the user, see `SessionStore.canHide`).
   var canHide = false
 
-  private var message: String? { Self.message(session) }
-
-  private static func message(_ s: Session) -> String? {
-    switch s.status {
-    case .done(let m), .error(let m): return m.isEmpty ? nil : m
-    default: return nil
-    }
-  }
-
   private static func marksRead(_ s: Session) -> Bool {
     s.unseen || s.status.kind == "waiting"
   }
@@ -818,16 +809,11 @@ struct RowActions: View {
   /// Whether the row has any of these buttons (there is no "go to the chat" button: the row
   /// itself does that).
   static func hasAny(session s: Session, canHide: Bool) -> Bool {
-    message(s) != nil || marksRead(s) || canHide
+    marksRead(s) || canHide
   }
 
   var body: some View {
     HStack(spacing: 2) {
-      if let message {
-        RowIconButton(icon: "doc.on.doc", label: loc("Copy the last message")) {
-          actions.copyMessage(session.id)
-        }
-      }
       if Self.marksRead(session) {
         RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
       }

@@ -130,7 +130,6 @@
 "Copied" = "Kopyalandı";
 "Copied to the clipboard" = "Panoya kopyalandı";
 "Copy the image to the clipboard (%@×%@)" = "Görüntüyü panoya kopyala (%@×%@)";
-"Copy the last message" = "Son mesajı kopyala";
 "Copy the latest shelf item" = "Raftaki son öğeyi kopyala";
 "Copy the text to the clipboard" = "Metni panoya kopyala";
 "copy to a remote server" = "uzak sunucuya kopya";
@@ -202,7 +201,6 @@
 "jq not found: on macOS 14, run `brew install jq` in Terminal." = "jq bulunamadı: macOS 14’te Terminal’de `brew install jq` çalıştır.";
 "Keep the panel open when a shortcut opens it" = "Kısayol paneli açınca açık kalsın";
 "Language" = "Dil";
-"Last message copied to the clipboard" = "Son mesaj panoya kopyalandı";
 " · last sync %@" = " · son eşitleme %@";
 "Long break: %lld min" = "Uzun mola: %lld dk";
 "Longer" = "Süreyi artır";

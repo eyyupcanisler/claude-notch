@@ -130,7 +130,6 @@
 "Copied" = "Copied";
 "Copied to the clipboard" = "Copied to the clipboard";
 "Copy the image to the clipboard (%@×%@)" = "Copy the image to the clipboard (%@×%@)";
-"Copy the last message" = "Copy the last message";
 "Copy the latest shelf item" = "Copy the latest shelf item";
 "Copy the text to the clipboard" = "Copy the text to the clipboard";
 "copy to a remote server" = "copy to a remote server";
@@ -202,7 +201,6 @@
 "jq not found: on macOS 14, run `brew install jq` in Terminal." = "jq not found: on macOS 14, run `brew install jq` in Terminal.";
 "Keep the panel open when a shortcut opens it" = "Keep the panel open when a shortcut opens it";
 "Language" = "Language";
-"Last message copied to the clipboard" = "Last message copied to the clipboard";
 " · last sync %@" = " · last sync %@";
 "Long break: %lld min" = "Long break: %lld min";
 "Longer" = "Longer";

@@ -1725,7 +1725,6 @@ final class NotchController {
         guard let self else { return }
         for s in self.store.sessions.values where s.unseen { self.store.markSeen(sessionID: s.id) }
       },
-      copyMessage: { [weak self] sid in self?.copyMessage(sid) },
       denyAll: { [weak self] sid in self?.denyAll(sessionID: sid) },
       togglePin: { [weak self] in self?.ui.pinned.toggle() },
       openSettings: { [weak self] in self?.openSettings() },
@@ -1758,18 +1757,6 @@ final class NotchController {
       },
       dropShelf: { [weak self] sid in self?.dropShelf(on: sid) ?? false }
     )
-  }
-
-  private func copyMessage(_ sid: String) {
-    guard let s = store.sessions[sid] else { return }
-    switch s.status {
-    case .done(let m), .error(let m):
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(m, forType: .string)
-      showHint(loc("Last message copied to the clipboard"), seconds: 2.5)
-    default:
-      break
-    }
   }
 
   func openSettings() {
