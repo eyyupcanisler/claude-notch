@@ -530,24 +530,18 @@ struct SessionRow: View {
       .clipShape(shape)
   }
 
-  /// Idle rows stay plain; seen results glow less.
+  /// The row's colors follow its segment of the status line under the notch
+  /// (`SessionStore.lineState`): a finished or failed chat is blue / red until it is seen, then
+  /// plain like an idle one, on the line and in the panel alike.
+  private var lineState: LineState { store.lineState(of: session) }
+
+  /// Idle (and seen) rows stay plain.
   private var glowColor: Color? {
-    if store.hasPending(for: session.id) { return theme.needs }
-    switch session.status {
-    case .idle, .quiet: return nil
-    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.5)
-    default: return statusColor
-    }
+    lineState == .idle ? nil : statusColor
   }
 
-  /// Idle rows keep their last turn's rhythm, muted.
-  private var tickColor: Color {
-    switch session.status {
-    case .idle, .quiet: return theme.tertiary
-    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.6)
-    default: return statusColor
-    }
-  }
+  /// Idle (and seen) rows keep their last turn's rhythm, muted.
+  private var tickColor: Color { statusColor }
 
   /// Working: how long this turn has been running. Needs you: how long it has waited.
   /// Done / error: how long the turn took (frozen). Idle: how long since anything happened.
@@ -568,12 +562,7 @@ struct SessionRow: View {
     }
   }
 
-  private var elapsedColor: Color {
-    switch session.status {
-    case .idle, .quiet: return theme.tertiary
-    default: return statusColor
-    }
-  }
+  private var elapsedColor: Color { statusColor }
 
   private var statusText: String {
     store.hasPending(for: session.id) ? loc("Asks for permission") : session.status.label
@@ -583,7 +572,7 @@ struct SessionRow: View {
   /// part (the dot-matrix time spans both lines).
   private func header(trailing: Bool) -> some View {
     HStack(spacing: 8) {
-      StatusDot(session: session, pending: store.hasPending(for: session.id))
+      StatusDot(session: session, state: lineState)
       // The chat's title leads, the project follows in grey (`SessionStore.rowNames`).
       let names = store.rowNames(for: session)
       HStack(spacing: 6) {
@@ -647,13 +636,12 @@ struct SessionRow: View {
   }
 
   private var statusColor: Color {
-    if store.hasPending(for: session.id) { return theme.needs }
-    switch session.status {
+    switch lineState {
+    case .needs: return theme.needs
     case .working: return theme.working
     case .done: return theme.done
     case .error: return theme.error
-    case .waitingInput, .question, .planApproval: return theme.needs
-    case .idle, .quiet: return theme.tertiary
+    case .idle: return theme.tertiary
     }
   }
 
@@ -964,31 +952,38 @@ struct RowIconButton: View {
   }
 }
 
+/// The row's status sign, colored by its status line segment (`state`): a seen finished chat
+/// gets the idle dot, a seen error keeps its × shape in the idle grey.
 struct StatusDot: View {
   let session: Session
-  let pending: Bool
+  let state: LineState
   @Environment(\.notchTheme) private var theme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     Group {
-      if pending || session.status.needsAttention && session.status.kind != "error" {
+      switch state {
+      case .needs:
         Image(systemName: "exclamationmark.triangle.fill")
           .font(.system(size: 10, weight: .bold))
           .foregroundStyle(theme.needs)
-      } else {
+      case .working:
+        // Core Animation runs the pulse in the render server: a SwiftUI repeatForever here
+        // redrew the panel every frame (~2% CPU while open, measured).
+        PulseDot(color: NSColor(theme.working), pulsing: !reduceMotion)
+          .frame(width: 7, height: 7)
+      case .done:
+        Circle().fill(theme.done).frame(width: 7, height: 7)
+      case .error:
+        Image(systemName: "xmark.circle.fill")
+          .font(.system(size: 10, weight: .bold))
+          .foregroundStyle(theme.error)
+      case .idle:
         switch session.status {
-        case .working:
-          // Core Animation runs the pulse in the render server: a SwiftUI repeatForever here
-          // redrew the panel every frame (~2% CPU while open, measured).
-          PulseDot(color: NSColor(theme.working), pulsing: !reduceMotion)
-            .frame(width: 7, height: 7)
-        case .done:
-          Circle().fill(theme.done.opacity(session.unseen ? 1 : 0.45)).frame(width: 7, height: 7)
         case .error:
           Image(systemName: "xmark.circle.fill")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(theme.error.opacity(session.unseen ? 1 : 0.6))
+            .foregroundStyle(theme.idle)
         case .quiet:
           Circle().strokeBorder(theme.idle, lineWidth: 1.2).frame(width: 7, height: 7)
         default:
