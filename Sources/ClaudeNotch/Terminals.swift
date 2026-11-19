@@ -11,6 +11,8 @@ let clickLog = Logger(subsystem: "com.eyyupcan.claudenotch", category: "click")
 
 enum Terminals {
   static let ghosttyBundleID = TerminalHost.ghostty
+  /// AEDeterminePermissionToAutomateTarget: the user was never asked (asking would prompt).
+  static let errWouldPrompt: Int32 = -1744
 
   enum Outcome {
     case activated
@@ -107,7 +109,17 @@ enum Terminals {
     var code: Int?
     var steps: [String] = []
     if isRunning(bundleID) {
-      if let tty = session.tty, let pid = session.pid {
+      // The first jump into this terminal: macOS asks whether the app may control it. Ask
+      // now and wait for the answer; the tab script's 4 s timeout used to run out while the
+      // prompt was still up, and the panel then said the chat's tab may be closed.
+      if kind != .other, await automationStatus(bundleID: bundleID) == errWouldPrompt {
+        let answer = await requestAutomation(bundleID: bundleID)
+        steps.append("asked for Automation: \(answer)")
+        if Int(answer) == FocusOutcome.errNotPermitted { result = .notAuthorized(app: kind.appName) }
+      }
+      if result != nil {
+        // Not allowed: nothing to try, the app still comes forward below.
+      } else if let tty = session.tty, let pid = session.pid {
         if !probe.owns(pid: pid, tty: tty) {
           steps.append("tty: pid \(pid) no longer owns \(tty)")
         } else if session.behindTmux {
