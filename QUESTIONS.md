@@ -48,10 +48,11 @@ undo it) and, at the end, the questions to grill you on. Each ON entry ends with
 
 Pushed to `origin` (`furkanzt/claude-notch`) only, never `upstream`, no force: see the
 final status at the bottom of this file. Commits were squashed into bites first (one per
-piece of work), with a backup branch.
+piece of work); the unsquashed history is in the local branch
+`backup/huseyins-requests-pre-squash`.
 
-**How to revert:** `git push origin <backup-branch>:main --force-with-lease` brings `main`
-back (the backup branch name is in the final status).
+**How to undo the whole push:** `git revert --no-edit 3928505..main` (new commits that undo
+it, safe), or, only if nobody has pulled yet, `git push --force-with-lease origin 3928505:main`.
 
 **A:**
 
@@ -59,13 +60,24 @@ back (the backup branch name is in the final status).
 
 ## ON13: The app running on your Mac
 
-I did not stop your running notch during testing (the safety checks blocked it, rightly). All UI
-tests ran in a *renamed copy* of the app (`com.eyyupcan.claudenotch.uitest`) beside yours.
-The final status at the bottom says whether I swapped in the new build.
+I did not stop your running notch (the safety checks blocked it, rightly: twice, once for
+testing and once for the update). All UI tests ran in a *renamed copy* of the app
+(`com.eyyupcan.claudenotch.uitest`) beside yours. **Your notch still runs the old build.**
 
-**To update it yourself:** `./install.sh` in the repo (it builds this checkout, keeps your
-hooks, leaves your own status line script alone because it already feeds the notch, and
-restarts the app).
+**To update it yourself** (the new build is already built and signed with your
+"ClaudeNotch Dev" identity, so macOS keeps your permissions):
+
+```sh
+cd ~/Desktop/impark/pulled-projects/claude-notch && scripts/install-app.sh
+```
+
+It quits the notch, copies `build.noindex/ClaudeNotch.app` to `~/Applications` and starts it.
+At launch the app refreshes the hook bridge in Application Support by itself. Your hooks
+and your own status line script stay as they are (your script already feeds the notch, so
+Settings shows the status line as connected). `./install.sh --no-hooks --no-statusline`
+does the same, rebuilding first.
+
+**A:**
 
 **A:**
 
@@ -78,7 +90,7 @@ now asks first and waits for your answer, then selects the tab.
 **Why:** a real iTerm2 test showed the old way: the tab script started, macOS showed its prompt,
 the 4-second timeout ran out, and the panel said "Its tab may be closed". Wrong message on a
 new user's very first click.
-**Revert:** `git revert 4b629e8` (hash before squashing; search the log for "fix(jump)").
+**Revert:** `git revert 1889f9c`.
 
 **A:**
 
@@ -275,3 +287,40 @@ log show --last 10m --style compact --predicate 'subsystem == "com.eyyupcan.clau
    docs English?
 8. **Your friend** (ON1): can you get the `log show … | grep jump` line from him?
 9. **Upstream**: should any of this go back to `eyyupcanisler/claude-notch` as a pull request?
+
+---
+
+## Final status (20 Nov 2026, about 01:00)
+
+**Review:** a five-angle review of the whole branch (terminal detection, the order model,
+the drag UI, the install scripts, settings and docs), each followed by a skeptic that tried
+to refute every finding: 19 findings, 15 real, all fixed in `472efb0` (tmux in Ghostty could
+select an unrelated tab; the permission question came for jumps that run no script; an old
+record could take a pin away on `/clear`; a drop moved the card-slot chat to the bottom; a
+long pause of the app dropped pins of live chats; row places could go stale after a drop;
+dragging over a question's option buttons could press them; paths with an apostrophe broke
+under macOS's bash 3.2; stale button names in docs). 4 were refuted.
+
+**Tests:** 451 unit tests pass (`swift test`). Real iTerm2 and Terminal chats were detected
+correctly. The installer was run end to end in a scratch HOME, piped from curl and from a
+checkout, with install, update and uninstall.
+
+**Not re-checked on screen:** the last drag fix (rows measured outside their offset). The Mac
+locked itself around 00:50, after which synthetic mouse events land on the lock screen, so I
+stopped. The drag itself was verified before that change, and the change keeps the
+places right whichever way SwiftUI reports them. Please drag a few rows once.
+
+**Pushed bites** on `furkanzt/claude-notch` `main` (oldest first, after `3928505`):
+
+| Bite | What |
+| --- | --- |
+| `2ea38a4` | fix(terminals): tell which app a chat runs in without TERM_PROGRAM or a tty |
+| `8d9459f` | feat(usage): connect the status line for everyone |
+| `54674f1` | feat(panel): pin chats and drag rows (+ the 1:1 drag fix) |
+| `e9be6a1` | feat(install): one-command install, short README (+ piped-run and uninstall fixes) |
+| `c2f627c` | fix(panel): a drag whose row leaves the list is called off |
+| `1889f9c` | fix(jump): the first click waits for the macOS permission answer |
+| `d0a1b26` | docs: this file |
+| `472efb0` | fix(review): everything the review found |
+| (this commit) | docs: this final status |
+
