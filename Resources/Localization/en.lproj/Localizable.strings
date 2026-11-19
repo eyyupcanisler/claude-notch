@@ -441,3 +441,14 @@
 /* The folded clipboard shelf. */
 "Show the shelf" = "Show the shelf";
 "Hide the shelf" = "Hide the shelf";
+
+/* Claude Code connection: hooks and the status line (plan usage). */
+"Connect" = "Connect";
+"Status line connected (plan usage)" = "Status line connected (plan usage)";
+"Status line not connected (no plan usage)" = "Status line not connected (no plan usage)";
+"Connected. The percentages show once Claude Code next updates its status line (send a message in any chat)." = "Connected. The percentages show once Claude Code next updates its status line (send a message in any chat).";
+"Claude Code gives these percentages only to its status line. Connect lets the notch read them; the status line you have keeps working as it is." = "Claude Code gives these percentages only to its status line. Connect lets the notch read them; the status line you have keeps working as it is.";
+"Connect adds hooks to ~/.claude/settings.json, so Claude Code’s status and permission requests come to the notch, and connects the status line for plan usage (after a backup; your other settings, and the status line you have, stay as they are)." = "Connect adds hooks to ~/.claude/settings.json, so Claude Code’s status and permission requests come to the notch, and connects the status line for plan usage (after a backup; your other settings, and the status line you have, stay as they are).";
+"Hooks removed and your status line put back. Open Claude Code sessions are affected once restarted." = "Hooks removed and your status line put back. Open Claude Code sessions are affected once restarted.";
+"Connected. Open Claude Code sessions use it from their next message; plan usage shows once Claude Code next updates its status line." = "Connected. Open Claude Code sessions use it from their next message; plan usage shows once Claude Code next updates its status line.";
+"Status line connected. Plan usage shows once Claude Code next updates its status line." = "Status line connected. Plan usage shows once Claude Code next updates its status line.";

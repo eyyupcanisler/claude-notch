@@ -55,7 +55,8 @@ strip -S -x "$APP/Contents/MacOS/ClaudeNotch"
 # App icon (redraw with scripts/make-icon.swift, then iconutil; see that file).
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # The hook bridge and its installer travel inside the app (Settings → General installs them).
-cp "$ROOT/hooks/claude-notch-hook.sh" "$ROOT/scripts/install-hooks.sh" "$APP/Contents/Resources/"
+cp "$ROOT/hooks/claude-notch-hook.sh" "$ROOT/hooks/claude-notch-statusline.sh" \
+  "$ROOT/scripts/install-hooks.sh" "$ROOT/scripts/install-statusline.sh" "$APP/Contents/Resources/"
 # UI strings (en, tr) for Bundle.main. main.swift sets the app's AppleLanguages from the
 # Language setting (default "System": Turkish when the Mac's first language is Turkish, English
 # otherwise). Plain .lproj folders, not a SwiftPM resource bundle (one at the app root would

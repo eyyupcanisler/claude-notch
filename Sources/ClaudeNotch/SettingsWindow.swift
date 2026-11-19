@@ -145,9 +145,22 @@ struct SettingsView: View {
             } else if hooks.state == .installed {
               Button("Remove") { hooks.uninstall() }
             } else {
-              Button(hooks.state == .notInstalled ? "Install hooks" : "Connect to this app") {
+              Button(hooks.state == .notInstalled ? "Connect" : "Connect to this app") {
                 hooks.install()
               }
+            }
+          }
+          HStack {
+            if hooks.statusLineConnected {
+              Label("Status line connected (plan usage)", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            } else {
+              Label("Status line not connected (no plan usage)", systemImage: "info.circle")
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !hooks.busy, hooks.state == .installed, !hooks.statusLineConnected {
+              Button("Connect") { hooks.connectStatusLine() }
             }
           }
           Text(hooks.message ?? hookHelp)
@@ -261,10 +274,17 @@ struct SettingsView: View {
               .fixedSize(horizontal: false, vertical: true)
           }
           if settings.usageEnabled && !modules.usage.hasData {
-            Text("Claude Code gives these percentages only to the status line. Run once: scripts/install-statusline.sh (adds one line to your status line script, after a backup).")
-              .font(.caption).foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-              .textSelection(.enabled)
+            HStack(alignment: .firstTextBaseline) {
+              Text(hooks.statusLineConnected
+                ? loc("Connected. The percentages show once Claude Code next updates its status line (send a message in any chat).")
+                : loc("Claude Code gives these percentages only to its status line. Connect lets the notch read them; the status line you have keeps working as it is."))
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+              Spacer()
+              if !hooks.statusLineConnected && !hooks.busy {
+                Button("Connect") { hooks.connectStatusLine() }
+              }
+            }
           }
           Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {
@@ -437,7 +457,7 @@ struct SettingsView: View {
     case .installed:
       return loc("Claude Code events and permission requests come to this app.")
     case .notInstalled:
-      return loc("To bring Claude Code’s status and permission requests to the notch, hooks are added to ~/.claude/settings.json (after a backup; your other settings stay untouched).")
+      return loc("Connect adds hooks to ~/.claude/settings.json, so Claude Code’s status and permission requests come to the notch, and connects the status line for plan usage (after a backup; your other settings, and the status line you have, stay as they are).")
     case .other(let path):
       return loc("\(path) is in use right now (an install from source). If it works, it can stay that way.")
     }
