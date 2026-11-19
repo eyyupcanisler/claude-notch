@@ -442,6 +442,11 @@
 "Show the shelf" = "Rafı göster";
 "Hide the shelf" = "Rafı gizle";
 
+/* Pinned chats and dragging rows in the panel. */
+"Pin to the top" = "En üste sabitle";
+"Pinned to the top" = "En üste sabitlendi";
+"Pinned" = "Sabitlendi";
+
 /* Claude Code connection: hooks and the status line (plan usage). */
 "Connect" = "Bağla";
 "Status line connected (plan usage)" = "Durum satırı bağlı (plan kullanımı)";

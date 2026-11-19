@@ -442,6 +442,11 @@
 "Show the shelf" = "Show the shelf";
 "Hide the shelf" = "Hide the shelf";
 
+/* Pinned chats and dragging rows in the panel. */
+"Pin to the top" = "Pin to the top";
+"Pinned to the top" = "Pinned to the top";
+"Pinned" = "Pinned";
+
 /* Claude Code connection: hooks and the status line (plan usage). */
 "Connect" = "Connect";
 "Status line connected (plan usage)" = "Status line connected (plan usage)";

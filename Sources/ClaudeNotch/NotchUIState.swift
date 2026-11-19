@@ -31,6 +31,9 @@ final class NotchUIState {
   var selectedSessionID: String?
   /// Session order captured when the pointer entered the panel (no reordering under it).
   var frozenOrder: [String]?
+  /// The row being dragged to a new place (its session id), nil otherwise. While set, row
+  /// clicks are dropped and the panel stays open even when the pointer leaves it.
+  var draggingRowID: String?
   /// Sessions drawn as rich (needs-you) rows at freeze time: a session that starts or stops
   /// needing the user while the pointer is over the list keeps its row shape.
   var frozenRich: Set<String> = []

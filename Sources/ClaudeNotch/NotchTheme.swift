@@ -127,6 +127,14 @@ enum Motion {
   static let wingContentIn = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
   /// Content height changes inside an open shape (a card opens, a row appears).
   static let resize = Animation.spring(response: 0.38, dampingFraction: 1)
+  /// Rows making room for a dragged row, and a row moving to its new place (pinned to the top,
+  /// or dropped): a reposition, so critically damped (no gesture threw them past their slot)
+  /// with a short response; a spring re-targets from where the rows are, so dragging back and
+  /// forth never waits for a shift to finish.
+  static let rowShift = Animation.spring(response: 0.3, dampingFraction: 1)
+  /// The dragged row lifting off the list on the first move (scale, shadow): instant
+  /// acknowledgement, no overshoot.
+  static let rowLift = Animation.spring(response: 0.18, dampingFraction: 1)
   /// Reduce motion: crossfades only.
   static let crossfade = Animation.easeOut(duration: 0.16)
   /// Content leaving before the shape retracts.

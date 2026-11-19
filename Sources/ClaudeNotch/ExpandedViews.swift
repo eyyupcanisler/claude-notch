@@ -154,14 +154,37 @@ struct ExpandedBody: View {
   /// Measured natural height of the rows (nil until the first layout; an estimate is used
   /// meanwhile: a zero-height ScrollView would never lay out its content to report a size).
   @State private var measuredRows: CGFloat?
+  /// The row being dragged to a new place (see `rowDrag(for:rows:)`).
+  @State private var drag: RowDragState?
+  /// Each row's place in the list (`rowSpace`), measured before any drag offset.
+  @State private var rowSpans: [String: RowReorder.Span] = [:]
   @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let spacing: CGFloat = 6
   static let topPadding: CGFloat = 4
   static let bottomPadding: CGFloat = 12
+  /// The rows' coordinate space (drag translation and row places).
+  nonisolated static let rowSpace = "panelRows"
+  /// How far the pointer moves before a press on a row becomes a drag (a click jumps).
+  nonisolated static let dragThreshold: CGFloat = 6
+
+  /// A row on its way to a new place: its group (pinned rows, or the others) as it was when
+  /// the drag started, where it started and where it would land now.
+  struct RowDragState: Equatable {
+    var id: String
+    var group: [String]
+    var start: Int
+    var target: Int
+    var translation: CGFloat
+    /// The rows' places when the drag started. Measured places move with the rows' offsets
+    /// (`frame(in:)` counts the offset around a row), so during the drag only this copy is
+    /// used: the live ones would count the dragged row's own movement twice.
+    var spans: [String: RowReorder.Span]
+  }
 
   private var sessions: [Session] {
-    let live = store.displayOrder
+    let live = store.panelOrder
     guard let frozen = ui.frozenOrder else { return live }
     return SessionStore.applyFrozen(frozen, to: live)
   }
@@ -218,7 +241,7 @@ struct ExpandedBody: View {
           SessionRow(
             session: session, kind: .card(card.id), store: store, ui: ui, actions: actions,
             title: store.chatLabel(for: session),
-            contextLeft: modules.usage.contextLeft[session.id])
+            contextLeft: modules.usage.contextLeft[session.id], pinned: store.isPinned(session.id))
             .notchEnter(1)
         }
       }
@@ -228,13 +251,33 @@ struct ExpandedBody: View {
           ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: Self.spacing) {
               ForEach(Array(rows.enumerated()), id: \.element.id) { i, session in
+                let dragged = drag?.id == session.id
+                let offset = rowOffset(session.id)
                 SessionRow(
                   session: session, kind: kinds[i], store: store, ui: ui, actions: actions,
                   title: store.chatLabel(for: session),
-                  contextLeft: modules.usage.contextLeft[session.id])
+                  contextLeft: modules.usage.contextLeft[session.id],
+                  pinned: store.isPinned(session.id), lifted: dragged)
+                  .onGeometryChange(for: CGRect.self) {
+                    $0.frame(in: .named(Self.rowSpace))
+                  } action: { frame in
+                    // Only between drags: during one the frames carry the drag's offsets.
+                    guard drag == nil else { return }
+                    rowSpans[session.id] = RowReorder.Span(
+                      top: Double(frame.minY), bottom: Double(frame.maxY))
+                  }
+                  .offset(y: offset)
+                  // The dragged row is glued to the pointer (1:1, never animated); the others
+                  // slide out of its way with a spring that re-targets as it moves.
+                  .animation(dragged || reduceMotion ? nil : Motion.rowShift, value: offset)
+                  .zIndex(dragged ? 1 : 0)
+                  .simultaneousGesture(
+                    rowDrag(for: session, rows: rows),
+                    including: kinds[i] == .compact || kinds[i] == .rich ? .all : .subviews)
                   .notchEnter(min(i + 2, 8))
               }
             }
+            .coordinateSpace(.named(Self.rowSpace))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredRows = $0 }
             // Lets the last row scroll clear of the fade.
             .padding(.bottom, overflow ? ScrollFade.height : 0)
@@ -265,6 +308,67 @@ struct ExpandedBody: View {
       modules.shelf.addFiles(urls)
       return !urls.isEmpty
     }
+  }
+}
+
+// MARK: - Dragging a row to a new place
+
+extension ExpandedBody {
+  /// The rows of `id`'s group, top first: the pinned rows, or the others (a row never leaves
+  /// its group by a drag; the pin button moves it between them).
+  private func group(of id: String, rows: [Session]) -> [String] {
+    let pinned = store.isPinned(id)
+    return rows.filter { store.isPinned($0.id) == pinned }.map(\.id)
+  }
+
+  /// How far the row is moved from its place: the drag itself for the dragged row, the gap
+  /// it opens for the rows it passed.
+  fileprivate func rowOffset(_ id: String) -> CGFloat {
+    guard let drag else { return 0 }
+    if id == drag.id { return drag.translation }
+    let height = drag.spans[drag.id]?.height ?? Double(SessionRow.compactHeight)
+    return CGFloat(RowReorder.shift(
+      of: id, dragged: drag.id, group: drag.group, target: drag.target, height: height,
+      spacing: Double(Self.spacing)))
+  }
+
+  /// Press and move a row past `dragThreshold` to drag it; let go to drop it there. A press
+  /// that does not move stays a click (the row's own tap jumps to the terminal).
+  fileprivate func rowDrag(for session: Session, rows: [Session]) -> some Gesture {
+    DragGesture(minimumDistance: Self.dragThreshold, coordinateSpace: .named(Self.rowSpace))
+      .onChanged { value in
+        if drag == nil {
+          let group = group(of: session.id, rows: rows)
+          // A group of one has nowhere to go.
+          guard group.count > 1, let start = group.firstIndex(of: session.id) else { return }
+          actions.rowDrag(session.id)
+          withAnimation(reduceMotion ? nil : Motion.rowLift) {
+            drag = RowDragState(
+              id: session.id, group: group, start: start, target: start, translation: 0,
+              spans: rowSpans)
+          }
+        }
+        guard var d = drag, d.id == session.id else { return }
+        let t = RowReorder.resisted(
+          translation: Double(value.translation.height), dragged: d.id, group: d.group,
+          spans: d.spans)
+        d.translation = CGFloat(t)
+        d.target = RowReorder.target(
+          dragged: d.id, group: d.group, spans: d.spans, translation: t)
+        drag = d
+      }
+      .onEnded { _ in
+        guard let d = drag, d.id == session.id else { return }
+        // The row settles into its new place from where the pointer left it; the others
+        // close the gap in the same spring.
+        withAnimation(reduceMotion ? nil : Motion.rowShift) {
+          if d.target != d.start {
+            actions.reorderChats(RowReorder.moved(d.group, dragged: d.id, to: d.target))
+          }
+          drag = nil
+        }
+        actions.rowDrag(nil)
+      }
   }
 }
 
@@ -421,6 +525,10 @@ struct SessionRow: View {
   let title: String
   /// Context window left (from the status line bridge); shown from 25 % down.
   var contextLeft: Double?
+  /// Pinned to the top of the panel (a pin beside the title).
+  var pinned = false
+  /// Being dragged to a new place: lifted off the list.
+  var lifted = false
   @State private var hover = false
   @State private var dropTarget = false
   @Environment(\.notchTheme) private var theme
@@ -457,7 +565,8 @@ struct SessionRow: View {
           }
           Group {
             if hover && hasRowActions {
-              RowActions(session: session, actions: actions, canHide: store.canHide(session))
+              RowActions(
+                session: session, actions: actions, canHide: store.canHide(session), pinned: pinned)
                 .transition(.opacity)
             } else {
               DotElapsed(mode: elapsedMode, color: elapsedColor)
@@ -518,6 +627,13 @@ struct SessionRow: View {
     // The row itself is the way to its terminal (a click anywhere, or the title line of a card);
     // VoiceOver gets the same jump as the row's action.
     .accessibilityAction(named: Text("Focus")) { actions.focus(session.id) }
+    .accessibilityAction(named: Text(pinned ? loc("Unpin") : loc("Pin to the top"))) {
+      actions.togglePinChat(session.id)
+    }
+    // Lifted while dragged: a touch larger, with a shadow under it, so it reads as held above
+    // the rows that make room for it.
+    .scaleEffect(lifted ? 1.02 : 1)
+    .shadow(color: .black.opacity(lifted ? 0.5 : 0), radius: lifted ? 12 : 0, y: lifted ? 6 : 0)
   }
 
   nonisolated static let compactHeight: CGFloat = 62
@@ -590,6 +706,14 @@ struct SessionRow: View {
             .truncationMode(.middle)
             .layoutPriority(1)
         }
+        if pinned {
+          Image(systemName: "pin.fill")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(theme.tertiary)
+            .rotationEffect(.degrees(45))
+            .help("Pinned to the top")
+            .accessibilityLabel("Pinned")
+        }
       }
       Spacer(minLength: 4)
       if let left = contextLeft, left <= ContextLeft.showMark {
@@ -606,7 +730,8 @@ struct SessionRow: View {
       }
       if trailing {
         if hover && hasRowActions {
-          RowActions(session: session, actions: actions, canHide: store.canHide(session))
+          RowActions(
+                session: session, actions: actions, canHide: store.canHide(session), pinned: pinned)
             .transition(.opacity)
         } else {
           Elapsed(session: session)
@@ -801,21 +926,27 @@ struct RowActions: View {
   let actions: NotchActions
   /// Offer "Hide" (never while the chat needs the user, see `SessionStore.canHide`).
   var canHide = false
+  /// The chat is pinned: the pin button unpins it.
+  var pinned = false
 
   private static func marksRead(_ s: Session) -> Bool {
     s.unseen || s.status.kind == "waiting"
   }
 
   /// Whether the row has any of these buttons (there is no "go to the chat" button: the row
-  /// itself does that).
-  static func hasAny(session s: Session, canHide: Bool) -> Bool {
-    marksRead(s) || canHide
-  }
+  /// itself does that). Every row can be pinned, so there always is one.
+  static func hasAny(session s: Session, canHide: Bool) -> Bool { true }
 
   var body: some View {
     HStack(spacing: 2) {
       if Self.marksRead(session) {
         RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
+      }
+      RowIconButton(
+        icon: pinned ? "pin.slash" : "pin",
+        label: pinned ? loc("Unpin") : loc("Pin to the top")
+      ) {
+        actions.togglePinChat(session.id)
       }
       // An eye crossed out, not a cross: the chat is only out of sight, its terminal and its
       // process stay (a cross would read as closing it).

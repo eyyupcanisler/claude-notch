@@ -64,6 +64,10 @@ public final class SessionStore {
   @ObservationIgnored public var probe: ProcessProbe
   /// Position of each tty in Ghostty's tab order (see `applyTabOrder`); empty when unknown.
   public private(set) var tabOrder: [String: Int] = [:]
+  /// The panel's own order: pinned chats and the user's drags (`ChatOrder`, `panelOrder`).
+  public internal(set) var chatOrder = ChatOrder()
+  /// Called after every change of `chatOrder` (the app saves it).
+  @ObservationIgnored public var onChatOrderChange: (@MainActor (ChatOrder) -> Void)?
   /// Hidden terminal -> the terminal of the tab showing it, from the last process scan
   /// (`ClaudeProcess.tabTTYs`): chats Claude Code's background daemon runs.
   public internal(set) var tabTTYs: [String: String] = [:]
@@ -400,6 +404,7 @@ public final class SessionStore {
     apply(context, to: &session)
     adoptDiscovered(context, into: &session, isNew: isNew)
     if e.name != "SessionEnd" { retireSiblings(of: e.sessionID, pid: context.pid) }
+    carryOrder(to: e.sessionID, context: context)
     let before = session.status
     if let agent = e.agentID, e.name != "SubagentStop" {
       let old = session.agents[agent]
@@ -591,6 +596,8 @@ public final class SessionStore {
   private func retireSiblings(of sessionID: String, pid: Int32?) {
     guard let pid else { return }
     for s in sessions.values where s.id != sessionID && !s.isDiscovered && s.pid == pid {
+      // The same chat under its new id: it keeps its pin and place.
+      updateOrder { $0.rename(s.id, to: sessionID) }
       removeSession(s.id)
     }
   }
@@ -603,6 +610,7 @@ public final class SessionStore {
       // The user hid the placeholder: the hook session that replaces it stays hidden (the
       // event that adopted it may still reveal it, see `reveals`).
       if isNew, placeholder.hidden { session.hidden = true }
+      updateOrder { $0.rename(placeholder.id, to: session.id) }
       sessions.removeValue(forKey: placeholder.id)
       exitWatches.removeValue(forKey: placeholder.id)?.watch.cancel()
     }
@@ -890,6 +898,7 @@ public final class SessionStore {
   /// Returns the removed session ids.
   @discardableResult
   public func sweep() -> [String] {
+    touchOrder()
     let t = now()
     var removed: [String] = []
     for (id, s) in sessions {
@@ -971,7 +980,7 @@ public final class SessionStore {
         "host": opt(s.hostBundleID), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
         "discovered": .bool(s.isDiscovered), "tab_title": opt(s.tabTitle),
-        "hidden": .bool(s.hidden),
+        "hidden": .bool(s.hidden), "pinned": .bool(chatOrder.isPinned(s.id)),
         "secondary": opt(secondaryText(for: s)),
         "disambiguator": opt(disambiguator(for: s)),
         "status": .string(s.status.kind), "label": .string(s.status.label),

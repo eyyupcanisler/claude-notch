@@ -472,7 +472,7 @@ final class NotchController {
       onExpand?()
     }
     if reason == .hotkey {
-      ui.selectedSessionID = store.pending.first?.sessionID ?? store.displayOrder.first?.id
+      ui.selectedSessionID = store.pending.first?.sessionID ?? store.panelOrder.first?.id
     }
     // A card that just came on screen (the panel opened with it, or another one took the
     // slot) waits the new-card delay before any button, key or global shortcut decides it.
@@ -528,7 +528,7 @@ final class NotchController {
   /// Freezes the list (order, row shapes, whether the card slot exists) while the pointer is
   /// over the panel or the keyboard drives it.
   private func freezeOrder() {
-    let order = store.displayOrder
+    let order = store.panelOrder
     ui.frozenOrder = order.map(\.id)
     ui.frozenRich = Set(order.filter { store.needsAttention($0) }.map(\.id))
     ui.slotFrozenEmpty = store.pending.isEmpty
@@ -628,7 +628,9 @@ final class NotchController {
       // Only the drawn shape takes clicks: the notch (+ line), the island, the open panel.
       // The menu-bar band beside the notch never does unless the panel is expanded.
       let inside = rects.contains { $0.contains(p) }
-      let clickable = inside && s.pointerAtAppear == nil
+      // A row being dragged keeps the panel's events until the button comes up, wherever the
+      // pointer goes.
+      let clickable = (inside && s.pointerAtAppear == nil) || ui.draggingRowID != nil
       if s.panel.ignoresMouseEvents == clickable { s.panel.ignoresMouseEvents = !clickable }
       if menuOpen { continue }
       let g = s.state.geometry
@@ -690,7 +692,9 @@ final class NotchController {
         if near {
           collapseTask?.cancel()
           collapseTask = nil
-        } else if !ui.pinned && !ui.keyMode && !ui.shortcutOpen && !debugFreeze {
+        } else if !ui.pinned && !ui.keyMode && !ui.shortcutOpen && !debugFreeze
+          && ui.draggingRowID == nil
+        {
           // Closes the moment the pointer leaves (the 6 pt margin above forgives brushing the
           // edge); it used to wait 400 ms first, which read as lag.
           collapse()
@@ -1185,7 +1189,7 @@ final class NotchController {
   }
 
   private func visibleOrder() -> [Session] {
-    let live = store.displayOrder
+    let live = store.panelOrder
     guard let frozen = ui.frozenOrder else { return live }
     return SessionStore.applyFrozen(frozen, to: live)
   }
@@ -1713,6 +1717,30 @@ final class NotchController {
         }
         self.disarmRowClicks()
       },
+      togglePinChat: { [weak self] sid in
+        guard let self, self.rowClicksArmed() else { return }
+        clickLog.notice("pin \(String(sid.prefix(8)), privacy: .public)")
+        withAnimation(Motion.reduce ? nil : Motion.rowShift) {
+          self.store.togglePin(sessionID: sid)
+          self.refreezeShownOrder()
+        }
+        self.disarmRowClicks()
+      },
+      reorderChats: { [weak self] group in
+        guard let self else { return }
+        self.store.reorder(group: group)
+        self.refreezeShownOrder()
+      },
+      rowDrag: { [weak self] sid in
+        guard let self else { return }
+        self.ui.draggingRowID = sid
+        if sid == nil {
+          // The tap that may follow the drag's mouse-up must not jump to the terminal.
+          self.disarmRowClicks()
+          // The pointer may have left the panel during the drag: it closes now.
+          self.updatePointer()
+        }
+      },
       unhideAll: { [weak self] in
         guard let self, self.rowClicksArmed() else { return }
         withAnimation(Motion.reduce ? nil : Motion.rowHide) {
@@ -1765,6 +1793,11 @@ final class NotchController {
 
   /// Whether a click on a row may act now (see `rowClicksArmedAt`); a dropped one is logged.
   private func rowClicksArmed() -> Bool {
+    // The press that ends a drag is no click on the row.
+    guard ui.draggingRowID == nil else {
+      clickLog.notice("row click dropped: a row is being dragged")
+      return false
+    }
     guard Date() >= rowClicksArmedAt else {
       clickLog.notice("row click dropped: the rows just moved")
       return false
@@ -1776,7 +1809,7 @@ final class NotchController {
   /// end of the frozen list (`applyFrozen` puts unknown ids last, maybe under the fade).
   private func refreezeShownOrder() {
     guard ui.frozenOrder != nil else { return }
-    ui.frozenOrder = store.displayOrder.map(\.id)
+    ui.frozenOrder = store.panelOrder.map(\.id)
   }
 
   private func disarmRowClicks() {
@@ -2057,6 +2090,7 @@ final class NotchController {
       "peek_until": wings.nextChange.map { .double($0.timeIntervalSinceNow) } ?? .null,
       "poll_timer": .bool(pollTimer != nil),
       "tab_order": .object(store.tabOrder.mapValues { .int($0) }),
+      "panel_order": .array(store.panelOrder.map { .string($0.id) }),
       "status_line": .array(store.statusLine.map {
         .object([
           "session": .string($0.sessionID), "state": .string($0.state.rawValue),
@@ -2175,6 +2209,16 @@ final class NotchController {
     // {"hide": "<session id>"} / {"unhide_all": true}: the row's hide button and "Show all".
     if let id = json["hide"]?.stringValue { store.hide(sessionID: id) }
     if json["unhide_all"] == .bool(true) { store.unhideAll() }
+    // {"pin_chat": "<session id>"}: the row's pin button (pins, or unpins a pinned chat).
+    // {"reorder": ["<id>", ...]}: a row dropped, the new order of its group's rows.
+    if let id = json["pin_chat"]?.stringValue {
+      store.togglePin(sessionID: id)
+      refreezeShownOrder()
+    }
+    if case .array(let items)? = json["reorder"] {
+      store.reorder(group: items.compactMap(\.stringValue))
+      refreezeShownOrder()
+    }
     // {"mark_seen": "<session id>"}: as looking at the chat does.
     if let id = json["mark_seen"]?.stringValue { store.markSeen(sessionID: id) }
     // {"focused_tty": "/dev/ttysNNN" | null}: the terminal the user is in (its chats' segments

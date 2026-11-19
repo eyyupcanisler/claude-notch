@@ -32,6 +32,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Keep the installed hook bridge in step with this build (it used to refresh only when
     // Settings opened). Demo runs never touch the real hook copy.
     if !NotchSettings.isDemo { HookInstaller.refreshCopy() }
+    // Pinned chats and dragged rows survive a restart of the app (`ChatOrder`). A demo run
+    // shares the app's defaults domain, so it neither reads nor writes the real order.
+    if !NotchSettings.isDemo {
+      if let data = UserDefaults.standard.data(forKey: ChatOrder.defaultsKey),
+        let order = try? JSONDecoder().decode(ChatOrder.self, from: data)
+      {
+        store.loadChatOrder(order)
+      }
+      store.onChatOrderChange = { order in
+        guard let data = try? JSONEncoder().encode(order) else { return }
+        UserDefaults.standard.set(data, forKey: ChatOrder.defaultsKey)
+      }
+    }
     // A reinstalled bundle loses its login item: register again if the user wanted it.
     if !NotchSettings.isDemo, UserDefaults.standard.bool(forKey: "loginWanted"),
       SMAppService.mainApp.status != .enabled

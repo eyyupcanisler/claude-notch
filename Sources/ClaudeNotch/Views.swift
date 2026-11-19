@@ -33,6 +33,13 @@ struct NotchActions {
   /// chats back (the "Hidden" line).
   var hide: @MainActor (String) -> Void = { _ in }
   var unhide: @MainActor (String) -> Void = { _ in }
+  /// Pins a chat to the top of the panel, or unpins it (row button). Not `togglePin`, which
+  /// keeps the whole panel open.
+  var togglePinChat: @MainActor (String) -> Void = { _ in }
+  /// A row was dropped: the new order of its group's rows (pinned ones, or the others).
+  var reorderChats: @MainActor ([String]) -> Void = { _ in }
+  /// A row drag started (its session id) or ended (nil).
+  var rowDrag: @MainActor (String?) -> Void = { _ in }
   var unhideAll: @MainActor () -> Void = {}
   var markAllSeen: @MainActor () -> Void = {}
   var denyAll: @MainActor (String) -> Void = { _ in }

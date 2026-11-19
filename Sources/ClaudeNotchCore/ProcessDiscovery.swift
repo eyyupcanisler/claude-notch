@@ -340,6 +340,7 @@ extension SessionStore {
         lastUpdate: t)
       link(&placeholder)
       sessions[id] = placeholder
+      carryOrder(toPlaceholder: id, pid: r.pid, tty: tty)
       watchDiscoveredExit(sessionID: id, pid: r.pid)
     }
     for (id, s) in sessions where s.isDiscovered && !wanted.contains(id) {
