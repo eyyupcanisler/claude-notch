@@ -47,20 +47,39 @@ ClaudeNotch Google'a kendi OAuth istemcinle bağlanır (yalnız okuma). Bir kez:
 bağlantısı varsa paneldeki takvim kartı başlangıçtan 15 dk önce **Katıl** düğmesi gösterir
 (çentiğin yanındaki kanatlar yalnızca hatırlatır; tıklamak paneli açar).
 
-## İndirerek kurma (en kolayı)
+## Kurulum (tek komut)
 
-1. [Son sürümden](https://github.com/eyyupcanisler/claude-notch/releases/latest)
-   `ClaudeNotch-<sürüm>.zip` dosyasını indir, aç ve **ClaudeNotch.app**'i **Uygulamalar**
-   klasörüne taşı.
-2. Aç. Uygulama Apple Developer ID ile imzalı olmadığı için macOS ilk açılışı engeller:
-   **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç**. (Ya da Terminal'de:
-   `xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app`.)
-3. Spotlight'tan **ClaudeNotch**'ı tekrar açınca Ayarlar gelir:
-   **Genel → Claude Code bağlantısı → Kancaları kur**. Kancalar `~/.claude/settings.json`
-   dosyasına yedek alınarak eklenir, diğer ayarlarına dokunulmaz.
+Terminal'e (herhangi bir terminale) yapıştır:
 
-Gereksinim: macOS 14+ (macOS 14'te `brew install jq`; macOS 15 ve sonrasında hazır gelir) ve
-Claude Code.
+```sh
+curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash
+```
+
+Bu tek komut:
+
+1. uygulamayı alır (Mac'inde derler, 1-3 dakika) ve `~/Applications` klasörüne koyar;
+2. Claude Code'u bağlar: durum ve izin istekleri için kancalar, plan kullanımı için durum
+   satırı (önce `~/.claude/settings.json` yedeklenir; diğer ayarların ve varsa kendi durum
+   satırın olduğu gibi çalışmaya devam eder);
+3. **Oturum açılışında başlat**'ı açar ve uygulamayı başlatır.
+
+Bir sonraki Claude Code mesajın çentikte görünür. Güncellemek için aynı komutu tekrar çalıştır.
+
+**Gerekenler:** macOS 14+ ve Claude Code. Derleme için Apple'ın Komut Satırı Araçları gerekir;
+yoksa kurulum betiği kurulum penceresini açar, kurduktan sonra komutu tekrar çalıştırırsın.
+macOS 14'te `jq` de gerekir (Homebrew varsa betik kurar; macOS 15 ve sonrasında hazır gelir).
+
+**Bir sohbete ilk tıklayışta** macOS bir kez ClaudeNotch'ın terminalini kontrol etmesine izin
+isteyip istemediğini sorar (*Otomasyon*): **İzin Ver** de, yoksa tıklama sohbetin sekmesini
+seçemez.
+
+**Kaldırmak için:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash -s -- --uninstall
+```
+
+Uygulamayı, kancaları ve durum satırı köprüsünü kaldırır, eski durum satırını geri koyar.
 
 ## Derleme
 
@@ -381,7 +400,9 @@ basılmadıkça hiçbir şey değişmez. Hyper için Caps Lock'u ⌃⌥⇧⌘ ya
   da uygulama yeniden başlayınca silinir; sabitlenenler diskte kalır. İsteğe bağlı iki ayar:
   **Sabitlenmemiş öğeleri sil** 1 / 3 / 7 gün sonra (varsayılan: Hiçbir zaman) ve **Raf
   kapatılınca sabitlenenleri de sil** (varsayılan: kapalı).
-- **Claude planı** (`scripts/install-statusline.sh`): halka 5 saatlik ve haftalık pencereden
+- **Claude planı** (kurulum betiği ya da Ayarlar > Genel > Claude Code bağlantısı > Durum
+  satırı > **Bağla**; Claude Code bu yüzdeleri yalnızca durum satırına verir, köprü onları
+  çentiğe iletip senin durum satırını aynen çalıştırır): halka 5 saatlik ve haftalık pencereden
   dolu olanı gösterir, %80 ve %95 uyarıları 5 saatlik pencere içindir. Durum satırı yalnız
   haftalık pencereyi (`rate_limits.seven_day`) gönderiyorsa (yeni Claude Code sürümleri) halka
   haftalık limiti izler; uyarılar ise yalnızca Ayarlar > Modüller > **Haftalık limit %80’e,
