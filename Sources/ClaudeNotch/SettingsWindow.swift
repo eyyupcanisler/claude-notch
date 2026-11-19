@@ -285,6 +285,12 @@ struct SettingsView: View {
                 Button("Connect") { hooks.connectStatusLine() }
               }
             }
+            // What Connect said (a failure too), here as on the General tab.
+            if let message = hooks.message {
+              Text(message).font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            }
           }
           Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {

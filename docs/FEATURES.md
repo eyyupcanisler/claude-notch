@@ -107,12 +107,15 @@ long one: what each part does, the settings behind it, and how it works inside.
   rows it passes make room, and it stays where you drop it. Without pins or drags the panel
   follows the terminal tabs as before; the status line under the notch always does, since
   its segments stand for the tabs. Pins and places survive `/clear`, `/resume` and a restart
-  of the app; a chat not seen for a day is forgotten.
+  of the app; a chat is forgotten a day after it ended. A row with a permission card or a
+  question answered in the notch is not dragged (its buttons keep their presses).
 - **Every terminal.** The notch learns which app a chat runs in from the chat itself:
   TERM_PROGRAM, else the app's bundle id that macOS passes to everything started inside it
   (so iTerm2 behind tmux, Cursor, Alacritty, kitty and Claude's desktop app are known too),
   else the app found above the claude process. A click on a row selects the exact tab in
-  Ghostty, iTerm2 and Terminal; any other app comes to the front.
+  Ghostty, iTerm2 and Terminal; any other app comes to the front, as does the terminal of a
+  chat inside tmux (the pane is not selected). The first click into a terminal waits for
+  macOS's "may ClaudeNotch control …?" answer before it selects the tab.
 - **Plan usage for everyone.** Claude Code reports the 5-hour and weekly limits only to its
   status line, so *Connect* (Settings → General, or the installer) makes the notch's small
   bridge the status line command: it hands the numbers to the notch and then runs the

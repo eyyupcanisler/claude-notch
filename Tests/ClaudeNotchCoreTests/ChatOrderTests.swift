@@ -145,6 +145,60 @@ final class ChatOrderTests: XCTestCase {
     XCTAssertEqual(data.flatMap { try? JSONDecoder().decode(ChatOrder.self, from: $0) }, saved)
   }
 
+  /// A drop leaves the chats that are not in the list where they were: the one whose card
+  /// has the slot above the list, and hidden ones.
+  func testDropKeepsTheCardSlotChatInItsPlace() {
+    var order = ChatOrder()
+    order.pinned = ["A", "B", "C"]
+    order.reorder(["C", "B"])  // A has the card slot: the list showed B and C
+    XCTAssertEqual(order.pinned, ["A", "C", "B"])
+    order.manual = ["a", "b", "c", "d"]
+    order.reorder(["d", "c", "b"])  // a in the slot
+    XCTAssertEqual(order.manual, ["a", "d", "c", "b"])
+    order.manual = []
+    order.reorder(["y", "x"])  // a first drag: everything shown is listed
+    XCTAssertEqual(order.manual, ["y", "x"])
+  }
+
+  /// An unpinned chat's old record is gone, so it can never be matched for another chat.
+  func testUnpinnedRecordsAreNeverMatched() {
+    let store = fourChats()
+    store.togglePin(sessionID: "c")
+    store.togglePin(sessionID: "c")
+    XCTAssertTrue(store.chatOrder.identity.isEmpty)
+    var order = ChatOrder()
+    order.identity["stale"] = ChatOrder.Identity(pid: 9, tty: "/dev/ttys009")
+    XCTAssertNil(order.entry(pid: 9, tty: "/dev/ttys009", live: []))
+    order.pinned = ["stale"]
+    XCTAssertEqual(order.entry(pid: 9, tty: "/dev/ttys009", live: []), "stale")
+  }
+
+  /// Old entries go only when their chat is gone: a chat still running after a long pause of
+  /// the app keeps its pin; the hourly pass drops entries of chats that ended a day ago.
+  func testPruneKeepsLiveChatsAndDropsEndedOnes() {
+    final class Alive: @unchecked Sendable { var pids: Set<Int32> = [] }
+    let alive = Alive()
+    let probe = ProcessProbe(isAlive: { alive.pids.contains($0) }, ttyOf: { _ in nil })
+    let store = SessionStore(now: { [unowned self] in self.clock }, probe: probe)
+    alive.pids = [501, 502]
+    store.handleEvent(ev("SessionStart", "a"), context: ctx(1))
+    store.handleEvent(ev("SessionStart", "b"), context: ctx(2))
+    store.togglePin(sessionID: "a")
+    store.togglePin(sessionID: "b")
+    let saved = store.chatOrder
+    // Three days later, only a's process still runs.
+    alive.pids = [501]
+    let later = clock + 3 * 24 * 3600
+    XCTAssertEqual(saved.pruned(now: later) { v in alive.pids.contains(v.pid) }.pinned, ["a"])
+    // While running: b's process ends, a day and an hour pass.
+    _ = store.sweep()
+    XCTAssertNil(store.sessions["b"])
+    XCTAssertEqual(store.chatOrder.pinned, ["a", "b"], "kept for a day after the chat ends")
+    clock += ChatOrder.keepFor + 3700
+    _ = store.sweep()
+    XCTAssertEqual(store.chatOrder.pinned, ["a"])
+  }
+
   func testArrangeIsStableForUnknownIDs() {
     var order = ChatOrder()
     order.pinned = ["gone"]

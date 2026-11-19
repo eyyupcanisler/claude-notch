@@ -108,24 +108,33 @@ enum Terminals {
     var triedTab = false
     var code: Int?
     var steps: [String] = []
-    if isRunning(bundleID) {
-      // The first jump into this terminal: macOS asks whether the app may control it. Ask
-      // now and wait for the answer; the tab script's 4 s timeout used to run out while the
-      // prompt was still up, and the panel then said the chat's tab may be closed.
-      if kind != .other, await automationStatus(bundleID: bundleID) == errWouldPrompt {
-        let answer = await requestAutomation(bundleID: bundleID)
-        steps.append("asked for Automation: \(answer)")
-        if Int(answer) == FocusOutcome.errNotPermitted { result = .notAuthorized(app: kind.appName) }
+    // The first script into this terminal: macOS asks whether the app may control it. Asked
+    // right before a script runs (never for a jump that runs none) and waited for: the
+    // script's 4 s timeout used to run out while the prompt was still up, and the panel then
+    // said the chat's tab may be closed. False when the user said no.
+    var asked = false
+    func allowed() async -> Bool {
+      if asked { return result == nil }
+      asked = true
+      guard await automationStatus(bundleID: bundleID) == errWouldPrompt else { return true }
+      let answer = await requestAutomation(bundleID: bundleID)
+      steps.append("asked for Automation: \(answer)")
+      guard Int(answer) != FocusOutcome.errNotPermitted else {
+        result = .notAuthorized(app: kind.appName)
+        return false
       }
-      if result != nil {
-        // Not allowed: nothing to try, the app still comes forward below.
-      } else if let tty = session.tty, let pid = session.pid {
+      return true
+    }
+    if isRunning(bundleID) {
+      if let tty = session.tty, let pid = session.pid {
         if !probe.owns(pid: pid, tty: tty) {
           steps.append("tty: pid \(pid) no longer owns \(tty)")
         } else if session.behindTmux {
           // A tmux pane's tty: no terminal tab has it. The host app comes forward.
           steps.append("tmux pane \(tty)")
-        } else if let tab = session.terminal, let script = kind.focusScript(tty: tab) {
+        } else if let tab = session.terminal, let script = kind.focusScript(tty: tab),
+          await allowed()
+        {
           // The tab's terminal: for a chat Claude Code's daemon runs, not its process's.
           triedTab = true
           let r = await AppleScriptRunner.run(script)
@@ -141,8 +150,10 @@ enum Terminals {
       } else {
         steps.append("tty: none")
       }
-      if result == nil, kind == .ghostty,
-        let script = TerminalScript.ghosttyFocus(directory: session.cwd)
+      // Not behind tmux: Ghostty knows the tmux client's directory, not the pane's, so a
+      // directory match there could select an unrelated tab.
+      if result == nil, kind == .ghostty, !session.behindTmux,
+        let script = TerminalScript.ghosttyFocus(directory: session.cwd), await allowed()
       {
         let r = await AppleScriptRunner.run(script)
         steps.append("directory: \(r.output ?? "-") code \(r.errorCode.map(String.init) ?? "-")")

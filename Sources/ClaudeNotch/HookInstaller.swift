@@ -170,7 +170,8 @@ final class HookInstaller {
     uninstall: Bool, hooks: Bool, results: [(ok: Bool, text: String)]
   ) -> String {
     if let failed = results.first(where: { !$0.ok }) {
-      if failed.text.contains("jq") {
+      // install-hooks.sh / install-statusline.sh say exactly this when jq is missing.
+      if failed.text.contains("jq not found") || failed.text.contains("jq bulunamadı") {
         return loc("jq not found: on macOS 14, run `brew install jq` in Terminal.")
       }
       return loc("Could not install: \(failed.text)")

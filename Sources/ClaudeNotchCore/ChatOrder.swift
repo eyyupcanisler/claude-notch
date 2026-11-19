@@ -70,20 +70,32 @@ public struct ChatOrder: Codable, Equatable, Sendable {
       pinned.append(id)
     }
     manual.removeAll { $0 == id }
+    dropStale()
   }
 
   /// The user dropped a row: `group` is the new order of the rows of its group (all pinned
-  /// ones, or all the others) as the panel shows them. Chats of the group that are not on
-  /// screen (hidden) keep their entries after the shown ones.
+  /// ones, or all the others) as the panel's list shows them. The group's chats that are not
+  /// in that list (hidden, or the one whose card has the slot above it) keep their places:
+  /// the listed ones take the places listed ones had, in their new order.
   public mutating func reorder(_ group: [String]) {
     guard let first = group.first else { return }
     if pinned.contains(first) {
-      let shown = Set(group)
-      pinned = group.filter(pinned.contains) + pinned.filter { !shown.contains($0) }
+      pinned = Self.fill(pinned, with: group.filter(pinned.contains))
     } else {
-      let shown = Set(group)
-      manual = group.filter { !pinned.contains($0) } + manual.filter { !shown.contains($0) }
+      manual = Self.fill(manual, with: group.filter { !pinned.contains($0) })
     }
+  }
+
+  /// `list` (plus the ids of `group` it lacks, at its end) with the places of `group`'s ids
+  /// taken by `group`, in its order; every other id stays where it was.
+  static func fill(_ list: [String], with group: [String]) -> [String] {
+    let shown = Set(group)
+    var out = list + group.filter { !list.contains($0) }
+    var next = group.makeIterator()
+    for i in out.indices where shown.contains(out[i]) {
+      if let id = next.next() { out[i] = id }
+    }
+    return out
   }
 
   /// The chat's id changed (see the type's note): its entries move to the new id. Nothing
@@ -96,26 +108,33 @@ public struct ChatOrder: Codable, Equatable, Sendable {
     if let v = seen.removeValue(forKey: old) { seen[new] = v }
   }
 
-  /// The chat ended: it is forgotten.
-  public mutating func forget(_ id: String) {
-    pinned.removeAll { $0 == id }
-    manual.removeAll { $0 == id }
-    identity[id] = nil
-    seen[id] = nil
-  }
-
   public func contains(_ id: String) -> Bool { pinned.contains(id) || manual.contains(id) }
 
-  /// The entry (an id no live chat has) whose pid and terminal are these.
-  public func entry(pid: Int32, tty: String, live: Set<String>) -> String? {
-    identity.first { id, v in v.pid == pid && v.tty == tty && !live.contains(id) }?.key
+  /// Identities and times of ids that are in neither list any more (unpinned, never dragged)
+  /// go: an old record must never be matched for a chat.
+  mutating func dropStale() {
+    identity = identity.filter { contains($0.key) }
+    seen = seen.filter { contains($0.key) }
   }
 
-  /// Without entries not seen since `keepFor`, and at most `maxEntries` (newest kept).
-  public func pruned(now: Date) -> ChatOrder {
+  /// The entry (an id in the lists that no live chat has) whose pid and terminal are these.
+  public func entry(pid: Int32, tty: String, live: Set<String>) -> String? {
+    identity.filter { id, v in
+      v.pid == pid && v.tty == tty && !live.contains(id) && contains(id)
+    }.keys.sorted().first
+  }
+
+  /// Without entries not seen since `keepFor` whose chat is gone, and at most `maxEntries`
+  /// (newest kept). `alive` says whether an entry's process still runs on its terminal: a
+  /// chat that outlived a long pause of the app (quit on Friday, back on Monday) keeps its
+  /// pin and place.
+  public func pruned(now: Date, alive: (Identity) -> Bool = { _ in false }) -> ChatOrder {
     var out = self
     let ids = Set(pinned + manual)
-    var keep = ids.filter { id in (seen[id].map { now.timeIntervalSince($0) < Self.keepFor } ?? false) }
+    var keep = ids.filter { id in
+      if let s = seen[id], now.timeIntervalSince(s) < Self.keepFor { return true }
+      return identity[id].map(alive) ?? false
+    }
     if keep.count > Self.maxEntries {
       keep = Set(keep.sorted { (seen[$0] ?? .distantPast) > (seen[$1] ?? .distantPast) }
         .prefix(Self.maxEntries))

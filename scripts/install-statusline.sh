@@ -179,7 +179,11 @@ fi
 
 # The command as Claude Code runs it (through a shell): the path quoted, since "Application
 # Support" has a space.
-QUOTED="'${BRIDGE//\'/\'\\\'\'}'"
+# The quote and its escape sit in variables: macOS's bash 3.2 keeps the backslashes of a
+# quote escaped inside ${//} literally.
+q="'"
+qe="'\\''"
+QUOTED="'${BRIDGE//$q/$qe}'"
 RESULT="$(printf '%s' "$CURRENT" | jq --arg cmd "$QUOTED" \
   '.statusLine = ((if (.statusLine | type) == "object" then .statusLine else {} end)
      + {type: "command", command: $cmd})')" \

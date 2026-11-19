@@ -177,9 +177,8 @@ struct ExpandedBody: View {
     var start: Int
     var target: Int
     var translation: CGFloat
-    /// The rows' places when the drag started. Measured places move with the rows' offsets
-    /// (`frame(in:)` counts the offset around a row), so during the drag only this copy is
-    /// used: the live ones would count the dragged row's own movement twice.
+    /// The rows' places when the drag started: the drag works from one fixed picture of the
+    /// list, whatever else lays out meanwhile.
     var spans: [String: RowReorder.Span]
   }
 
@@ -258,22 +257,24 @@ struct ExpandedBody: View {
                   title: store.chatLabel(for: session),
                   contextLeft: modules.usage.contextLeft[session.id],
                   pinned: store.isPinned(session.id), lifted: dragged)
-                  .onGeometryChange(for: CGRect.self) {
-                    $0.frame(in: .named(Self.rowSpace))
-                  } action: { frame in
-                    // Only between drags: during one the frames carry the drag's offsets.
-                    guard drag == nil else { return }
-                    rowSpans[session.id] = RowReorder.Span(
-                      top: Double(frame.minY), bottom: Double(frame.maxY))
-                  }
                   .offset(y: offset)
                   // The dragged row is glued to the pointer (1:1, never animated); the others
                   // slide out of its way with a spring that re-targets as it moves.
                   .animation(dragged || reduceMotion ? nil : Motion.rowShift, value: offset)
+                  // Measured outside the offset: the row's place in the list, which a drag
+                  // never moves (inside it, the frame would carry the drag's offset).
+                  .onGeometryChange(for: CGRect.self) {
+                    $0.frame(in: .named(Self.rowSpace))
+                  } action: { frame in
+                    rowSpans[session.id] = RowReorder.Span(
+                      top: Double(frame.minY), bottom: Double(frame.maxY))
+                  }
                   .zIndex(dragged ? 1 : 0)
+                  // A row with a permission card or a question answered here is not dragged:
+                  // a press on one of its buttons must stay a press on that button.
                   .simultaneousGesture(
                     rowDrag(for: session, rows: rows),
-                    including: kinds[i] == .compact || kinds[i] == .rich ? .all : .subviews)
+                    including: canDrag(session) ? .all : .subviews)
                   .notchEnter(min(i + 2, 8))
               }
             }
@@ -331,6 +332,12 @@ extension ExpandedBody {
   private func group(of id: String, rows: [Session]) -> [String] {
     let pinned = store.isPinned(id)
     return rows.filter { store.isPinned($0.id) == pinned }.map(\.id)
+  }
+
+  /// Rows whose whole surface jumps to the terminal can be dragged; one with a pending card
+  /// or a question answered in the notch keeps its presses for its buttons.
+  fileprivate func canDrag(_ s: Session) -> Bool {
+    !store.hasPending(for: s.id) && store.question(for: s.id) == nil
   }
 
   /// How far the row is moved from its place: the drag itself for the dragged row, the gap

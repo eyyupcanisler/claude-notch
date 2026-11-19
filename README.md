@@ -84,8 +84,9 @@ Language changes it). Every feature in detail, with its settings:
 | Terminal | selects the exact tab | not yet |
 | Anything else (Warp, WezTerm, kitty, VS Code, Cursor…) | brings the app to the front | no |
 
-ClaudeNotch learns the terminal from each chat itself, also behind tmux or when the terminal
-sets no `TERM_PROGRAM`.
+ClaudeNotch learns the terminal from each chat itself, also when the terminal sets no
+`TERM_PROGRAM`. A chat inside tmux brings its terminal app to the front (the tmux pane is not
+selected).
 
 ## Shortcuts
 

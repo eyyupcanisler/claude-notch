@@ -53,7 +53,11 @@ fi
 # Quote the path in the command string only if needed.
 CMD_PATH="$HOOK"
 if [[ "$HOOK" =~ [^A-Za-z0-9_./-] ]]; then
-  CMD_PATH="'${HOOK//\'/\'\\\'\'}'"
+  # The quote and its escape sit in variables: macOS's bash 3.2 keeps the backslashes of a
+  # quote escaped inside ${//} literally.
+  q="'"
+  qe="'\\''"
+  CMD_PATH="'${HOOK//$q/$qe}'"
 fi
 
 # Our hooks JSON fragment.

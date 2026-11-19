@@ -68,6 +68,8 @@ public final class SessionStore {
   public internal(set) var chatOrder = ChatOrder()
   /// Called after every change of `chatOrder` (the app saves it).
   @ObservationIgnored public var onChatOrderChange: (@MainActor (ChatOrder) -> Void)?
+  /// When `touchOrder` last dropped entries of ended chats.
+  @ObservationIgnored var lastOrderPrune = Date.distantPast
   /// Hidden terminal -> the terminal of the tab showing it, from the last process scan
   /// (`ClaudeProcess.tabTTYs`): chats Claude Code's background daemon runs.
   public internal(set) var tabTTYs: [String: String] = [:]

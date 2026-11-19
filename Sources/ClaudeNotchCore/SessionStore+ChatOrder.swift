@@ -31,9 +31,16 @@ extension SessionStore {
     }
   }
 
-  /// The saved order (the app loads it at launch): entries not seen for a day are dropped.
+  /// The saved order (the app loads it at launch): entries not seen for a day whose process
+  /// is gone are dropped.
   public func loadChatOrder(_ order: ChatOrder) {
-    chatOrder = order.pruned(now: now())
+    chatOrder = order.pruned(now: now()) { v in self.entryAlive(v) }
+    lastOrderPrune = now()
+  }
+
+  /// The entry's chat process still runs on its terminal.
+  private func entryAlive(_ v: ChatOrder.Identity) -> Bool {
+    probe.owns(pid: v.pid, tty: v.tty)
   }
 
   /// Changes `chatOrder` and reports it (`onChatOrderChange`) when it changed.
@@ -83,14 +90,20 @@ extension SessionStore {
   }
 
   /// Marks the live chats in the order as seen, at most once an hour each (the sweep calls it),
-  /// so an open chat is never forgotten while it runs.
+  /// so an open chat is never forgotten while it runs; then, once an hour, entries of chats
+  /// that ended more than a day ago go.
   func touchOrder() {
     guard !chatOrder.isEmpty else { return }
     let t = now()
     let stale = sessions.keys.filter { id in
       chatOrder.contains(id) && (chatOrder.seen[id].map { t.timeIntervalSince($0) > 3600 } ?? true)
     }
-    guard !stale.isEmpty else { return }
-    updateOrder { order in for id in stale { order.seen[id] = t } }
+    if !stale.isEmpty {
+      updateOrder { order in for id in stale { order.seen[id] = t } }
+    }
+    guard t.timeIntervalSince(lastOrderPrune) > 3600 else { return }
+    lastOrderPrune = t
+    let alive = { (v: ChatOrder.Identity) in self.entryAlive(v) }
+    updateOrder { order in order = order.pruned(now: t, alive: alive) }
   }
 }

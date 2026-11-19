@@ -110,7 +110,8 @@ Gereksinimler: macOS 14+, Swift 6 araç zinciri, `jq` ve `curl`.
 
 ## Hook kurulumu
 
-En kolayı uygulamanın içinden: **Ayarlar → Genel → Claude Code bağlantısı → Kancaları kur**.
+En kolayı kurulum komutu ya da uygulamanın içinden: **Ayarlar → Genel → Claude Code bağlantısı →
+Bağla** (kancaları ve durum satırını birlikte kurar).
 Uygulama içindeki köprü betiğini `~/Library/Application Support/ClaudeNotch/` altına kopyalar ve
 kancaları ona bağlar (uygulama taşınsa ya da güncellense de yol değişmez). Kaynak koddan:
 

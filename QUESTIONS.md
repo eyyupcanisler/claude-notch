@@ -200,8 +200,8 @@ groups you use the pin button. A newly pinned chat goes *below* the chats alread
 
 **What:** pins are saved by session id, with the chat's pid and terminal, in the app's
 settings. They follow the chat through `/clear`, `/resume`, the hook session replacing the
-process-scan placeholder, and an app restart. A chat not seen alive for 24 hours is
-forgotten; at most 100 are kept.
+process-scan placeholder, and an app restart. A chat is forgotten a day after it ended (a chat
+still running after a long pause of the app keeps its pin); at most 100 are kept.
 **Limit:** a chat with no tty (like your friend's) keeps its pin across an app restart (same
 session id) but not across `/clear` (nothing ties the new id to the old one).
 
