@@ -49,7 +49,7 @@ undo it) and, at the end, the questions to grill you on. Each ON entry ends with
 Pushed to `origin` (`furkanzt/claude-notch`) only, never `upstream`, no force: see the
 final status at the bottom of this file. Commits were squashed into bites first (one per
 piece of work); the unsquashed history is in the local branch
-`backup/huseyins-requests-pre-squash`.
+`backup/pre-squash-2026-11-20`.
 
 **How to undo the whole push:** `git revert --no-edit 3928505..main` (new commits that undo
 it, safe), or, only if nobody has pulled yet, `git push --force-with-lease origin 3928505:main`.
@@ -64,20 +64,20 @@ I did not stop your running notch (the safety checks blocked it, rightly: twice,
 testing and once for the update). All UI tests ran in a *renamed copy* of the app
 (`com.eyyupcan.claudenotch.uitest`) beside yours. **Your notch still runs the old build.**
 
-**To update it yourself** (the new build is already built and signed with your
-"ClaudeNotch Dev" identity, so macOS keeps your permissions):
+**Tomorrow, in this order** (do it on your own Mac first: it is the installer's first real
+run, before your friend gets the one-liner):
 
-```sh
-cd ~/Desktop/impark/pulled-projects/claude-notch && scripts/install-app.sh
-```
-
-It quits the notch, copies `build.noindex/ClaudeNotch.app` to `~/Applications` and starts it.
-At launch the app refreshes the hook bridge in Application Support by itself. Your hooks
-and your own status line script stay as they are (your script already feeds the notch, so
-Settings shows the status line as connected). `./install.sh --no-hooks --no-statusline`
-does the same, rebuilding first.
-
-**A:**
+1. Update your notch. In the repo folder: `./install.sh --no-hooks --no-statusline`
+   (rebuilds, quits the notch, replaces `~/Applications/ClaudeNotch.app`, starts it; your hooks
+   and your own status line script stay as they are). The plain `scripts/install-app.sh` does
+   the same with the build that is already there (signed with your "ClaudeNotch Dev"
+   identity, so macOS keeps your permissions).
+2. Click one Ghostty row (the jump code changed and only its tmux path ran live), then drag
+   one row and pin one.
+3. If anything is wrong, go back to the old app: `pkill -x ClaudeNotch; rm -rf
+   ~/Applications/ClaudeNotch.app; ditto build.noindex/ClaudeNotch-previous.app
+   ~/Applications/ClaudeNotch.app; open ~/Applications/ClaudeNotch.app` (I copied your
+   installed app there before ending).
 
 **A:**
 
@@ -261,7 +261,7 @@ log show --last 10m --style compact --predicate 'subsystem == "com.eyyupcan.clau
 - A renamed test copy of the app ran beside yours: bundle id
   `com.eyyupcan.claudenotch.uitest`, from the session scratchpad (deleted with it). macOS asked
   it for Calendar access once; I clicked **Don't Allow** for that test id only. To clear the
-  record: `tccutil reset Calendar com.eyyupcan.claudenotch.uitest`.
+  records of that test id: `tccutil reset All com.eyyupcan.claudenotch.uitest`.
 - It also asked to control iTerm2. The safety check stopped me from answering (permissions
   are yours), and the prompt went away when I closed the test copy. If it ever shows up
   again for "ClaudeNotchUITest", choose **Don't Allow**.
@@ -303,12 +303,26 @@ under macOS's bash 3.2; stale button names in docs). 4 were refuted.
 
 **Tests:** 451 unit tests pass (`swift test`). Real iTerm2 and Terminal chats were detected
 correctly. The installer was run end to end in a scratch HOME, piped from curl and from a
-checkout, with install, update and uninstall.
+checkout, with install, update and uninstall; after the push, the published one-liner
+(script from raw.githubusercontent, source from GitHub's tarball) ran end to end the same way.
 
-**Not re-checked on screen:** the last drag fix (rows measured outside their offset). The Mac
-locked itself around 00:50, after which synthetic mouse events land on the lock screen, so I
-stopped. The drag itself was verified before that change, and the change keeps the
-places right whichever way SwiftUI reports them. Please drag a few rows once.
+**Public file:** this file sits at the root of a public repo. It says what ran on your Mac
+tonight (no secrets, names or personal paths). Move or delete it whenever you like.
+
+**Not checked live (please try them, steps in ON13):**
+
+- The last drag fix (rows measured outside their offset): the Mac locked itself around
+  00:50, after which synthetic mouse events land on the lock screen, so I stopped. The drag
+  was verified on screen before that change.
+- The jump code after its last two changes (asking for permission right before a script,
+  skipping the directory guess behind tmux): only the tmux path ran live (21 ms, no prompt).
+  The Ghostty path you click all day did not run with this exact code.
+- The installer's real-mode steps: tests skip quitting the app, making the signing
+  identity, `loginWanted` (Open at login) and starting the app.
+- A status line that had none before: the bridge prints nothing (tested), but nobody looked
+  at a real Claude Code terminal to see that the bottom line looks unchanged.
+- Ask 2 is a slice: detection and the choice of tab script work in all three terminals; the
+  selection inside iTerm2 and Terminal needs the macOS permission, which only you can give.
 
 **Pushed bites** on `furkanzt/claude-notch` `main` (oldest first, after `3928505`):
 
