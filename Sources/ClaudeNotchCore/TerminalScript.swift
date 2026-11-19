@@ -122,6 +122,17 @@ public enum TerminalKind: String, Sendable {
     }
   }
 
+  /// The same from the app's bundle id (a chat whose TERM_PROGRAM is missing or another, see
+  /// `TerminalHost`).
+  public init(bundleID: String?) {
+    switch bundleID {
+    case TerminalHost.ghostty: self = .ghostty
+    case TerminalHost.appleTerminal: self = .appleTerminal
+    case TerminalHost.iTerm: self = .iTerm
+    default: self = .other
+    }
+  }
+
   /// Display name for hints.
   public var appName: String {
     switch self {

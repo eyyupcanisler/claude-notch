@@ -79,10 +79,54 @@ final class BridgeIdentityTests: XCTestCase {
     }
   }
 
+  /// Hooks run through the user's shell: fish (and the other shells) count as wrappers too.
+  func testAnyShellIsAWrapper() throws {
+    for shell in ["/opt/homebrew/bin/fish", "/bin/ksh", "/bin/tcsh"] {
+      let h = try headers(table: [
+        "\(getpid())|?? 5000 \(shell)",
+        "5000|ttys011 4000 /Users/x/.local/bin/claude",
+      ])
+      XCTAssertTrue(h.contains("X-Claude-TTY: /dev/ttys011"), "\(shell): \(h)")
+    }
+  }
+
+  /// Claude Code exports its pid as CLAUDE_PID: that ancestor is the chat whatever its name.
+  func testClaudePIDNamesTheChatOnTheWayUp() throws {
+    let h = try headers(
+      table: [
+        "\(getpid())|?? 5000 /bin/sh",
+        "5000|ttys012 4000 /Users/x/.bun/bin/bun",
+      ], env: ["CLAUDE_PID": "5000"])
+    XCTAssertTrue(h.contains("X-Claude-TTY: /dev/ttys012"), "\(h)")
+    XCTAssertTrue(h.contains("X-Claude-PID: 5000"), "\(h)")
+  }
+
+  /// A CLAUDE_PID that is not on the way up (inherited from an outer session) names nothing.
+  func testClaudePIDOffThePathIsIgnored() throws {
+    let h = try headers(
+      table: [
+        "\(getpid())|?? 5000 /bin/sh",
+        "5000|ttys012 4000 /Users/x/.bun/bin/bun",
+        "7000|ttys001 1 /Users/x/.local/bin/claude",
+      ], env: ["CLAUDE_PID": "7000"])
+    XCTAssertFalse(h.contains { $0.hasPrefix("X-Claude-TTY") }, "\(h)")
+  }
+
+  /// The host app's bundle id goes out as X-Term-Bundle; anything else is not sent.
+  func testHostBundleHeader() throws {
+    let table = ["\(getpid())|ttys003 4000 /Users/x/.local/bin/claude"]
+    let h = try headers(table: table, env: ["__CFBundleIdentifier": "com.googlecode.iterm2"])
+    XCTAssertTrue(h.contains("X-Term-Bundle: com.googlecode.iterm2"), "\(h)")
+    for bad in ["com.x\"y", "com x", "", ".com.x", "a..b"] {
+      let h = try headers(table: table, env: ["__CFBundleIdentifier": bad])
+      XCTAssertFalse(h.contains { $0.hasPrefix("X-Term-Bundle") }, "\(bad): \(h)")
+    }
+  }
+
   // MARK: - Helpers
 
   /// Runs the bridge with this process as the hook's parent; returns the curl header values.
-  private func headers(table: [String]) throws -> [String] {
+  private func headers(table: [String], env extra: [String: String] = [:]) throws -> [String] {
     let root = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let psTable = dir.appendingPathComponent("ps.txt")
@@ -98,7 +142,7 @@ final class BridgeIdentityTests: XCTestCase {
       "CLAUDE_NOTCH_SOCK": dir.appendingPathComponent("s.sock").path,
       "FAKE_PS": psTable.path,
       "CURL_LOG": log.path,
-    ]
+    ].merging(extra) { _, new in new }
     let input = Pipe()
     p.standardInput = input
     p.standardOutput = FileHandle.nullDevice

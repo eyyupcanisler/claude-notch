@@ -16,6 +16,9 @@ public struct ProcessRecord: Sendable, Equatable {
   public var cwd: String?
   /// TERM_PROGRAM from the process environment (validated), if readable.
   public var termProgram: String?
+  /// `__CFBundleIdentifier` from the process environment: the app it was started in
+  /// (validated, see `TerminalHost`).
+  public var termBundle: String?
   /// When the process started (`pbi_start_tvsec` / `pbi_start_tvusec`).
   public var startedAt: Date?
   /// Stopped (Ctrl-Z, or the old process `/restart` leaves behind): it runs nothing.
@@ -33,7 +36,7 @@ public struct ProcessRecord: Sendable, Equatable {
     pid: Int32, ppid: Int32, tty: String? = nil, path: String? = nil, args: [String] = [],
     cwd: String? = nil, termProgram: String? = nil, startedAt: Date? = nil,
     stopped: Bool = false, foreground: Bool = true, surfaceID: String? = nil,
-    backgroundSession: Bool = false
+    backgroundSession: Bool = false, termBundle: String? = nil
   ) {
     self.pid = pid
     self.ppid = ppid
@@ -42,6 +45,7 @@ public struct ProcessRecord: Sendable, Equatable {
     self.args = args
     self.cwd = cwd
     self.termProgram = termProgram
+    self.termBundle = termBundle
     self.startedAt = startedAt
     self.stopped = stopped
     self.foreground = foreground
@@ -186,6 +190,7 @@ enum SystemProcesses {
         let (args, env) = arguments(pid)
         r.args = args
         r.termProgram = HookContext.validTermProgram(env["TERM_PROGRAM"])
+        r.termBundle = TerminalHost.validBundleID(env["__CFBundleIdentifier"])
         r.surfaceID = ProcessRecord.validSurfaceID(env["GHOSTTY_SURFACE_ID"])
         r.backgroundSession = env["CLAUDE_CODE_SESSION_KIND"] == "bg"
       }
@@ -329,7 +334,8 @@ extension SessionStore {
         continue
       }
       var placeholder = Session(
-        id: id, project: project, cwd: cwd, termProgram: r.termProgram, tty: tty, pid: r.pid,
+        id: id, project: project, cwd: cwd, termProgram: r.termProgram,
+        termBundle: r.termBundle, tty: tty, pid: r.pid,
         status: .idle, isDiscovered: true, startedAt: Self.discoveredStart(r, scan: t),
         lastUpdate: t)
       link(&placeholder)

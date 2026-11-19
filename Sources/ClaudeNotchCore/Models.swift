@@ -93,6 +93,9 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var project: String
   public var cwd: String
   public var termProgram: String?
+  /// Bundle id of the app the chat runs in, from its inherited `__CFBundleIdentifier`
+  /// (validated, see `TerminalHost`); nil when the hook or the process did not carry one.
+  public var termBundle: String?
   /// Controlling terminal of the claude process, e.g. "/dev/ttys012" (validated).
   public var tty: String?
   /// pid of the claude process that owns `tty`.
@@ -139,7 +142,8 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var waitsForPrompt = false
 
   public init(
-    id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,
+    id: String, project: String, cwd: String, termProgram: String?, termBundle: String? = nil,
+    tty: String? = nil,
     pid: Int32? = nil, branch: String? = nil, status: SessionStatus, isDiscovered: Bool = false,
     tabTitle: String? = nil, unseen: Bool = false,
     agents: [String: AgentActivity] = [:], startedAt: Date, lastUpdate: Date,
@@ -150,6 +154,7 @@ public struct Session: Sendable, Identifiable, Equatable {
     self.project = project
     self.cwd = cwd
     self.termProgram = termProgram
+    self.termBundle = termBundle
     self.tty = tty
     self.pid = pid
     self.branch = branch

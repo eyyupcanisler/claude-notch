@@ -10,6 +10,15 @@ MODE="${1:-event}"
 SOCK="${CLAUDE_NOTCH_SOCK:-$HOME/Library/Application Support/ClaudeNotch/notch.sock}"
 TERM_NAME="${TERM_PROGRAM:-}"
 if [ -n "${CURSOR_TRACE_ID:-}" ]; then TERM_NAME="cursor"; fi
+# The app the chat runs in, whatever its TERM_PROGRAM: macOS gives every app it launches its
+# bundle id in __CFBundleIdentifier, and everything started inside inherits it (iTerm2's shells
+# carry com.googlecode.iterm2 even behind tmux, which sets TERM_PROGRAM=tmux; Claude's desktop
+# app and editors carry theirs). Only a bundle-id-shaped value goes out; the app checks it again.
+TERM_BUNDLE="${__CFBundleIdentifier:-}"
+case "$TERM_BUNDLE" in
+  *[!A-Za-z0-9.-]* | "" | .* | *..*) TERM_BUNDLE="" ;;
+esac
+[ "${#TERM_BUNDLE}" -le 128 ] || TERM_BUNDLE=""
 PERMISSION_MAX_TIME="${CLAUDE_NOTCH_PERMISSION_MAX_TIME:-590}"
 
 if [ ! -S "$SOCK" ]; then
@@ -28,10 +37,16 @@ fi
 # claude started without a terminal (e.g. `claude -p` from another session's Bash tool) sends
 # no identity: walking further would attach it to the OUTER session's tty and pid.
 # The tty + pid let the app focus the exact terminal tab and notice when the session dies.
+# Claude Code exports its own pid to hooks as CLAUDE_PID: the ancestor with that pid is the
+# chat whatever its process is named (bun, a renamed binary). It is only trusted on the way up,
+# never on its own: a value inherited from an outer session names that session, not this one.
+# Every shell counts as a wrapper (hooks run through the user's shell, fish included).
+OWN_PID="${CLAUDE_PID:-}"
+case "$OWN_PID" in "" | *[!0-9]*) OWN_PID="" ;; esac
 CLAUDE_TTY=""
 CLAUDE_PID=""
 p="$PPID"
-for _ in 1 2 3 4 5; do
+for _ in 1 2 3 4 5 6 7 8; do
   case "$p" in "" | *[!0-9]*) break ;; esac
   [ "$p" -gt 1 ] || break
   line="$(ps -o tty=,ppid=,comm= -p "$p" 2>/dev/null)" || break
@@ -42,8 +57,9 @@ for _ in 1 2 3 4 5; do
   # Claude Code also runs as its versioned build, named only by its version
   # (~/.local/share/claude/versions/2.1.328): a chat /restart brings back runs that way.
   case "$comm" in */claude/versions/*) name="claude" ;; esac
+  if [ -n "$OWN_PID" ] && [ "$p" = "$OWN_PID" ]; then name="claude"; fi
   case "$name" in
-    sh | bash | zsh | dash)
+    sh | bash | zsh | dash | fish | ksh | mksh | tcsh | csh)
       p="$pp"
       ;;
     claude | node)
@@ -103,6 +119,9 @@ if [ "$MODE" != "permission" ] && command -v jq >/dev/null 2>&1; then
 fi
 
 HEADERS=(-H 'Expect:' -H 'Content-Type: application/json' -H "X-Term-Program: $TERM_NAME")
+if [ -n "$TERM_BUNDLE" ]; then
+  HEADERS+=(-H "X-Term-Bundle: $TERM_BUNDLE")
+fi
 if [ -n "$CLAUDE_TTY" ]; then
   HEADERS+=(-H "X-Claude-TTY: $CLAUDE_TTY" -H "X-Claude-PID: $CLAUDE_PID")
 fi

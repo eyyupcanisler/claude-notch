@@ -345,7 +345,7 @@ final class SessionMonitor {
   /// the user is in. (Clearing alone needed it only while a chat was unseen or waiting; the
   /// mark needs it for every Ghostty chat.)
   private var watchesFocus: Bool {
-    store.sessions.values.contains { $0.terminal != nil && $0.termProgram == "ghostty" }
+    store.sessions.values.contains { $0.terminal != nil && $0.terminalKind == .ghostty }
   }
 
   /// Sessions that focusing their terminal would clear. Marking seen (which also hands a held
@@ -353,7 +353,7 @@ final class SessionMonitor {
   /// the wider `watchesFocus` only decides whether the focused terminal is looked up.
   private var seenCandidates: [Session] {
     store.sessions.values.filter {
-      $0.terminal != nil && $0.termProgram == "ghostty"
+      $0.terminal != nil && $0.terminalKind == .ghostty
         && ($0.unseen || $0.status.kind == "waiting")
     }
   }

@@ -10,19 +10,7 @@ import os
 let clickLog = Logger(subsystem: "com.eyyupcan.claudenotch", category: "click")
 
 enum Terminals {
-  static let bundleIDs: [String: String] = [
-    "Apple_Terminal": "com.apple.Terminal",
-    "iTerm.app": "com.googlecode.iterm2",
-    "vscode": "com.microsoft.VSCode",
-    "ghostty": "com.mitchellh.ghostty",
-    "WarpTerminal": "dev.warp.Warp-Stable",
-    "cursor": "com.todesktop.230313mzl4w4u92",
-    "WezTerm": "com.github.wez.wezterm",
-    "kitty": "net.kovidgoyal.kitty",
-    "Hyper": "co.zeit.hyper"
-  ]
-
-  static let ghosttyBundleID = "com.mitchellh.ghostty"
+  static let ghosttyBundleID = TerminalHost.ghostty
 
   enum Outcome {
     case activated
@@ -34,8 +22,8 @@ enum Terminals {
   /// An accessory app that is not active cannot reliably `activate()` another app since
   /// macOS 14 (cooperative activation); LaunchServices can, also for already running apps.
   @MainActor
-  static func activate(termProgram: String?) async -> Outcome {
-    guard let termProgram, let id = bundleIDs[termProgram] else { return .unknownTerminal }
+  static func activate(bundleID: String?) async -> Outcome {
+    guard let id = bundleID else { return .unknownTerminal }
     guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
       return .failed
     }
@@ -47,6 +35,50 @@ enum Terminals {
     } catch {
       return .failed
     }
+  }
+
+  /// The app a chat runs in: what its environment said (`Session.hostBundleID`), else the
+  /// first app found walking up from its claude process (a terminal's shells descend from the
+  /// terminal; iTerm2's and tmux's do not, but their chats carry the bundle id).
+  static func hostBundleID(of session: Session) -> String? {
+    if let id = session.hostBundleID { return id }
+    guard let pid = session.pid else { return nil }
+    return appAncestor(of: pid)
+  }
+
+  /// Walks up the parent chain (sysctl: root-owned `login` in between is readable too) and
+  /// returns the bundle id of the first ancestor that is a running app.
+  static func appAncestor(of pid: pid_t) -> String? {
+    var p = pid
+    for _ in 0..<16 {
+      guard p > 1 else { return nil }
+      if let id = NSRunningApplication(processIdentifier: p)?.bundleIdentifier { return id }
+      guard let parent = parentPID(of: p), parent != p else { return nil }
+      p = parent
+    }
+    return nil
+  }
+
+  private static func parentPID(of pid: pid_t) -> pid_t? {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+    return info.kp_eproc.e_ppid
+  }
+
+  /// The app's name for hints ("iTerm2", "Visual Studio Code"), from the app itself.
+  static func appName(bundleID: String) -> String? {
+    if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+      let name = app.localizedName
+    {
+      return name
+    }
+    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+      return nil
+    }
+    return FileManager.default.displayName(atPath: url.path)
+      .replacingOccurrences(of: ".app", with: "")
   }
 
   static func isRunning(_ bundleID: String) -> Bool {
@@ -62,12 +94,14 @@ enum Terminals {
   static func focus(_ session: Session, probe: ProcessProbe) async -> FocusOutcome {
     let sid = String(session.id.prefix(8))
     let started = Date()
-    guard let term = session.termProgram, let bundleID = bundleIDs[term] else {
+    guard let bundleID = hostBundleID(of: session) else {
       clickLog.notice(
-        "jump \(sid, privacy: .public): unknown terminal \(session.termProgram ?? "nil", privacy: .public)")
+        "jump \(sid, privacy: .public): unknown terminal \(session.termProgram ?? "nil", privacy: .public), no bundle, pid \(session.pid.map(String.init) ?? "nil", privacy: .public)")
       return .unknownTerminal
     }
-    let kind = TerminalKind(termProgram: term)
+    let term = session.termProgram ?? bundleID
+    var kind = session.terminalKind
+    if kind == .other { kind = TerminalKind(bundleID: bundleID) }
     var result: FocusOutcome?
     var triedTab = false
     var code: Int?
@@ -76,6 +110,9 @@ enum Terminals {
       if let tty = session.tty, let pid = session.pid {
         if !probe.owns(pid: pid, tty: tty) {
           steps.append("tty: pid \(pid) no longer owns \(tty)")
+        } else if session.behindTmux {
+          // A tmux pane's tty: no terminal tab has it. The host app comes forward.
+          steps.append("tmux pane \(tty)")
         } else if let tab = session.terminal, let script = kind.focusScript(tty: tab) {
           // The tab's terminal: for a chat Claude Code's daemon runs, not its process's.
           triedTab = true
@@ -112,7 +149,7 @@ enum Terminals {
       steps.append("\(kind.appName) not running")
     }
     // The script's own `activate` may be ignored for an accessory app: LaunchServices too.
-    let app = await activate(termProgram: term)
+    let app = await activate(bundleID: bundleID)
     let outcome: FocusOutcome
     if let result {
       outcome = result

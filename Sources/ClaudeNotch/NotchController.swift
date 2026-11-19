@@ -1529,11 +1529,11 @@ final class NotchController {
     guard
       FocusIslands.shows(kind: kind, focusActive: settings.focusOn)
     else { return false }
-    let term = store.sessions[sessionID]?.termProgram
+    let session = store.sessions[sessionID]
     return TerminalIslands.shows(
       kind: kind, hideWhileTerminalInFront: settings.hideIslandsWhileTerminalInFront,
-      questionMode: settings.questionMode, termProgram: term,
-      terminalBundleID: term.flatMap { Terminals.bundleIDs[$0] }, frontmostBundleID: front)
+      questionMode: settings.questionMode, termProgram: session?.termProgram,
+      terminalBundleID: session?.hostBundleID, frontmostBundleID: front)
   }
 
   /// Darwin notification token of `observeFocus` (kept for the app's lifetime).

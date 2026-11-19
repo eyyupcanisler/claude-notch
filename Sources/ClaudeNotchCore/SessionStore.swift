@@ -567,11 +567,12 @@ public final class SessionStore {
   private func newSession(_ e: HookEvent, context: HookContext, at t: Date) -> Session {
     Session(
       id: e.sessionID, project: e.projectName, cwd: e.cwd, termProgram: context.termProgram,
-      status: .idle, startedAt: t, lastUpdate: t)
+      termBundle: context.termBundle, status: .idle, startedAt: t, lastUpdate: t)
   }
 
   private func apply(_ context: HookContext, to session: inout Session) {
     if let term = context.termProgram, !term.isEmpty { session.termProgram = term }
+    if let bundle = context.termBundle { session.termBundle = bundle }
     if let tty = context.tty, let pid = context.pid {
       session.tty = tty
       session.pid = pid
@@ -598,6 +599,7 @@ public final class SessionStore {
     for placeholder in discoveredMatches(context) where placeholder.id != session.id {
       if isNew { session.startedAt = min(session.startedAt, placeholder.startedAt) }
       if session.termProgram == nil { session.termProgram = placeholder.termProgram }
+      if session.termBundle == nil { session.termBundle = placeholder.termBundle }
       // The user hid the placeholder: the hook session that replaces it stays hidden (the
       // event that adopted it may still reveal it, see `reveals`).
       if isNew, placeholder.hidden { session.hidden = true }
@@ -965,7 +967,8 @@ public final class SessionStore {
       if case .question(_, let o) = s.status { options = .array(o.map { .string($0) }) }
       return .object([
         "session_id": .string(s.id), "project": .string(s.project), "cwd": .string(s.cwd),
-        "term": opt(s.termProgram), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
+        "term": opt(s.termProgram), "term_bundle": opt(s.termBundle),
+        "host": opt(s.hostBundleID), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
         "discovered": .bool(s.isDiscovered), "tab_title": opt(s.tabTitle),
         "hidden": .bool(s.hidden),

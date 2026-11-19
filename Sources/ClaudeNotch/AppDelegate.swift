@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       return .object(["error": .string(loc("no such session"))])
     }
     if dryRun {
-      let kind = TerminalKind(termProgram: s.termProgram)
+      let kind = s.terminalKind
       return .object([
         "tty": s.terminal.map { .string($0) } ?? .null,
         "alive": .bool(store.isAlive(s)),

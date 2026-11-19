@@ -122,14 +122,15 @@ public enum AskingPeek {
     "ghostty", "Apple_Terminal", "iTerm.app", "WarpTerminal", "WezTerm", "kitty", "Hyper"
   ]
 
-  /// The session's terminal is a terminal-only app (`terminalApps`) with a known bundle id,
-  /// and that app is the front app.
+  /// The session's terminal is a terminal-only app (`terminalApps` by TERM_PROGRAM, or
+  /// `TerminalHost.terminalOnly` by bundle id, for a chat that has no TERM_PROGRAM or is behind
+  /// tmux) with a known bundle id, and that app is the front app.
   public static func terminalInFront(
     termProgram: String?, terminalBundleID: String?, frontmostBundleID: String?
   ) -> Bool {
-    guard let termProgram, terminalApps.contains(termProgram), let terminal = terminalBundleID
-    else { return false }
-    return terminal == frontmostBundleID
+    guard let terminal = terminalBundleID, terminal == frontmostBundleID else { return false }
+    if let termProgram, terminalApps.contains(termProgram) { return true }
+    return TerminalHost.isTerminalOnly(terminal)
   }
 }
 
