@@ -1566,7 +1566,7 @@ final class NotchController {
   private func ringBell(for sessionID: String, notificationType: String?) {
     guard settings.terminalBell, !NotchSettings.isDemo,
       TerminalBell.ringsNow(notificationType: notificationType, silentMode: settings.silentMode),
-      let session = store.sessions[sessionID], let tty = session.tty, store.isAlive(session)
+      let session = store.sessions[sessionID], let tty = session.terminal, store.isAlive(session)
     else { return }
     TerminalBell.ring(tty: tty)
   }
@@ -2056,6 +2056,7 @@ final class NotchController {
       "peek_duration": .string(settings.peekDuration.rawValue),
       "peek_until": wings.nextChange.map { .double($0.timeIntervalSinceNow) } ?? .null,
       "poll_timer": .bool(pollTimer != nil),
+      "tab_order": .object(store.tabOrder.mapValues { .int($0) }),
       "status_line": .array(store.statusLine.map {
         .object([
           "session": .string($0.sessionID), "state": .string($0.state.rawValue),

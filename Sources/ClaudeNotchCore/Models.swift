@@ -97,6 +97,11 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var tty: String?
   /// pid of the claude process that owns `tty`.
   public var pid: Int32?
+  /// The terminal of the tab showing the chat, when it is not `tty`: a chat Claude Code's
+  /// background daemon runs (after `/restart` in Claude Code 2.1.328) has its process on a
+  /// hidden terminal, and its tab shows it through a client. The process scan links the two
+  /// by Ghostty's tab id (`ClaudeProcess.tabTTYs`).
+  public var tabTTY: String?
   /// Git branch at SessionStart / last prompt (nil: unknown, detached or not a repo).
   public var branch: String?
   /// Found by the process scan (no hook event yet): an idle placeholder until hooks arrive.
@@ -162,9 +167,14 @@ public struct Session: Sendable, Identifiable, Equatable {
     self.rhythm = rhythm
   }
 
-  /// "s012" for "/dev/ttys012".
+  /// The terminal of the tab the chat is in: `tabTTY`, else `tty`. Everything about the tab
+  /// (tab order and title, focusing it, "you are here", seen, the bell) uses this; whether the
+  /// process still lives is checked against `tty`.
+  public var terminal: String? { tabTTY ?? tty }
+
+  /// "s012" for "/dev/ttys012" (the tab's terminal).
   public var ttySuffix: String? {
-    guard let tty, tty.hasPrefix("/dev/tty") else { return nil }
+    guard let tty = terminal, tty.hasPrefix("/dev/tty") else { return nil }
     return String(tty.dropFirst("/dev/tty".count))
   }
 

@@ -23,7 +23,8 @@ fi
 
 # Session identity. Claude Code runs hooks detached (our tty is "??"); the hook's parent is the
 # claude process, possibly behind `sh -c` wrappers. Walk up through shell wrappers only and take
-# the tty + pid of the first non-shell ancestor if that is claude (or node) and has a tty. A
+# the tty + pid of the first non-shell ancestor if that is claude (or node, or Claude Code's
+# versioned build) and has a tty. A
 # claude started without a terminal (e.g. `claude -p` from another session's Bash tool) sends
 # no identity: walking further would attach it to the OUTER session's tty and pid.
 # The tty + pid let the app focus the exact terminal tab and notice when the session dies.
@@ -38,6 +39,9 @@ for _ in 1 2 3 4 5; do
   [ -n "$t" ] || break
   name="${comm##*/}"
   name="${name#-}"
+  # Claude Code also runs as its versioned build, named only by its version
+  # (~/.local/share/claude/versions/2.1.328): a chat /restart brings back runs that way.
+  case "$comm" in */claude/versions/*) name="claude" ;; esac
   case "$name" in
     sh | bash | zsh | dash)
       p="$pp"

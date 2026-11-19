@@ -18,10 +18,22 @@ public struct ProcessRecord: Sendable, Equatable {
   public var termProgram: String?
   /// When the process started (`pbi_start_tvsec` / `pbi_start_tvusec`).
   public var startedAt: Date?
+  /// Stopped (Ctrl-Z, or the old process `/restart` leaves behind): it runs nothing.
+  public var stopped: Bool
+  /// In its terminal's foreground process group (what the tab is showing).
+  public var foreground: Bool
+  /// GHOSTTY_SURFACE_ID from the environment: the Ghostty tab or split it was started in
+  /// (validated). Inherited by everything started there, even by a daemon's processes.
+  public var surfaceID: String?
+  /// CLAUDE_CODE_SESSION_KIND is "bg": a chat Claude Code's background daemon runs, on a
+  /// hidden terminal of its own.
+  public var backgroundSession: Bool
 
   public init(
     pid: Int32, ppid: Int32, tty: String? = nil, path: String? = nil, args: [String] = [],
-    cwd: String? = nil, termProgram: String? = nil, startedAt: Date? = nil
+    cwd: String? = nil, termProgram: String? = nil, startedAt: Date? = nil,
+    stopped: Bool = false, foreground: Bool = true, surfaceID: String? = nil,
+    backgroundSession: Bool = false
   ) {
     self.pid = pid
     self.ppid = ppid
@@ -31,6 +43,18 @@ public struct ProcessRecord: Sendable, Equatable {
     self.cwd = cwd
     self.termProgram = termProgram
     self.startedAt = startedAt
+    self.stopped = stopped
+    self.foreground = foreground
+    self.surfaceID = surfaceID
+    self.backgroundSession = backgroundSession
+  }
+
+  /// A Ghostty surface id as it appears in GHOSTTY_SURFACE_ID ("0x" and 1-16 hex digits).
+  public static func validSurfaceID(_ raw: String?) -> String? {
+    guard let raw, raw.hasPrefix("0x") else { return nil }
+    let digits = raw.dropFirst(2)
+    guard (1...16).contains(digits.count), digits.allSatisfy(\.isHexDigit) else { return nil }
+    return raw.lowercased()
   }
 }
 
@@ -61,14 +85,23 @@ public enum ClaudeProcess {
     return false
   }
 
-  /// Interactive top-level Claude Code processes: Claude, on a terminal, and its parent is not
-  /// a Claude process. Shell wrappers in between are looked through (`zsh -c claude` run by
-  /// another session's tool still has that session as its real parent), like the hook bridge
-  /// does when it looks for the claude process.
+  /// A spare Claude Code process the background daemon starts ahead of time (`claude bg-spare`):
+  /// not a chat.
+  public static func isSpare(_ r: ProcessRecord) -> Bool {
+    r.args.contains("--bg-spare") || r.args.dropFirst().first == "bg-spare"
+  }
+
+  /// Interactive top-level Claude Code processes, at most one per tab: Claude, on a terminal,
+  /// running (not stopped), not a daemon spare, and its parent is not a Claude process. Shell
+  /// wrappers in between are looked through (`zsh -c claude` run by another session's tool
+  /// still has that session as its real parent), like the hook bridge does when it looks for
+  /// the claude process. Several left in one tab (its terminal, or a hidden terminal linked to
+  /// it by `tabTTYs`): the daemon's chat (the tab only shows it through a client), else the one
+  /// in the foreground, else the newest.
   public static func sessions(in records: [ProcessRecord]) -> [ProcessRecord] {
     let byPID = Dictionary(records.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
-    return records.filter { r in
-      guard r.tty != nil, isClaude(r) else { return false }
+    let candidates = records.filter { r in
+      guard r.tty != nil, isClaude(r), !r.stopped, !isSpare(r) else { return false }
       var p = r.ppid
       for _ in 0..<8 {
         guard p > 1, let parent = byPID[p] else { return true }
@@ -77,7 +110,39 @@ public enum ClaudeProcess {
         p = parent.ppid
       }
       return true
-    }.sorted { $0.pid < $1.pid }
+    }
+    let tabs = tabTTYs(in: records)
+    let byTab = Dictionary(grouping: candidates) { r in r.tty.map { tabs[$0] ?? $0 } ?? "" }
+    let rank = { (r: ProcessRecord) in
+      (r.backgroundSession ? 1 : 0, r.foreground ? 1 : 0, r.startedAt ?? .distantPast, r.pid)
+    }
+    return byTab.values.compactMap { group in group.max { rank($0) < rank($1) } }
+      .sorted { $0.pid < $1.pid }
+  }
+
+  /// Which tab each hidden terminal belongs to (hidden terminal -> the tab's terminal). A chat
+  /// Claude Code's background daemon runs (`backgroundSession`) sits on a terminal no tab
+  /// shows; the tab is the one terminal whose processes carry the same Ghostty tab id. No link
+  /// when that is ambiguous or unknown. Terminals that host a daemon chat or a spare never count
+  /// as the tab (that chat's own tools carry the id too), and a spare is never linked: it
+  /// carries the id of whichever tab started the daemon, not of the tab that later uses it.
+  public static func tabTTYs(in records: [ProcessRecord]) -> [String: String] {
+    let daemonChats = records.filter { $0.backgroundSession && isClaude($0) && !isSpare($0) }
+    let hidden = Set(
+      records.filter { ($0.backgroundSession && isClaude($0)) || isSpare($0) }.compactMap(\.tty))
+    var bySurface: [String: Set<String>] = [:]
+    for r in records {
+      guard let tty = r.tty, !hidden.contains(tty), let id = r.surfaceID else { continue }
+      bySurface[id, default: []].insert(tty)
+    }
+    var out: [String: String] = [:]
+    for r in daemonChats {
+      guard let tty = r.tty, let id = r.surfaceID, let tabs = bySurface[id], tabs.count == 1,
+        let tab = tabs.first
+      else { continue }
+      out[tty] = tab
+    }
+    return out
   }
 
   static func isShell(_ r: ProcessRecord) -> Bool {
@@ -106,6 +171,8 @@ enum SystemProcesses {
       let size = Int32(MemoryLayout<proc_bsdinfo>.size)
       guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { continue }
       var r = ProcessRecord(pid: pid, ppid: Int32(bitPattern: info.pbi_ppid))
+      r.stopped = info.pbi_status == UInt32(SSTOP)
+      r.foreground = info.pbi_pgid == info.e_tpgid
       if info.pbi_start_tvsec > 0 {
         r.startedAt = Date(
           timeIntervalSince1970: Double(info.pbi_start_tvsec)
@@ -119,6 +186,8 @@ enum SystemProcesses {
         let (args, env) = arguments(pid)
         r.args = args
         r.termProgram = HookContext.validTermProgram(env["TERM_PROGRAM"])
+        r.surfaceID = ProcessRecord.validSurfaceID(env["GHOSTTY_SURFACE_ID"])
+        r.backgroundSession = env["CLAUDE_CODE_SESSION_KIND"] == "bg"
       }
       out.append(r)
     }
@@ -158,28 +227,44 @@ enum SystemProcesses {
     }
     var buf = [UInt8](repeating: 0, count: size)
     guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0, size > 4 else { return ([], [:]) }
-    let data = buf.prefix(size)
+    return ProcArgs.parse(Array(buf.prefix(size)))
+  }
+}
+
+/// The KERN_PROCARGS2 layout: argc (Int32), the exec path, NUL padding, argc NUL-terminated
+/// argv strings (empty ones included), then NUL-terminated environment strings up to an empty
+/// one or the end. Pure, so it is tested without a process.
+public enum ProcArgs {
+  public static func parse(_ data: [UInt8]) -> ([String], [String: String]) {
+    let size = data.count
+    guard size > 4 else { return ([], [:]) }
     let argc = data.prefix(4).withUnsafeBytes { Int($0.loadUnaligned(as: Int32.self)) }
     guard argc > 0, argc < 4096 else { return ([], [:]) }
     var i = 4
     // Exec path, then NUL padding.
     while i < size, data[i] != 0 { i += 1 }
     while i < size, data[i] == 0 { i += 1 }
-    var strings: [String] = []
+    var args: [String] = []
     var start = i
-    while i < size {
+    while i < size, args.count < argc {
       if data[i] == 0 {
-        if i == start { break }
-        strings.append(String(decoding: data[start..<i], as: UTF8.self))
+        args.append(String(decoding: data[start..<i], as: UTF8.self))
         start = i + 1
       }
       i += 1
     }
-    let args = Array(strings.prefix(argc))
     var env: [String: String] = [:]
-    for item in strings.dropFirst(argc) {
-      guard let eq = item.firstIndex(of: "=") else { continue }
-      env[String(item[..<eq])] = String(item[item.index(after: eq)...])
+    start = i
+    while i < size {
+      if data[i] == 0 {
+        if i == start { break }
+        let item = String(decoding: data[start..<i], as: UTF8.self)
+        if let eq = item.firstIndex(of: "=") {
+          env[String(item[..<eq])] = String(item[item.index(after: eq)...])
+        }
+        start = i + 1
+      }
+      i += 1
     }
     return (args, env)
   }
@@ -196,20 +281,38 @@ extension SessionStore {
   /// usually exiting, or about to start a new session (/clear).
   public static let endedGrace: TimeInterval = 10
 
-  /// Applies one process scan: every top-level Claude Code process on a terminal that no hook
-  /// session owns (same tty or pid) gets an idle "discovered" session; placeholders whose
-  /// process is gone, or that a hook session now owns, are dropped.
+  /// Applies one process scan: every top-level Claude Code process in a tab that no hook
+  /// session owns (same tab, tty or pid) gets an idle "discovered" session; placeholders whose
+  /// process is gone, or that a hook session now owns, are dropped. A chat on a hidden terminal
+  /// (Claude Code's background daemon) is linked to its tab (`ClaudeProcess.tabTTYs`). A hook
+  /// chat whose process is stopped while another Claude runs in its tab leaves: the tab shows
+  /// the other one (Ctrl-Z, or the old process `/restart` leaves behind).
   public func applyDiscovery(_ records: [ProcessRecord]) {
     let t = now()
     let found = ClaudeProcess.sessions(in: records)
+    let tabs = ClaudeProcess.tabTTYs(in: records)
+    if tabTTYs != tabs { tabTTYs = tabs }
+    for (id, s) in sessions {
+      var linked = s
+      link(&linked)
+      if linked != s { sessions[id] = linked }
+    }
     endedPIDs = endedPIDs.filter { t.timeIntervalSince($0.value) < Self.endedGrace }
+    let stopped = Set(records.filter(\.stopped).map(\.pid))
+    let runningTabs = Set(found.compactMap { r in r.tty.map { tabs[$0] ?? $0 } })
+    for s in sessions.values where !s.isDiscovered {
+      guard let pid = s.pid, stopped.contains(pid), let tab = s.terminal,
+        runningTabs.contains(tab), !found.contains(where: { $0.pid == pid })
+      else { continue }
+      removeSession(s.id)
+    }
     let hook = sessions.values.filter { !$0.isDiscovered }
-    let ownedTTYs = Set(hook.compactMap(\.tty))
+    let ownedTTYs = Set(hook.compactMap(\.tty)).union(hook.compactMap(\.terminal))
     let ownedPIDs = Set(hook.compactMap(\.pid))
     var wanted: Set<String> = []
     for r in found {
-      guard let tty = r.tty, !ownedTTYs.contains(tty), !ownedPIDs.contains(r.pid),
-        endedPIDs[r.pid] == nil
+      guard let tty = r.tty, !ownedTTYs.contains(tty), !ownedTTYs.contains(tabs[tty] ?? tty),
+        !ownedPIDs.contains(r.pid), endedPIDs[r.pid] == nil
       else { continue }
       let id = Self.discoveredPrefix + String(r.pid)
       wanted.insert(id)
@@ -220,14 +323,17 @@ extension SessionStore {
           s.cwd = cwd
           s.project = project
           s.tty = tty
+          link(&s)
           sessions[id] = s
         }
         continue
       }
-      sessions[id] = Session(
+      var placeholder = Session(
         id: id, project: project, cwd: cwd, termProgram: r.termProgram, tty: tty, pid: r.pid,
         status: .idle, isDiscovered: true, startedAt: Self.discoveredStart(r, scan: t),
         lastUpdate: t)
+      link(&placeholder)
+      sessions[id] = placeholder
       watchDiscoveredExit(sessionID: id, pid: r.pid)
     }
     for (id, s) in sessions where s.isDiscovered && !wanted.contains(id) {
@@ -241,6 +347,15 @@ extension SessionStore {
   static func discoveredStart(_ r: ProcessRecord, scan t: Date) -> Date {
     if let start = r.startedAt, start <= t { return start }
     return t.addingTimeInterval(Double(r.pid) / 1_000_000)
+  }
+
+  /// Links a session on a hidden terminal to its tab (`tabTTYs`), or unlinks it. A linked chat
+  /// is a Ghostty one: the tab id that linked it is Ghostty's (the daemon's process may lack
+  /// TERM_PROGRAM).
+  func link(_ s: inout Session) {
+    let tab = s.tty.flatMap { tabTTYs[$0] }
+    if s.tabTTY != tab { s.tabTTY = tab }
+    if tab != nil, s.termProgram == nil { s.termProgram = "ghostty" }
   }
 
   /// Placeholders a hook session with this identity replaces (same pid or same tty).

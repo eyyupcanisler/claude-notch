@@ -76,10 +76,11 @@ enum Terminals {
       if let tty = session.tty, let pid = session.pid {
         if !probe.owns(pid: pid, tty: tty) {
           steps.append("tty: pid \(pid) no longer owns \(tty)")
-        } else if let script = kind.focusScript(tty: tty) {
+        } else if let tab = session.terminal, let script = kind.focusScript(tty: tab) {
+          // The tab's terminal: for a chat Claude Code's daemon runs, not its process's.
           triedTab = true
           let r = await AppleScriptRunner.run(script)
-          steps.append("tty \(tty): \(r.output ?? "-") code \(r.errorCode.map(String.init) ?? "-")")
+          steps.append("tty \(tab): \(r.output ?? "-") code \(r.errorCode.map(String.init) ?? "-")")
           if r.errorCode == FocusOutcome.errNotPermitted {
             result = .notAuthorized(app: kind.appName)
           } else if r.output == "focused" {

@@ -224,6 +224,13 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   Otomasyon; Erişilebilirlik izniyle anında), bu yüzden bu kontrol yalnızca görülmemiş ya da
   bekleyen bir sohbet varken değil, bir Ghostty sohbeti olduğu sürece çalışır. Terminal ve
   iTerm2 sekmeleri bu işareti almaz.
+- **Sekme başına bir parça:** durdurulmuş bir Claude süreci (Ctrl-Z ya da `/restart`ın geride
+  bıraktığı eski süreç) veya Claude Code'un arka plan servisinin önceden başlattığı yedek süreç
+  sohbet sayılmaz. Bu servisin çalıştırdığı bir sohbetin (Claude Code 2.1.328'de `/restart`
+  sonrası) süreci gizli bir terminaldedir; çentik onu, sürecin devraldığı sekme kimliğiyle
+  (`GHOSTTY_SURFACE_ID`) Ghostty sekmesine bağlar, böylece renkleri, işareti, tıklaması ve
+  "görüldü"sü kendi sekmesinde kalır. 10'dan fazla sohbet varken çizgi önce içinde olduğunuz
+  sohbeti, sonra en acil olanları gösterir.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
   başkaysa onun menü çubuğunun ortasında 180 pt'lik siyah bir yapay çentik görünür ve aynı model
   geçerlidir (altında durum çizgisi, kanatlar onun iki yanından büyür, panel onun bandını alır). Ayarlar > Ekran: Otomatik / Sadece

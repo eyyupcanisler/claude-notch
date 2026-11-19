@@ -64,6 +64,9 @@ public final class SessionStore {
   @ObservationIgnored public var probe: ProcessProbe
   /// Position of each tty in Ghostty's tab order (see `applyTabOrder`); empty when unknown.
   public private(set) var tabOrder: [String: Int] = [:]
+  /// Hidden terminal -> the terminal of the tab showing it, from the last process scan
+  /// (`ClaudeProcess.tabTTYs`): chats Claude Code's background daemon runs.
+  public internal(set) var tabTTYs: [String: String] = [:]
   /// The terminal the user is in: Ghostty's focused tab or split while Ghostty is the front
   /// app, nil otherwise (see `setFocusedTTY`). Its chats' status line segments get the white
   /// "you are here" base (`hereSessionIDs`).
@@ -196,7 +199,7 @@ public final class SessionStore {
   /// title, clears it for sessions whose tty is not listed. Writes only what changed.
   public func applyTabTitles(_ titles: [String: String]) {
     for (id, s) in sessions {
-      let title = s.tty.flatMap { titles[$0] }
+      let title = s.terminal.flatMap { titles[$0] }
       if s.tabTitle != title { sessions[id]?.tabTitle = title }
     }
   }
@@ -574,6 +577,7 @@ public final class SessionStore {
       session.pid = pid
       watchExit(sessionID: session.id, pid: pid)
     }
+    link(&session)
     if let branch = context.branch { session.branch = branch }
   }
 
@@ -842,9 +846,9 @@ public final class SessionStore {
   public func markSeen(tty: String) -> Bool {
     guard HookContext.validTTY(tty) != nil else { return false }
     // The user is at that terminal: a held question goes back to it.
-    for s in sessions.values where s.tty == tty { releaseQuestions(sessionID: s.id) }
+    for s in sessions.values where s.terminal == tty { releaseQuestions(sessionID: s.id) }
     var any = false
-    for s in sessions.values where s.tty == tty && (s.unseen || s.status.kind == "waiting") {
+    for s in sessions.values where s.terminal == tty && (s.unseen || s.status.kind == "waiting") {
       markSeen(sessionID: s.id)
       any = true
     }
@@ -863,7 +867,7 @@ public final class SessionStore {
   /// Usually one; two when an old chat on the same tty has not been swept yet.
   public var hereSessionIDs: Set<String> {
     guard let tty = focusedTTY else { return [] }
-    return Set(sessions.values.lazy.filter { $0.tty == tty }.map(\.id))
+    return Set(sessions.values.lazy.filter { $0.terminal == tty }.map(\.id))
   }
 
   /// v1 name of `markSeen(sessionID:)`.
@@ -961,7 +965,7 @@ public final class SessionStore {
       if case .question(_, let o) = s.status { options = .array(o.map { .string($0) }) }
       return .object([
         "session_id": .string(s.id), "project": .string(s.project), "cwd": .string(s.cwd),
-        "term": opt(s.termProgram), "tty": opt(s.tty),
+        "term": opt(s.termProgram), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
         "discovered": .bool(s.isDiscovered), "tab_title": opt(s.tabTitle),
         "hidden": .bool(s.hidden),

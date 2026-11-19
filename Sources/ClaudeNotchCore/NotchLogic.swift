@@ -501,8 +501,9 @@ public struct LineSegment: Sendable, Equatable, Identifiable {
 }
 
 extension SessionStore {
-  /// At most this many segments; more sessions keep the most urgent ones.
-  public static let maxLineSegments = 6
+  /// At most this many segments (about 10 pt each on a 14" notch's 131 pt line); more sessions
+  /// keep the chat you are in, then the most urgent ones.
+  public static let maxLineSegments = 10
 
   public func lineState(of s: Session) -> LineState {
     if hasPending(for: s.id) { return .needs }
@@ -517,12 +518,16 @@ extension SessionStore {
 
   /// One segment per shown session in tab order (a segment never moves when its session
   /// changes state; hidden chats have none); with more than `maxLineSegments` sessions the
-  /// most urgent ones are shown.
+  /// chat you are in and then the most urgent ones are shown.
   public var statusLine: [LineSegment] {
     var picked = displayOrder.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
     if picked.count > Self.maxLineSegments {
       let rank = Dictionary(uniqueKeysWithValues: picked.enumerated().map { ($1.sessionID, $0) })
-      let key = { (x: LineSegment) in (x.state.priority, rank[x.sessionID] ?? 0) }
+      // The chat you are in always keeps its place (its segment carries the white base).
+      let here = hereSessionIDs
+      let key = { (x: LineSegment) in
+        (here.contains(x.sessionID) ? -1 : x.state.priority, rank[x.sessionID] ?? 0)
+      }
       picked = Array(picked.sorted { key($0) < key($1) }.prefix(Self.maxLineSegments))
       picked.sort { (rank[$0.sessionID] ?? 0) < (rank[$1.sessionID] ?? 0) }
     }
@@ -557,7 +562,7 @@ extension SessionStore {
   /// Ghostty tab order (by tty, see `applyTabOrder`); sessions not in a known tab follow, in
   /// creation order.
   public var tabOrdered: [Session] {
-    let pos = { (s: Session) in s.tty.flatMap { self.tabOrder[$0] } ?? Int.max }
+    let pos = { (s: Session) in s.terminal.flatMap { self.tabOrder[$0] } ?? Int.max }
     return sessions.values.sorted {
       (pos($0), $0.startedAt, $0.id) < (pos($1), $1.startedAt, $1.id)
     }

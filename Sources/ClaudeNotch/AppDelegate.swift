@@ -93,10 +93,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     if dryRun {
       let kind = TerminalKind(termProgram: s.termProgram)
       return .object([
-        "tty": s.tty.map { .string($0) } ?? .null,
+        "tty": s.terminal.map { .string($0) } ?? .null,
         "alive": .bool(store.isAlive(s)),
         "automation": .int(Int(await monitor?.refreshAutomationStatus() ?? -1)),
-        "script": s.tty.flatMap { kind.focusScript(tty: $0) }.map { .string($0) } ?? .null
+        "script": s.terminal.flatMap { kind.focusScript(tty: $0) }.map { .string($0) } ?? .null
       ])
     }
     guard let outcome = await controller?.focus(sessionID: sessionID) else { return .null }

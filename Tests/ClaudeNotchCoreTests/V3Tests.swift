@@ -158,8 +158,10 @@ final class V3Tests: XCTestCase {
     ev("Stop", "seen")
     store.markSeen(sessionID: "seen")
     let line = store.statusLine
-    XCTAssertEqual(line.map(\.sessionID), ["idle", "work", "done", "err", "ask", "card"])
-    XCTAssertEqual(line.map(\.state), [.idle, .working, .done, .error, .needs, .needs])
+    // Seven chats fit under the cap: a seen finished chat shows as idle.
+    XCTAssertEqual(
+      line.map(\.sessionID), ["idle", "work", "done", "err", "ask", "card", "seen"])
+    XCTAssertEqual(line.map(\.state), [.idle, .working, .done, .error, .needs, .needs, .idle])
     XCTAssertEqual(store.sessions["seen"].map { store.lineState(of: $0) }, .idle)
     store.markSeen(sessionID: "err")
     XCTAssertEqual(store.sessions["err"].map { store.lineState(of: $0) }, .idle)
@@ -175,17 +177,27 @@ final class V3Tests: XCTestCase {
     XCTAssertEqual(store.statusLine.map(\.state), [.working, .idle, .needs])
   }
 
-  func testStatusLineCapsAtSixKeepingTheUrgentOnes() {
-    start((1...9).map { "s\($0)" })
-    ev("UserPromptSubmit", "s9")
-    ev("PreToolUse", "s9", tool: "AskUserQuestion")
-    ev("UserPromptSubmit", "s8")
-    ev("StopFailure", "s8")
-    ev("UserPromptSubmit", "s7")
+  func testStatusLineCapsKeepingTheUrgentOnes() {
+    let cap = SessionStore.maxLineSegments
+    let n = cap + 3
+    start((1...n).map { "s\($0)" })
+    ev("UserPromptSubmit", "s\(n)")
+    ev("PreToolUse", "s\(n)", tool: "AskUserQuestion")
+    ev("UserPromptSubmit", "s\(n - 1)")
+    ev("StopFailure", "s\(n - 1)")
+    ev("UserPromptSubmit", "s\(n - 2)")
     let line = store.statusLine
-    XCTAssertEqual(line.count, SessionStore.maxLineSegments)
+    XCTAssertEqual(line.count, cap)
     // needs, error and working win; the rest by age; shown in creation order.
-    XCTAssertEqual(line.map(\.sessionID), ["s1", "s2", "s3", "s7", "s8", "s9"])
+    XCTAssertEqual(
+      line.map(\.sessionID),
+      (1...(cap - 3)).map { "s\($0)" } + ["s\(n - 2)", "s\(n - 1)", "s\(n)"])
+  }
+
+  /// Seven tabs (the user's Mac on 2026-11-19) all get a segment.
+  func testSevenChatsAllShow() {
+    start((1...7).map { "s\($0)" })
+    XCTAssertEqual(store.statusLine.count, 7)
   }
 
   func testStatusLineEmptyWithoutSessions() {

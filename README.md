@@ -97,6 +97,12 @@ terminal, and keep a few handy tools one glance away.
   focused-terminal check as "Seen when you look" (Automation for Ghostty; Accessibility makes it
   instant), which therefore runs whenever a Ghostty chat exists, not only while one is unseen or
   waiting. Terminal and iTerm2 tabs get no mark.
+- **One segment per tab.** A Claude process that is stopped (Ctrl-Z, or the old process
+  `/restart` leaves behind) or a spare that Claude Code's background daemon starts ahead of
+  time is not a chat. A chat that daemon runs (after `/restart` in Claude Code 2.1.328) has its
+  process on a hidden terminal; the notch links it to its Ghostty tab through the tab id the
+  process inherits (`GHOSTTY_SURFACE_ID`), so its colors, mark, click and "seen" stay on its tab.
+  With more than 10 chats, the line keeps the chat you are in, then the most urgent ones.
 - **Terminal bell (optional).** Settings → *Bildirimler → Claude Code bildirim gönderince
   terminal zilini çal* (Notifications → Ring the terminal bell when Claude Code notifies;
   default off) rings that session's terminal bell on every Claude Code notification
