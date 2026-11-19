@@ -308,6 +308,18 @@ struct ExpandedBody: View {
       modules.shelf.addFiles(urls)
       return !urls.isEmpty
     }
+    // The dragged row left the list mid-drag (its chat ended, it took the card slot): its
+    // gesture never ends, so the drag is called off here.
+    .onChange(of: rows.map(\.id)) { _, ids in
+      guard let d = drag, !ids.contains(d.id) else { return }
+      drag = nil
+      actions.rowDrag(nil)
+    }
+    .onDisappear {
+      guard drag != nil else { return }
+      drag = nil
+      actions.rowDrag(nil)
+    }
   }
 }
 

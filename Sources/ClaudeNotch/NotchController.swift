@@ -518,6 +518,8 @@ final class NotchController {
     keyGate.reset()
     ui.frozenOrder = nil
     ui.frozenRich = []
+    // A drag cannot outlive the panel (its row is gone with it).
+    ui.draggingRowID = nil
     ui.moreCardID = nil
     ui.shelfOpen = false
     for s in surfaces.values { s.intent.reset() }
@@ -612,6 +614,7 @@ final class NotchController {
   }
 
   func updatePointer() {
+    clearStaleRowDrag()
     let p = NSEvent.mouseLocation
     let now = Date()
     let live = hasSessions
@@ -1792,7 +1795,17 @@ final class NotchController {
   }
 
   /// Whether a click on a row may act now (see `rowClicksArmedAt`); a dropped one is logged.
+  /// A row drag lasts only while the mouse button is down: one still marked after the button
+  /// came up lost its end (its row left the list mid-drag, so the gesture never ended). It is
+  /// cleared, or the panel would stay open and drop every row click.
+  private func clearStaleRowDrag() {
+    guard ui.draggingRowID != nil, NSEvent.pressedMouseButtons & 1 == 0 else { return }
+    clickLog.notice("row drag cleared: the button is up")
+    ui.draggingRowID = nil
+  }
+
   private func rowClicksArmed() -> Bool {
+    clearStaleRowDrag()
     // The press that ends a drag is no click on the row.
     guard ui.draggingRowID == nil else {
       clickLog.notice("row click dropped: a row is being dragged")
@@ -2091,6 +2104,7 @@ final class NotchController {
       "poll_timer": .bool(pollTimer != nil),
       "tab_order": .object(store.tabOrder.mapValues { .int($0) }),
       "panel_order": .array(store.panelOrder.map { .string($0.id) }),
+      "dragging_row": ui.draggingRowID.map { .string($0) } ?? .null,
       "status_line": .array(store.statusLine.map {
         .object([
           "session": .string($0.sessionID), "state": .string($0.state.rawValue),
