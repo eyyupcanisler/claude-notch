@@ -64,6 +64,10 @@ public final class SessionStore {
   @ObservationIgnored public var probe: ProcessProbe
   /// Position of each tty in Ghostty's tab order (see `applyTabOrder`); empty when unknown.
   public private(set) var tabOrder: [String: Int] = [:]
+  /// The terminal the user is in: Ghostty's focused tab or split while Ghostty is the front
+  /// app, nil otherwise (see `setFocusedTTY`). Its chats' status line segments get the white
+  /// "you are here" base (`hereSessionIDs`).
+  public private(set) var focusedTTY: String?
   @ObservationIgnored public private(set) var lastRemovalAt = Date.distantPast
   @ObservationIgnored private var recentPre: [String: [(key: String, at: Date)]] = [:]
   /// The tool a session is asking with (AskUserQuestion / ExitPlanMode), by session id. Hook
@@ -845,6 +849,21 @@ public final class SessionStore {
       any = true
     }
     return any
+  }
+
+  /// The terminal the user is in changed: `tty` (validated; anything else counts as none), or
+  /// nil when no terminal of a known chat is in front. Writes only on a change, so the 0.5 s
+  /// focus poll does not wake the views each time it gets the same answer.
+  public func setFocusedTTY(_ tty: String?) {
+    let tty = HookContext.validTTY(tty)
+    if focusedTTY != tty { focusedTTY = tty }
+  }
+
+  /// Sessions running in the terminal the user is in (`focusedTTY`); empty while none is known.
+  /// Usually one; two when an old chat on the same tty has not been swept yet.
+  public var hereSessionIDs: Set<String> {
+    guard let tty = focusedTTY else { return [] }
+    return Set(sessions.values.lazy.filter { $0.tty == tty }.map(\.id))
   }
 
   /// v1 name of `markSeen(sessionID:)`.

@@ -72,6 +72,35 @@ public enum StatusPalette {
   /// An idle status-line segment: white at this alpha over the black band (both palettes).
   public static let idleAlpha: Double = 0.22
 
+  /// The "you are here" sign, in both palettes: the segment of the chat whose terminal you are
+  /// in (Ghostty's focused tab or split) grows `hereLift` points downward, and that strip is
+  /// `hereBase`, joined to the bar as one piece (`herePiece`). The bar keeps its own state
+  /// color, so the sign is the same for every state. White because no state uses it solid (idle
+  /// is white at `idleAlpha`): it reads as "selected", not as a status, with any color vision.
+  public static let hereBase: UInt32 = 0xFFFFFF
+  public static let hereLift: CGFloat = 1.5
+
+  /// The bar (`height` tall) and the "you are here" strip under it (`lift` tall) as one capsule
+  /// `height + lift` tall, split by a straight line where the bar ends. `top` is the bar's
+  /// outline (y 0...height, y down); `bottom` the strip's, in its own coordinates (y 0...lift,
+  /// 0 at the split).
+  public static func herePiece(width: CGFloat, height: CGFloat, lift: CGFloat = hereLift)
+    -> (top: CGPath, bottom: CGPath)
+  {
+    let w = max(0, width)
+    let h = max(0, height)
+    let l = max(0, lift)
+    let full = CGRect(x: 0, y: 0, width: w, height: h + l)
+    let r = min(full.width, full.height) / 2
+    let capsule = CGPath(roundedRect: full, cornerWidth: r, cornerHeight: r, transform: nil)
+    let top = capsule.intersection(
+      CGPath(rect: CGRect(x: 0, y: 0, width: w, height: h), transform: nil))
+    var shift = CGAffineTransform(translationX: 0, y: -h)
+    let strip = capsule.intersection(
+      CGPath(rect: CGRect(x: 0, y: h, width: w, height: l), transform: nil))
+    return (top, strip.copy(using: &shift) ?? strip)
+  }
+
   /// Opacity of a status-line segment's bar in `state` (before any animation). Idle is drawn as
   /// white at `idleAlpha` and returns that alpha here.
   public static func lineOpacity(_ state: LineState) -> Double {
@@ -152,6 +181,21 @@ public enum StatusPalette {
   /// the original look), else the dashes of the broken bar.
   public static func errorPieces(_ colors: Colors, width: CGFloat, height: CGFloat) -> [CGRect]? {
     colors.errorDashed ? dashes(width: width, height: height) : nil
+  }
+
+  /// The broken error bar's outline: each dash in `pieces` a pill (radius half its height or
+  /// width). `flatBottom` (the chat you are in): each dash runs on below the bar by its own
+  /// radius, so the clip at the bar's bottom edge (`herePiece(...).top`) cuts it flat where the
+  /// white base joins; the top corners keep their rounding.
+  public static func dashOutline(_ pieces: [CGRect], flatBottom: Bool = false) -> CGPath {
+    let path = CGMutablePath()
+    for r in pieces {
+      let radius = min(r.height, r.width) / 2
+      var rect = r
+      if flatBottom { rect.size.height += radius }
+      path.addRoundedRect(in: rect, cornerWidth: radius, cornerHeight: radius)
+    }
+    return path
   }
 
   /// The error sign: the segment drawn as `count` short dashes split by `gap` points, filling

@@ -82,12 +82,21 @@ terminal, and keep a few handy tools one glance away.
   unseen error, then an unseen finished run.
 - **Seen when you look (Ghostty; Accessibility optional).** A finished or waiting chat's
   segment clears when you switch to its Ghostty tab or split. By default, while Ghostty is in
-  front and such a chat exists, the notch asks Ghostty for its focused terminal every 0.5 s and
-  after each click. Settings → *Bildirimler → Anında güncelleme (Erişilebilirlik)*
+  front and any Ghostty chat exists, the notch asks Ghostty for its focused terminal every 0.5 s
+  and after each click. Settings → *Bildirimler → Anında güncelleme (Erişilebilirlik)*
   (Notifications → Instant updates (Accessibility)) → **Allow Accessibility…** lets the app
   watch Ghostty's focus, window and title changes instead: the segment clears the moment you
   switch, and the 0.5 s check and the click monitor stop. The permission is used for nothing
   else; the app never asks for it on its own, and without it everything works as before.
+- **You are here (Ghostty).** The segment of the chat whose Ghostty tab or split you are in
+  grows 1.5 pt downward, and that bottom strip is white, joined to the bar as one piece, so you
+  can tell which segment is the chat in front of you. The bar keeps its own color, so the sign
+  is the same whether that chat is working, idle, waiting for you or failed; no state uses solid
+  white, so it never reads as a status. It moves at once when you switch tabs and goes away
+  when another app comes to the front. It uses the same
+  focused-terminal check as "Seen when you look" (Automation for Ghostty; Accessibility makes it
+  instant), which therefore runs whenever a Ghostty chat exists, not only while one is unseen or
+  waiting. Terminal and iTerm2 tabs get no mark.
 - **Terminal bell (optional).** Settings → *Bildirimler → Claude Code bildirim gönderince
   terminal zilini çal* (Notifications → Ring the terminal bell when Claude Code notifies;
   default off) rings that session's terminal bell on every Claude Code notification

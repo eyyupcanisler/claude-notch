@@ -208,12 +208,22 @@ scripts/install-hooks.sh --hook <yol>          # kancaların çağıracağı kö
   Gizlilik ve Güvenlik > Otomasyon açılır.
 - **Bakınca görüldü (Ghostty; Erişilebilirlik isteğe bağlı):** bitmiş ya da bekleyen bir
   sohbetin parçası, onun Ghostty sekmesine ya da bölmesine geçince temizlenir. Varsayılan olarak
-  Ghostty öndeyken ve böyle bir sohbet varken çentik Ghostty'ye odaktaki terminali 0,5 sn'de bir
-  ve her tıklamadan sonra sorar. Ayarlar > Bildirimler > **Anında güncelleme (Erişilebilirlik)**
+  Ghostty öndeyken ve bir Ghostty sohbeti varken çentik Ghostty'ye odaktaki terminali 0,5 sn'de
+  bir ve her tıklamadan sonra sorar. Ayarlar > Bildirimler > **Anında güncelleme (Erişilebilirlik)**
   > **Erişilebilirliğe izin ver…** ile uygulama bunun yerine Ghostty'nin odak, pencere ve başlık
   değişikliklerini izler: parça geçtiğiniz anda temizlenir, 0,5 sn'lik kontrol ve tıklama
   izleyicisi durur. İzin başka hiçbir şey için kullanılmaz; uygulama onu kendiliğinden istemez,
   izin yoksa her şey eskisi gibi çalışır.
+- **Buradasınız (Ghostty):** Ghostty'de içinde olduğunuz sekmenin ya da bölmenin sohbetinin
+  durum çizgisi parçası 1,5 pt aşağı doğru uzar ve bu alt şerit beyazdır, çubukla tek parça
+  olarak birleşir; böylece önünüzdeki sohbetin hangi parça olduğu görünür. Çubuk kendi rengini
+  korur, bu yüzden işaret o sohbet çalışırken, boştayken, sizi beklerken ya da hata verdiğinde
+  aynıdır; hiçbir durum düz beyaz kullanmadığı için bir durum gibi okunmaz. Sekme değiştirince
+  anında yer değiştirir, başka bir uygulama öne gelince kalkar. "Bakınca görüldü" ile aynı
+  odaktaki terminal kontrolünü kullanır (Ghostty için
+  Otomasyon; Erişilebilirlik izniyle anında), bu yüzden bu kontrol yalnızca görülmemiş ya da
+  bekleyen bir sohbet varken değil, bir Ghostty sohbeti olduğu sürece çalışır. Terminal ve
+  iTerm2 sekmeleri bu işareti almaz.
 - **Birden çok ekran / çentiksiz ekran:** tam arayüz çentikli ekrandadır; çalıştığınız ekran
   başkaysa onun menü çubuğunun ortasında 180 pt'lik siyah bir yapay çentik görünür ve aynı model
   geçerlidir (altında durum çizgisi, kanatlar onun iki yanından büyür, panel onun bandını alır). Ayarlar > Ekran: Otomatik / Sadece

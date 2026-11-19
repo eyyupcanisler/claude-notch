@@ -219,7 +219,9 @@ struct NotchRootView: View {
       StatusLineView(
         segments: segments, colors: settings.statusColors.colors,
         // The chat the wings are about lights up, so the wing reads as that segment's.
-        lit: mode == .peek ? Set(ui.wings?.sessionIDs ?? []) : [])
+        lit: mode == .peek ? Set(ui.wings?.sessionIDs ?? []) : [],
+        // The chat whose Ghostty tab the user is in gets the white "you are here" base.
+        here: store.hereSessionIDs)
         .frame(width: NotchMetrics.lineWidth(notch: g.notchWidth), height: NotchMetrics.lineHeight)
         .padding(.top, NotchMetrics.lineTop(g, pill: pillShown))
         .opacity(lineMode && surface.visible && !segments.isEmpty ? 1 : 0)
@@ -391,24 +393,33 @@ struct NotchSignals {
 /// runs the shimmer / breathing / flash in the render server, so an always-on line costs the
 /// app no frames. While the wings are out, the segment of the chat they are about is lit
 /// (`lit`): 1.5 pt taller, growing downward, with a stronger halo in its own color, so the
-/// colors keep their meaning.
+/// colors keep their meaning. The segment of the chat whose terminal the user is in (`here`,
+/// Ghostty's focused tab) grows 1.5 pt downward and that strip is white, joined to the bar as
+/// one piece (`StatusPalette.herePiece`): the same sign in every state, the bar keeping its
+/// state color. It moves at once, without animation, as tab switches are often keyboard ones.
 struct StatusLineView: NSViewRepresentable {
   let segments: [LineSegment]
   let colors: StatusPalette.Colors
   /// Sessions whose segment is lit (`WingDisplay.sessionIDs`).
   var lit: Set<String> = []
+  /// Sessions in the terminal the user is in (`SessionStore.hereSessionIDs`).
+  var here: Set<String> = []
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func makeNSView(context: Context) -> StatusLineLayerView { StatusLineLayerView() }
 
   func updateNSView(_ view: StatusLineLayerView, context: Context) {
-    view.update(segments, colors: colors, lit: lit, reduceMotion: reduceMotion)
+    view.update(segments, colors: colors, lit: lit, here: here, reduceMotion: reduceMotion)
   }
 }
 
 @MainActor
 final class StatusLineLayerView: NSView {
   private final class Segment {
+    /// The "you are here" base (opacity 0 unless `isHere`): a white strip right under the bar,
+    /// shaped with it as one capsule (`StatusPalette.herePiece`). Its own layer, so it stays
+    /// steady while the bar breathes, flashes or dims.
+    let hereBase = CAShapeLayer()
     /// The lit segment's halo (opacity 0 while not lit), under the glow.
     let halo = CALayer()
     let glow = CALayer()
@@ -416,9 +427,12 @@ final class StatusLineLayerView: NSView {
     let shine = CAGradientLayer()
     /// The wings are about this chat (`StatusLineView.lit`).
     var lit = false
-    /// Masks the bar into dashes while the state is `.error` and the palette draws error broken
-    /// (nil otherwise).
-    var dashMask: CAShapeLayer?
+    /// The user is in this chat's terminal (`StatusLineView.here`).
+    var isHere = false
+    /// The bar's outline when it is not just its own rounded ends: the error dashes (state
+    /// `.error` in a palette that draws error broken), the top of the "you are here" piece, or
+    /// both. Not set as the bar's mask otherwise.
+    let barMask = CAShapeLayer()
     var state: LineState?
   }
 
@@ -462,7 +476,7 @@ final class StatusLineLayerView: NSView {
 
   func update(
     _ list: [LineSegment], colors: StatusPalette.Colors, lit: Set<String> = [],
-    reduceMotion: Bool
+    here: Set<String> = [], reduceMotion: Bool
   ) {
     // A palette switch (Settings) restyles every segment in place, without an arrival flash.
     let restyle = reduceMotion != self.reduceMotion || colors != self.colors
@@ -471,6 +485,7 @@ final class StatusLineLayerView: NSView {
     order = list
     let ids = Set(list.map(\.sessionID))
     for (id, seg) in segments where !ids.contains(id) {
+      seg.hereBase.removeFromSuperlayer()
       seg.halo.removeFromSuperlayer()
       seg.glow.removeFromSuperlayer()
       seg.bar.removeFromSuperlayer()
@@ -484,6 +499,8 @@ final class StatusLineLayerView: NSView {
         let arrived = seg.state != nil && seg.state != item.state
         style(seg, item.state, arrived: arrived || seg.state == nil)
       }
+      // The base's shape and the bar's outline follow in `place`, below.
+      seg.isHere = here.contains(item.sessionID)
     }
     var changed: Set<String> = []
     for item in list {
@@ -514,18 +531,58 @@ final class StatusLineLayerView: NSView {
     seg.halo.shadowOpacity = 1
     seg.halo.shadowRadius = Self.litHaloRadius
     seg.halo.opacity = 0
+    seg.hereBase.fillColor = Self.rgb(StatusPalette.hereBase).cgColor
+    seg.hereBase.opacity = 0
     layer?.addSublayer(seg.halo)
     layer?.addSublayer(seg.glow)
+    // Over the glows, so the bar's own glow never tints it.
+    layer?.addSublayer(seg.hereBase)
     layer?.addSublayer(seg.bar)
     segments[id] = seg
     return seg
   }
 
-  private func color(_ state: LineState) -> NSColor {
-    func rgb(_ hex: UInt32) -> NSColor {
-      let c = StatusPalette.components(hex)
-      return NSColor(srgbRed: c.red, green: c.green, blue: c.blue, alpha: 1)
+  private static func rgb(_ hex: UInt32) -> NSColor {
+    let c = StatusPalette.components(hex)
+    return NSColor(srgbRed: c.red, green: c.green, blue: c.blue, alpha: 1)
+  }
+
+  /// The bar's corner radius: its own rounded ends, or none while it is the top of the "you are
+  /// here" piece (the mask shapes it then, with a straight bottom edge where the base joins).
+  private static func barRadius(_ seg: Segment, height: CGFloat) -> CGFloat {
+    seg.isHere ? 0 : height / 2
+  }
+
+  /// The bar's outline from its state and `isHere`, for its current bounds: the error dashes
+  /// (if any) clipped to the top of the "you are here" piece (if here); neither leaves the bar
+  /// unmasked (its corner radius rounds it). `dashes` is the dash outline, nil when not broken.
+  private func shapeBar(_ seg: Segment, dashes: CGPath?) {
+    let bounds = seg.bar.bounds
+    var outline = dashes
+    if seg.isHere {
+      let top = StatusPalette.herePiece(width: bounds.width, height: bounds.height).top
+      outline = outline.map { $0.intersection(top) } ?? top
     }
+    guard let outline else {
+      seg.bar.mask = nil
+      return
+    }
+    seg.barMask.frame = bounds
+    seg.barMask.path = outline
+    seg.bar.mask = seg.barMask
+  }
+
+  /// The "you are here" base under a bar of `frame` (its final frame): shape, place and
+  /// visibility. Shown or hidden at once; it moves with the bar (`light`).
+  private func placeBase(_ seg: Segment, under frame: CGRect) {
+    let lift = StatusPalette.hereLift
+    seg.hereBase.frame = CGRect(x: frame.minX, y: frame.maxY, width: frame.width, height: lift)
+    seg.hereBase.path = StatusPalette.herePiece(width: frame.width, height: frame.height).bottom
+    seg.hereBase.opacity = seg.isHere ? 1 : 0
+  }
+
+  private func color(_ state: LineState) -> NSColor {
+    func rgb(_ hex: UInt32) -> NSColor { Self.rgb(hex) }
     switch state {
     case .working: return rgb(colors.working)
     case .needs: return rgb(colors.needs)
@@ -539,32 +596,25 @@ final class StatusLineLayerView: NSView {
 
   /// The colorblind palette's error sign: the bar masked into short dashes and the glow cast
   /// from the same dashes (a plain glow would light the gaps), static. Any other state, and
-  /// the classic palette (a solid error bar, as originally), removes both.
+  /// the classic palette (a solid error bar, as originally), removes both. Either way the bar's
+  /// outline is then set for `isHere` too (`shapeBar`).
   private func applyDashes(_ seg: Segment, _ state: LineState) {
     let bounds = seg.bar.bounds
     guard state == .error,
       let pieces = StatusPalette.errorPieces(colors, width: bounds.width, height: bounds.height)
     else {
-      seg.bar.mask = nil
-      seg.dashMask = nil
       seg.glow.shadowPath = nil
       seg.halo.shadowPath = Self.pill(seg.halo.bounds)
+      shapeBar(seg, dashes: nil)
       return
     }
-    let mask = seg.dashMask ?? CAShapeLayer()
-    seg.dashMask = mask
-    seg.bar.mask = mask
-    let path = CGMutablePath()
-    for r in pieces {
-      let radius = min(r.height, r.width) / 2
-      path.addRoundedRect(in: r, cornerWidth: radius, cornerHeight: radius)
-    }
-    mask.frame = bounds
-    mask.path = path
+    let path = StatusPalette.dashOutline(pieces)
     seg.glow.shadowPath = path
     seg.halo.shadowPath = path
     // The glow's own fill would show through the gaps; only its shadow (shaped by the path) stays.
     seg.glow.backgroundColor = nil
+    // The chat you are in: the dashes' bottoms are cut flat where the white base joins.
+    shapeBar(seg, dashes: seg.isHere ? StatusPalette.dashOutline(pieces, flatBottom: true) : path)
   }
 
   /// A rounded bar shape filling `rect` (the halo's shadow outside the error dashes).
@@ -678,7 +728,9 @@ final class StatusLineLayerView: NSView {
           l.frame = frame
           l.cornerRadius = height / 2
         }
+        seg.bar.cornerRadius = Self.barRadius(seg, height: height)
         seg.halo.opacity = halo
+        placeBase(seg, under: frame)
       }
       // The halo takes its new shape at once: it only fades (`light`), and 1.5 pt under a
       // 3 pt blur does not show.
@@ -686,7 +738,8 @@ final class StatusLineLayerView: NSView {
       seg.halo.shadowPath = Self.pill(seg.halo.bounds)
       // Tall enough for the lit height; the bar clips it.
       seg.shine.frame = CGRect(x: 0, y: 0, width: w, height: h + Self.litLift)
-      if seg.state == .error, colors.errorDashed { applyDashes(seg, .error) }
+      // The bar's outline for its new size (error dashes, the "you are here" top).
+      applyDashes(seg, seg.state ?? .idle)
       if seg.state == .working, !reduceMotion,
         (seg.shine.value(forKey: "sweepWidth") as? CGFloat) != w
       {
@@ -696,11 +749,13 @@ final class StatusLineLayerView: NSView {
     CATransaction.commit()
   }
 
-  /// A segment lighting up (or going dark): its bar and glow take `frame` (taller or back)
-  /// and the halo `halo` opacity (`place` sets the halo's shape). Each animation starts from
-  /// what is on screen now, so a wing that changes mid-way turns back without a jump. Lighting
-  /// up uses `litIn`, going dark `litOut`; with Reduce Motion the height is set at once and
-  /// only the halo fades.
+  /// A segment lighting up (or going dark): its bar and glow take `frame` (taller or back),
+  /// the "you are here" base moves with the bar's bottom edge, and the halo takes `halo`
+  /// opacity (`place` sets the halo's shape). Each animation starts from what is on screen now,
+  /// so a wing that changes mid-way turns back without a jump. Lighting up uses `litIn`, going
+  /// dark `litOut`; with Reduce Motion the height is set at once and only the halo fades.
+  /// Going dark, a "you are here" bar is clipped to its final height at once (its outline is
+  /// set for the final size), so its base moves up at once too and the two stay joined.
   private func light(_ seg: Segment, frame: CGRect, halo: Float) {
     let up = seg.lit
     let timing = reduceMotion ? Self.litFade : (up ? Self.litIn : Self.litOut)
@@ -716,11 +771,16 @@ final class StatusLineLayerView: NSView {
       let now = l.presentation() ?? l
       let (bounds, position, radius) = (now.bounds, now.position, now.cornerRadius)
       l.frame = frame
-      l.cornerRadius = frame.height / 2
+      l.cornerRadius = l === seg.bar ? Self.barRadius(seg, height: frame.height) : frame.height / 2
       guard !reduceMotion else { continue }
       animate(l, "bounds", from: NSValue(rect: bounds))
       animate(l, "position", from: NSValue(point: position))
       animate(l, "cornerRadius", from: radius)
+    }
+    let base = (seg.hereBase.presentation() ?? seg.hereBase).position
+    placeBase(seg, under: frame)
+    if up, seg.isHere, !reduceMotion {
+      animate(seg.hereBase, "position", from: NSValue(point: base))
     }
     let from = (seg.halo.presentation() ?? seg.halo).opacity
     seg.halo.opacity = halo

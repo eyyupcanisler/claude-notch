@@ -2057,7 +2057,10 @@ final class NotchController {
       "peek_until": wings.nextChange.map { .double($0.timeIntervalSinceNow) } ?? .null,
       "poll_timer": .bool(pollTimer != nil),
       "status_line": .array(store.statusLine.map {
-        .object(["session": .string($0.sessionID), "state": .string($0.state.rawValue)])
+        .object([
+          "session": .string($0.sessionID), "state": .string($0.state.rawValue),
+          "here": .bool(store.hereSessionIDs.contains($0.sessionID))
+        ])
       }),
       "ghostty_consent": .object([
         "status": ui.ghosttyAutomation.map { .int(Int($0)) } ?? .null,
@@ -2173,6 +2176,9 @@ final class NotchController {
     if json["unhide_all"] == .bool(true) { store.unhideAll() }
     // {"mark_seen": "<session id>"}: as looking at the chat does.
     if let id = json["mark_seen"]?.stringValue { store.markSeen(sessionID: id) }
+    // {"focused_tty": "/dev/ttysNNN" | null}: the terminal the user is in (its chats' segments
+    // get the "you are here" base), as following Ghostty's focused tab sets it.
+    if let t = json["focused_tty"] { store.setFocusedTTY(t.stringValue) }
     // {"shelf_open": true|false}; {"shelf_add_file": "/abs/path"} adds a file without the
     // clipboard (as a file dropped on the panel does).
     if case .bool(let b)? = json["shelf_open"] { ui.shelfOpen = b }
