@@ -799,7 +799,7 @@ final class NotchController {
   }
 
   /// ⌃⌥P: no timer → a Pomodoro starts; running / paused → pause / resume; a finished
-  /// Pomodoro phase → the next one.
+  /// Pomodoro phase → the next one. A note says so only when no screen shows the timer.
   private func timerHotKey() {
     guard settings.timerEnabled else { return }
     switch modules.timer.state {
@@ -808,6 +808,14 @@ final class NotchController {
       if modules.pomodoro != nil { modules.startNextPhase() } else { modules.startPomodoro() }
     case .running, .paused: modules.toggleTimer()
     }
+    // The timer's ear (or the notch's timer extension) already shows the change: the icon
+    // turns to a pause sign and the time dims. A note would slide the wings out over it, so it
+    // comes only when no screen shows the timer.
+    let shown = surfaces.values.contains { s in
+      s.state.visible && (modules.timerEar(on: s.state.geometry) > 0
+        || modules.timerPill(on: s.state.geometry))
+    }
+    guard !shown else { return }
     let t = modules.timer
     let title: String = {
       switch t.state {

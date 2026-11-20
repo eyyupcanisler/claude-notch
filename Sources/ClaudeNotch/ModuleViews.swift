@@ -308,7 +308,7 @@ struct TimerPill: View {
 
   private func pill(at now: Date) -> some View {
     let running = modules.timer.isRunning
-    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : theme.working
+    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : TimerEar.focusTint
     let tint = running ? base : base.opacity(0.55)
     return HStack(spacing: 5) {
       Image(systemName: running ? "timer" : "pause.fill")
@@ -336,7 +336,11 @@ struct TimerEar: View {
   let height: CGFloat
   @Environment(\.notchTheme) private var theme
 
-  static let pitch: CGFloat = 1.6
+  static let pitch: CGFloat = 2.0
+  /// The time while focusing (or on a plain timer): near-white, readable on the black ear at
+  /// a glance. The status "working" colour is a dim grey in the default theme; breaks keep
+  /// the "done" colour.
+  static let focusTint = Color.white.opacity(0.92)
   static let icon: CGFloat = 10
   static let gap: CGFloat = 4
   /// Inner padding at the ear's outer end and next to the notch.
@@ -363,7 +367,7 @@ struct TimerEar: View {
 
   private func ear(at now: Date) -> some View {
     let running = modules.timer.isRunning
-    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : theme.working
+    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : TimerEar.focusTint
     let tint = running ? base : base.opacity(0.55)
     let remaining = modules.timer.remaining(at: now)
     return HStack(spacing: Self.gap) {
@@ -401,7 +405,7 @@ struct RoundEar: View {
   var body: some View {
     let p = modules.pomodoro
     let text = p.map(ModuleCenter.roundText) ?? ""
-    let base = p?.phase.isBreak == true ? theme.done : theme.working
+    let base = p?.phase.isBreak == true ? theme.done : TimerEar.focusTint
     let tint = modules.timer.isRunning ? base : base.opacity(0.55)
     DotMatrixText(text: text, color: tint, pitch: TimerEar.pitch)
       .frame(width: max(width, Self.width(text: text)), height: height)
