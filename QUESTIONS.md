@@ -44,6 +44,20 @@ undo it) and, at the end, the questions to grill you on. Each ON entry ends with
 
 ---
 
+## ON15: Quit takes two clicks in the panel
+
+**What:** a power button in the panel's top bar, right after Settings. First click: it turns
+into a red **Quit** pill for 3 seconds. Second click: the app quits. Settings → General →
+Startup also has a plain **Quit ClaudeNotch** button, and ⌘Q works while Settings is in front.
+**Why two clicks:** the panel opens when the pointer passes over the notch, so a stray click
+lands there easily; one click must not end the app. A double-click does not count either.
+**Other options:** one click (faster, riskier), or press and hold (like risky permission
+requests). **Revert:** `git revert 5bf43ec`.
+
+**A:**
+
+---
+
 ## ON14: Push
 
 Pushed to `origin` (`furkanzt/claude-notch`) only, never `upstream`, no force: see the
@@ -73,7 +87,8 @@ run, before your friend gets the one-liner):
    the same with the build that is already there (signed with your "ClaudeNotch Dev"
    identity, so macOS keeps your permissions).
 2. Click one Ghostty row (the jump code changed and only its tmux path ran live), then drag
-   one row and pin one.
+   one row and pin one. Click the power button once (it should turn red and say Quit) and
+   let it go back after 3 s.
 3. If anything is wrong, go back to the old app: `pkill -x ClaudeNotch; rm -rf
    ~/Applications/ClaudeNotch.app; ditto build.noindex/ClaudeNotch-previous.app
    ~/Applications/ClaudeNotch.app; open ~/Applications/ClaudeNotch.app` (I copied your
@@ -287,6 +302,8 @@ log show --last 10m --style compact --predicate 'subsystem == "com.eyyupcan.clau
    docs English?
 8. **Your friend** (ON1): can you get the `log show … | grep jump` line from him?
 9. **Upstream**: should any of this go back to `eyyupcanisler/claude-notch` as a pull request?
+10. **Quit** (ON15): two clicks in the panel, or one, or press and hold? And is beside
+    Settings the right place?
 
 ---
 
