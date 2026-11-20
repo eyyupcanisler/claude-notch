@@ -73,6 +73,10 @@ macOS 14'te `jq` de gerekir (Homebrew varsa betik kurar; macOS 15 ve sonrasında
 isteyip istemediğini sorar (*Otomasyon*): **İzin Ver** de, yoksa tıklama sohbetin sekmesini
 seçemez.
 
+**Çıkmak için:** paneldeki üst çubukta güç düğmesi (bir kez tıkla, sonra kırmızı **Çık**'a
+tıkla) ya da Ayarlar → Genel → **ClaudeNotch’tan çık** (orada ⌘Q de çalışır). Tekrar
+başlatmak için Spotlight'tan aç.
+
 **Kaldırmak için:**
 
 ```sh

@@ -45,6 +45,8 @@ struct NotchActions {
   var denyAll: @MainActor (String) -> Void = { _ in }
   var togglePin: @MainActor () -> Void = {}
   var openSettings: @MainActor () -> Void = {}
+  /// Quits the app (the band's power button, after its second click).
+  var quit: @MainActor () -> Void = { NSApp.terminate(nil) }
   var expand: @MainActor (CGDirectDisplayID) -> Void = { _ in }
   /// A click on the wings: the panel opens, or a terminal-only question's terminal comes up.
   var wingTap: @MainActor (CGDirectDisplayID) -> Void = { _ in }

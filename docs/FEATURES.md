@@ -101,6 +101,11 @@ long one: what each part does, the settings behind it, and how it works inside.
   be reached (it was closed, or the terminal did not answer), the panel says so with the
   chat's title instead of only bringing the terminal app forward. The panel comes to the
   front each time it opens, so another app's window at the same level cannot cover it.
+- **Quit in plain sight.** The panel's top bar has a power button beside Settings: a first
+  click turns it into a red **Quit** pill for 3 s and a second click quits (one stray click,
+  or a double-click, on a panel that opens under the pointer never ends the app). Settings →
+  General → Startup has a **Quit ClaudeNotch** button, and ⌘Q works while Settings is in
+  front. The right-click menu on the notch keeps its Quit item.
 - **Pin and order the chats.** Hover a row and click the pin: the chat moves to the top of
   the panel and a small pin shows beside its title (click again to unpin). Press a row and
   drag it to put it anywhere among the others (pinned rows move among the pinned ones): the

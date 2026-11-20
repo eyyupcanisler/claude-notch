@@ -457,3 +457,8 @@
 "Hooks removed and your status line put back. Open Claude Code sessions are affected once restarted." = "Hooks removed and your status line put back. Open Claude Code sessions are affected once restarted.";
 "Connected. Open Claude Code sessions use it from their next message; plan usage shows once Claude Code next updates its status line." = "Connected. Open Claude Code sessions use it from their next message; plan usage shows once Claude Code next updates its status line.";
 "Status line connected. Plan usage shows once Claude Code next updates its status line." = "Status line connected. Plan usage shows once Claude Code next updates its status line.";
+
+/* Quitting in plain sight: the band's power button (two clicks) and Settings. */
+"Quit" = "Quit";
+"Click again to quit ClaudeNotch" = "Click again to quit ClaudeNotch";
+"Open ClaudeNotch again from Spotlight to start it." = "Open ClaudeNotch again from Spotlight to start it.";

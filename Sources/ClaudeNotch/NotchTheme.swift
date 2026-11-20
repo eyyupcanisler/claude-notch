@@ -135,6 +135,9 @@ enum Motion {
   /// The dragged row lifting off the list on the first move (scale, shadow): instant
   /// acknowledgement, no overshoot.
   static let rowLift = Animation.spring(response: 0.18, dampingFraction: 1)
+  /// The band's power button arming into its red "Quit" pill and back: a small change on a
+  /// click, so a strong ease-out under 300 ms (the curve of `rowHide`), from where it is.
+  static let armQuit = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.18)
   /// Reduce motion: crossfades only.
   static let crossfade = Animation.easeOut(duration: 0.16)
   /// Content leaving before the shape retracts.

@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
     }
     installSignalHandlers()
+    installMainMenu()
     // Keep the installed hook bridge in step with this build (it used to refresh only when
     // Settings opened). Demo runs never touch the real hook copy.
     if !NotchSettings.isDemo { HookInstaller.refreshCopy() }
@@ -140,5 +141,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     alert.addButton(withTitle: loc("OK"))
     NSApp.activate()
     alert.runModal()
+  }
+
+  /// A menu bar the app never shows (it has no Dock icon), only for its keys while Settings is
+  /// in front: ⌘Q quits, and the text fields get ⌘X / ⌘C / ⌘V / ⌘A / ⌘Z.
+  private func installMainMenu() {
+    let main = NSMenu()
+    let appItem = NSMenuItem()
+    let appMenu = NSMenu()
+    appMenu.addItem(
+      NSMenuItem(
+        title: loc("Quit ClaudeNotch"), action: #selector(NSApplication.terminate(_:)),
+        keyEquivalent: "q"))
+    appItem.submenu = appMenu
+    main.addItem(appItem)
+    let editItem = NSMenuItem()
+    let edit = NSMenu(title: "Edit")
+    edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+    let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+    redo.keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+    editItem.submenu = edit
+    main.addItem(editItem)
+    NSApp.mainMenu = main
   }
 }

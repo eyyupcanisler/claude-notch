@@ -25,6 +25,7 @@ struct ExpandedToolbar: View {
           action: actions.togglePin)
         BandIconButton(
           icon: "gearshape", label: loc("Settings"), active: false, action: actions.openSettings)
+        BandQuitButton(quit: actions.quit)
         BandIconButton(
           icon: settings.silentMode ? "bell.slash.fill" : "bell",
           label: settings.silentMode
@@ -108,6 +109,69 @@ struct BandChip: View {
       .padding(.horizontal, 8)
       .frame(height: 20)
       .background(Capsule().fill(solid ? color : color.opacity(0.18)))
+  }
+}
+
+/// Quits the app, in plain sight in the band (it used to be only in the right-click menu). A
+/// first click arms it: it turns into a red "Quit" pill for 3 s, and a second click quits. One
+/// stray click on a panel that opens under the pointer must not end the app, and neither does
+/// a double-click (its second click lands within the system double-click time).
+struct BandQuitButton: View {
+  let quit: () -> Void
+  @State private var armedAt: Date?
+  @State private var hover = false
+  @State private var disarm: Task<Void, Never>?
+  @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  static let armedFor: Duration = .seconds(3)
+
+  private var armed: Bool { armedAt != nil }
+
+  var body: some View {
+    Button(action: press) {
+      HStack(spacing: 4) {
+        Image(systemName: "power")
+          .font(.system(size: 11.5, weight: armed ? .bold : .medium))
+        if armed {
+          Text("Quit")
+            .font(.system(size: 11, weight: .semibold))
+            .fixedSize()
+            .transition(.opacity)
+        }
+      }
+      .foregroundStyle(
+        armed ? NotchTheme.onStatus : (hover ? NotchTheme.bandInk : NotchTheme.bandSecondary))
+      .padding(.horizontal, armed ? 8 : 0)
+      .frame(minWidth: 24, minHeight: 24)
+      .background(Capsule().fill(armed ? theme.error : .white.opacity(hover ? 0.12 : 0)))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hover = $0 }
+    .help(armed ? loc("Click again to quit ClaudeNotch") : loc("Quit ClaudeNotch"))
+    .accessibilityLabel(armed ? loc("Click again to quit ClaudeNotch") : loc("Quit ClaudeNotch"))
+    .onDisappear {
+      disarm?.cancel()
+      armedAt = nil
+    }
+  }
+
+  private func press() {
+    if let at = armedAt {
+      // The second click of a double-click is not a decision.
+      guard Date().timeIntervalSince(at) > NSEvent.doubleClickInterval else { return }
+      clickLog.notice("quit from the panel")
+      quit()
+      return
+    }
+    withAnimation(reduceMotion ? nil : Motion.armQuit) { armedAt = Date() }
+    disarm?.cancel()
+    disarm = Task { @MainActor in
+      try? await Task.sleep(for: Self.armedFor)
+      guard !Task.isCancelled else { return }
+      withAnimation(reduceMotion ? nil : Motion.armQuit) { armedAt = nil }
+    }
   }
 }
 

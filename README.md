@@ -46,6 +46,10 @@ it with Homebrew when Homebrew is there; macOS 15 and later have it).
 
 **Settings:** ClaudeNotch has no Dock icon. Open it again from Spotlight to see its Settings.
 
+**Quit:** the power button in the panel's top bar (click it, then click the red **Quit**), or
+Settings → General → **Quit ClaudeNotch** (⌘Q works there too). Open it from Spotlight to
+start it again.
+
 **Uninstall:**
 
 ```sh

@@ -457,3 +457,8 @@
 "Hooks removed and your status line put back. Open Claude Code sessions are affected once restarted." = "Kancalar kaldırıldı ve durum satırınız eski haline döndü. Açık Claude Code oturumları yeniden başlatılınca etkilenir.";
 "Connected. Open Claude Code sessions use it from their next message; plan usage shows once Claude Code next updates its status line." = "Bağlandı. Açık Claude Code oturumları bir sonraki mesajdan itibaren kullanır; plan kullanımı, Claude Code durum satırını bir sonraki güncellediğinde görünür.";
 "Status line connected. Plan usage shows once Claude Code next updates its status line." = "Durum satırı bağlandı. Plan kullanımı, Claude Code durum satırını bir sonraki güncellediğinde görünür.";
+
+/* Quitting in plain sight: the band's power button (two clicks) and Settings. */
+"Quit" = "Çık";
+"Click again to quit ClaudeNotch" = "ClaudeNotch’tan çıkmak için tekrar tıklayın";
+"Open ClaudeNotch again from Spotlight to start it." = "Yeniden başlatmak için ClaudeNotch’ı Spotlight’tan açın.";

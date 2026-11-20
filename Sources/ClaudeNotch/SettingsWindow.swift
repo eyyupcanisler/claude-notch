@@ -174,6 +174,14 @@ struct SettingsView: View {
           if let loginError {
             Text(loginError).font(.caption).foregroundStyle(.orange)
           }
+          // Quitting in plain sight (also the power button in the panel's band, and ⌘Q here).
+          HStack {
+            Text("Open ClaudeNotch again from Spotlight to start it.")
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Quit ClaudeNotch") { NSApp.terminate(nil) }
+          }
         }
       }
       .formStyle(.grouped)
