@@ -2281,6 +2281,7 @@ final class NotchController {
     }
     if json["timer_toggle"] != nil { modules.toggleTimer() }
     if json["pomodoro_start"] != nil { modules.startPomodoro() }
+    if json["timer_end_soon"] != nil { modules.debugEndSoon() }
     // {"menu_reach": 300 | null}: the front app's menu width the ears beside the notch plan
     // around (the test copy has no Accessibility access to read it).
     if let r = json["menu_reach"] {

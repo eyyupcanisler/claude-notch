@@ -191,6 +191,14 @@ struct NotchRootView: View {
 
   private var theme: NotchTheme { settings.tokens }
   private var mode: NotchMode { surface.mode }
+
+  /// A timer ear coming out of the notch: it slides out from under it (the hardware notch is
+  /// black, so it seems to grow from there) and fades in; back in the same way. `fromLeft`:
+  /// the notch is on the ear's left (the right ear). Reduce Motion: a fade only.
+  static func earTransition(fromLeft: Bool) -> AnyTransition {
+    guard !Motion.reduce else { return .opacity }
+    return .opacity.combined(with: .offset(x: fromLeft ? -30 : 30))
+  }
   private var g: NotchGeometry { surface.geometry }
 
   var body: some View {
@@ -256,6 +264,8 @@ struct NotchRootView: View {
           .onTapGesture { actions.expand(g.displayID) }
           .transition(.opacity)
       }
+      // The ears grow out from under the notch sideways (the wings' spring), and go back in.
+      ZStack {
       if earShown {
         // Anchored at the notch's right edge (or the right wing's mark), whatever the ear's
         // width: it grows by itself when the time passes an hour.
@@ -269,8 +279,11 @@ struct NotchRootView: View {
           Spacer(minLength: 0).allowsHitTesting(false)
         }
         .frame(width: windowW, height: NotchMetrics.timerEarHeight(g), alignment: .leading)
-        .transition(.opacity)
+        .transition(Self.earTransition(fromLeft: true))
       }
+      }
+      .animation(Motion.reduce ? Motion.crossfade : Motion.wings, value: earShown)
+      ZStack {
       if roundW > 0 {
         // Mirrors the timer's ear: anchored at the notch's left edge (or the left wing's mark).
         let anchor = windowW / 2 - g.notchWidth / 2
@@ -283,8 +296,10 @@ struct NotchRootView: View {
           Color.clear.frame(width: max(0, windowW - anchor)).allowsHitTesting(false)
         }
         .frame(width: windowW, height: NotchMetrics.timerEarHeight(g), alignment: .trailing)
-        .transition(.opacity)
+        .transition(Self.earTransition(fromLeft: false))
       }
+      }
+      .animation(Motion.reduce ? Motion.crossfade : Motion.wings, value: roundW > 0)
       if pillShown {
         TimerPill(modules: modules)
           .frame(

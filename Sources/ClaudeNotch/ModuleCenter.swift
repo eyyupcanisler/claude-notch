@@ -38,6 +38,20 @@ final class ModuleCenter {
   /// Set while the timer runs a Pomodoro cycle (focus / breaks), nil for a plain timer.
   private(set) var pomodoro: Pomodoro?
   @ObservationIgnored private var timerTask: Task<Void, Never>?
+  /// The timer's last phase change (a break started, a break or the timer ended): the ears
+  /// flash with it, so it is seen even in a Focus, when no sound plays and no note shows.
+  private(set) var timerFlash: TimerFlash?
+  /// The flash the ears last played (one flash plays once, also when the ears come out late).
+  @ObservationIgnored var timerFlashPlayed: [String: Int] = [:]
+  /// A plain timer that just ended keeps its ear out (00:00) for `doneLinger`.
+  private(set) var timerDoneShowing = false
+  @ObservationIgnored private var doneTask: Task<Void, Never>?
+  static let doneLinger: Duration = .seconds(30)
+
+  struct TimerFlash: Equatable {
+    var id: Int
+    var at: Date
+  }
 
   // MARK: Battery state
   @ObservationIgnored private var battery: BatteryMonitor?
@@ -292,8 +306,28 @@ final class ModuleCenter {
   var timerShowing: Bool {
     switch timer.state {
     case .running, .paused: return settings.timerEnabled
-    default: return false
+    // A Pomodoro waiting for its next focus block keeps its ears (a play sign: start it from
+    // the panel or with the shortcut); a plain timer's ear stays a little after it ends.
+    case .finished: return settings.timerEnabled && (pomodoro != nil || timerDoneShowing)
+    case .idle: return false
     }
+  }
+
+  /// Seconds the timer's ear shows: the time left, or the next focus block's length while a
+  /// Pomodoro waits for it.
+  func earSeconds(at now: Date) -> TimeInterval {
+    if case .finished = timer.state, let p = pomodoro { return TimeInterval(p.minutes(p.phase) * 60) }
+    return timer.remaining(at: now)
+  }
+
+  /// A Pomodoro between phases, waiting for the user to start the next one.
+  var pomodoroWaiting: Bool {
+    if case .finished = timer.state { return pomodoro != nil }
+    return false
+  }
+
+  private func flashTimer() {
+    timerFlash = TimerFlash(id: (timerFlash?.id ?? 0) + 1, at: Date())
   }
 
   /// The notch grows down with the time inside on screen `g`: the style "under the notch", or
@@ -306,7 +340,7 @@ final class ModuleCenter {
   /// does not show there.
   func timerEar(on g: NotchGeometry, at now: Date = Date()) -> CGFloat {
     guard timerShowing, settings.timerStyle == .beside, g.bandHeight > 0 else { return 0 }
-    return TimerEar.width(remaining: timer.remaining(at: now))
+    return TimerEar.width(remaining: earSeconds(at: now))
   }
 
   /// Width of the Pomodoro round's ear ("2/4") left of the notch on screen `g`, the mirror of
@@ -373,9 +407,21 @@ final class ModuleCenter {
 
   private func run(minutes: Int) {
     timerDraft = nil
+    timerDoneShowing = false
     timerTask?.cancel()
     timer.reset()
     timer.duration = TimeInterval(minutes * 60)
+    timer.toggle(at: Date())
+    scheduleTimer()
+  }
+
+  /// Debug (`/debug/ui` `timer_end_soon`): the running block ends in a second, as if its time
+  /// were up (the Pomodoro keeps its phase).
+  func debugEndSoon() {
+    guard timer.isRunning else { return }
+    timerTask?.cancel()
+    timer.reset()
+    timer.duration = 1
     timer.toggle(at: Date())
     scheduleTimer()
   }
@@ -388,6 +434,7 @@ final class ModuleCenter {
 
   func resetTimer() {
     timerDraft = nil
+    timerDoneShowing = false
     pomodoro = nil
     timerTask?.cancel()
     timerTask = nil
@@ -402,11 +449,19 @@ final class ModuleCenter {
     timerTask = Task { [weak self] in
       try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
       guard !Task.isCancelled, let self, self.timer.settle(at: Date()) else { return }
+      self.flashTimer()
       if FocusIslands.playsModuleSound(focusActive: self.settings.focusOn) {
         self.settings.play("Glass")
       }
       let id = "timer:\(Int(end.timeIntervalSince1970))"
       guard var p = self.pomodoro else {
+        self.timerDoneShowing = true
+        self.doneTask?.cancel()
+        self.doneTask = Task { [weak self] in
+          try? await Task.sleep(for: Self.doneLinger)
+          guard !Task.isCancelled else { return }
+          self?.timerDoneShowing = false
+        }
         self.onNote?(
           ModuleNote(
             source: .timer, id: id, title: loc("Timer done"),

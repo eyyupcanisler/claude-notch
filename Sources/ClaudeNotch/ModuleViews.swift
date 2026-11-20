@@ -307,23 +307,23 @@ struct TimerPill: View {
   }
 
   private func pill(at now: Date) -> some View {
-    let running = modules.timer.isRunning
-    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : TimerEar.focusTint
-    let tint = running ? base : base.opacity(0.55)
+    let tint = TimerEar.tint(modules, theme: theme)
+    let shape = UnevenRoundedRectangle(
+      bottomLeadingRadius: 11, bottomTrailingRadius: 11, style: .continuous)
     return HStack(spacing: 5) {
-      Image(systemName: running ? "timer" : "pause.fill")
+      Image(systemName: TimerEar.symbol(modules))
         .font(.system(size: 9, weight: .bold))
         .foregroundStyle(tint)
+        .contentTransition(.symbolEffect(.replace))
       DotMatrixText(
-        text: DotClock.countdown(modules.timer.remaining(at: now)), color: tint, pitch: 1.7)
+        text: DotClock.countdown(modules.earSeconds(at: now)), color: tint, pitch: 1.7)
     }
+    .modifier(EarDip(running: modules.timer.isRunning, anchor: .center))
     .padding(.top, NotchMetrics.pillOverlap)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     // The notch growing down: straight sides, rounded bottom.
-    .background(
-      UnevenRoundedRectangle(
-        bottomLeadingRadius: 11, bottomTrailingRadius: 11, style: .continuous
-      ).fill(Color.black))
+    .modifier(EarFlash(modules: modules, key: "pill", tint: tint, shape: shape))
+    .background(shape.fill(Color.black))
   }
 }
 
@@ -361,27 +361,58 @@ struct TimerEar: View {
       }
     }
     .accessibilityElement()
-    .accessibilityLabel(
-      loc("Timer: \(DotClock.countdown(modules.timer.remaining(at: Date()))) left"))
+    .accessibilityLabel(label)
+  }
+
+  private var label: String {
+    if modules.pomodoroWaiting, let p = modules.pomodoro {
+      return loc("Focus \(p.round)/\(p.roundsBeforeLong) is ready: open the notch to start it")
+    }
+    return loc("Timer: \(DotClock.countdown(modules.timer.remaining(at: Date()))) left")
+  }
+
+  /// Tint of the ears: white while focusing (or a plain timer), the "done" colour on a break
+  /// and when a plain timer has ended; half as bright while paused or waiting.
+  static func tint(_ modules: ModuleCenter, theme: NotchTheme) -> Color {
+    let ended: Bool = {
+      if case .finished = modules.timer.state { return modules.pomodoro == nil }
+      return false
+    }()
+    let base = modules.pomodoro?.phase.isBreak == true || ended ? theme.done : focusTint
+    return modules.timer.isRunning || ended ? base : base.opacity(0.55)
+  }
+
+  private var symbol: String { Self.symbol(modules) }
+
+  /// The ear's icon: running, paused, a Pomodoro waiting for its next block (play), a plain
+  /// timer that ended (check).
+  static func symbol(_ modules: ModuleCenter) -> String {
+    switch modules.timer.state {
+    case .running: return "timer"
+    case .paused: return "pause.fill"
+    case .finished: return modules.pomodoro != nil ? "play.fill" : "checkmark"
+    case .idle: return "timer"
+    }
   }
 
   private func ear(at now: Date) -> some View {
-    let running = modules.timer.isRunning
-    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : TimerEar.focusTint
-    let tint = running ? base : base.opacity(0.55)
-    let remaining = modules.timer.remaining(at: now)
+    let tint = Self.tint(modules, theme: theme)
+    let seconds = modules.earSeconds(at: now)
+    let shape = UnevenRoundedRectangle(bottomTrailingRadius: 9, style: .continuous)
     return HStack(spacing: Self.gap) {
-      Image(systemName: running ? "timer" : "pause.fill")
+      Image(systemName: symbol)
         .font(.system(size: 9, weight: .bold))
         .foregroundStyle(tint)
+        .contentTransition(.symbolEffect(.replace))
         .frame(width: Self.icon)
-      DotMatrixText(text: DotClock.countdown(remaining), color: tint, pitch: Self.pitch)
+      DotMatrixText(text: DotClock.countdown(seconds), color: tint, pitch: Self.pitch)
     }
-    .frame(width: Self.width(remaining: remaining), height: height)
+    .modifier(EarDip(running: modules.timer.isRunning, anchor: .leading))
+    .frame(width: Self.width(remaining: seconds), height: height)
     // The part under the notch covers its rounded corner, so no gap shows where they meet.
     .padding(.leading, SpotifyEars.overlap)
-    .background(
-      UnevenRoundedRectangle(bottomTrailingRadius: 9, style: .continuous).fill(Color.black))
+    .modifier(EarFlash(modules: modules, key: "timer", tint: tint, shape: shape))
+    .background(shape.fill(Color.black))
     .contentShape(Rectangle())
   }
 }
@@ -403,19 +434,77 @@ struct RoundEar: View {
   }
 
   var body: some View {
-    let p = modules.pomodoro
-    let text = p.map(ModuleCenter.roundText) ?? ""
-    let base = p?.phase.isBreak == true ? theme.done : TimerEar.focusTint
-    let tint = modules.timer.isRunning ? base : base.opacity(0.55)
+    let text = modules.pomodoro.map(ModuleCenter.roundText) ?? ""
+    let tint = TimerEar.tint(modules, theme: theme)
+    let shape = UnevenRoundedRectangle(bottomLeadingRadius: 9, style: .continuous)
     DotMatrixText(text: text, color: tint, pitch: TimerEar.pitch)
+      .modifier(EarDip(running: modules.timer.isRunning, anchor: .trailing))
       .frame(width: max(width, Self.width(text: text)), height: height)
       // The part under the notch covers its rounded corner, so no gap shows where they meet.
       .padding(.trailing, SpotifyEars.overlap)
-      .background(
-        UnevenRoundedRectangle(bottomLeadingRadius: 9, style: .continuous).fill(Color.black))
+      .modifier(EarFlash(modules: modules, key: "round", tint: tint, shape: shape))
+      .background(shape.fill(Color.black))
       .contentShape(Rectangle())
       .accessibilityElement()
       .accessibilityLabel(loc("Pomodoro round \(text)"))
+  }
+}
+
+/// Pause / resume: the ear's content dips and comes back (a press-like acknowledgement of the
+/// change, about a quarter second; the icon swaps at the same time). No movement with Reduce
+/// Motion: the icon swap and the dimming say it.
+private struct EarDip: ViewModifier {
+  let running: Bool
+  /// The notch side: the content shrinks toward the notch.
+  let anchor: UnitPoint
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content.keyframeAnimator(initialValue: 1.0, trigger: running) { view, scale in
+      view.scaleEffect(reduceMotion ? 1 : scale, anchor: anchor)
+    } keyframes: { _ in
+      CubicKeyframe(0.84, duration: 0.09)
+      SpringKeyframe(1.0, duration: 0.24, spring: .init(response: 0.24, dampingRatio: 0.7))
+    }
+  }
+}
+
+/// A phase change (a break started, a break or the timer ended): the ear lights up in the
+/// timer's colour three times (about 1.5 s; under 3 flashes a second), so the change is seen
+/// without a sound, also in a Focus. An ear that comes out late (the wings' text had that
+/// side) plays the flash then, if it is under 10 s old; each ear plays each flash once.
+/// Reduce Motion: the same three, slower.
+private struct EarFlash<S: Shape>: ViewModifier {
+  let modules: ModuleCenter
+  let key: String
+  let tint: Color
+  let shape: S
+  @State private var trigger = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content
+      .keyframeAnimator(initialValue: 0.0, trigger: trigger) { view, glow in
+        view.background(shape.fill(tint.opacity(glow)))
+      } keyframes: { _ in
+        let k = reduceMotion ? 1.8 : 1.0
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0.08, duration: 0.26 * k)
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0.08, duration: 0.26 * k)
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0, duration: 0.6 * k)
+      }
+      .onAppear { play() }
+      .onChange(of: modules.timerFlash?.id) { play() }
+  }
+
+  private func play() {
+    guard let f = modules.timerFlash, modules.timerFlashPlayed[key] != f.id,
+      Date().timeIntervalSince(f.at) < 10
+    else { return }
+    modules.timerFlashPlayed[key] = f.id
+    trigger += 1
   }
 }
 

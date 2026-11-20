@@ -135,7 +135,11 @@ long one: what each part does, the settings behind it, and how it works inside.
   right of the notch shows the time, inside the menu bar, so nothing covers the browser tabs
   under it; during a Pomodoro a matching ear on the left shows the round, like *2/4*, when the
   menus of the app in front leave room for it (it never covers a menu: see
-  [ADR 0001](adr/0001-never-cover-what-the-user-clicks.md)); Settings → *Modules → Timer and Pomodoro → Show a running timer → Under the notch
+  [ADR 0001](adr/0001-never-cover-what-the-user-clicks.md)). The ears grow out of the notch
+  when the timer starts and dip when you pause or resume it. When a phase changes (a break
+  starts, a break or the timer ends) they light up three times in the timer's colour, also
+  during a Focus / Do Not Disturb, when no sound plays and no note shows. Between Pomodoro
+  phases they stay out with a ▶ and the next block's length until you start it; Settings → *Modules → Timer and Pomodoro → Show a running timer → Under the notch
   (large)* makes the notch grow down with the time instead), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
   Spotify cover and controls, a clipboard shelf with pinning (one folded line in the panel:
   click it to see the copied items), weather, plan usage, battery,
