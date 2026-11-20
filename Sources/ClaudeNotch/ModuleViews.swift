@@ -327,6 +327,61 @@ struct TimerPill: View {
   }
 }
 
+/// The running (or paused) timer while the panel is closed, in the style "beside the notch":
+/// a small black ear on the right of the notch at menu-bar height, fused to it like Spotify's
+/// ears, with the time inside. Nothing drops below the menu bar, so a browser's tabs under it
+/// stay in sight and clickable. The right side, because app menus run in from the left.
+struct TimerEar: View {
+  let modules: ModuleCenter
+  let height: CGFloat
+  @Environment(\.notchTheme) private var theme
+
+  static let pitch: CGFloat = 1.6
+  static let icon: CGFloat = 10
+  static let gap: CGFloat = 4
+  /// Inner padding at the ear's outer end and next to the notch.
+  static let padding: CGFloat = 8
+
+  /// The visible ear's width for this remaining time ("24:59" or "1:59:59").
+  static func width(remaining: TimeInterval) -> CGFloat {
+    (DotMatrixText.width(DotClock.countdown(remaining), pitch: pitch) + icon + gap + padding * 2)
+      .rounded(.up)
+  }
+
+  var body: some View {
+    Group {
+      if modules.timer.isRunning {
+        TimelineView(.periodic(from: .now, by: 1)) { context in ear(at: context.date) }
+      } else {
+        ear(at: Date())
+      }
+    }
+    .accessibilityElement()
+    .accessibilityLabel(
+      loc("Timer: \(DotClock.countdown(modules.timer.remaining(at: Date()))) left"))
+  }
+
+  private func ear(at now: Date) -> some View {
+    let running = modules.timer.isRunning
+    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : theme.working
+    let tint = running ? base : base.opacity(0.55)
+    let remaining = modules.timer.remaining(at: now)
+    return HStack(spacing: Self.gap) {
+      Image(systemName: running ? "timer" : "pause.fill")
+        .font(.system(size: 9, weight: .bold))
+        .foregroundStyle(tint)
+        .frame(width: Self.icon)
+      DotMatrixText(text: DotClock.countdown(remaining), color: tint, pitch: Self.pitch)
+    }
+    .frame(width: Self.width(remaining: remaining), height: height)
+    // The part under the notch covers its rounded corner, so no gap shows where they meet.
+    .padding(.leading, SpotifyEars.overlap)
+    .background(
+      UnevenRoundedRectangle(bottomTrailingRadius: 9, style: .continuous).fill(Color.black))
+    .contentShape(Rectangle())
+  }
+}
+
 /// Spotify while playing and the panel is closed, fused to the notch (each ear starts inside
 /// it, so no gap shows). Full: a black ear on each side, the cover left, a waveform right.
 /// Tucked (an app in front whose menu might reach the notch): the black ears fold away and the
@@ -337,6 +392,8 @@ struct SpotifyEars: View {
   let full: Bool
   let notchWidth: CGFloat
   let height: CGFloat
+  /// The right ear (the waveform) shows; false while the timer's ear has that side.
+  var trailing = true
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let green = Color(hex: 0x1ED760)
@@ -352,7 +409,7 @@ struct SpotifyEars: View {
     HStack(spacing: 0) {
       side(leading: true, width: w)
       Color.clear.frame(width: notchWidth - Self.overlap * 2)
-      side(leading: false, width: w)
+      side(leading: false, width: w).opacity(trailing ? 1 : 0)
     }
     .frame(height: height)
     .animation(

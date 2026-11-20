@@ -131,8 +131,10 @@ long one: what each part does, the settings behind it, and how it works inside.
   request, a question, a plan approval). Claude Code's "waiting for your input" notice a minute
   after a turn does not bring it back. A chat with a permission request, a question, a plan approval or an unread error cannot be hidden; one only waiting for its next prompt can. Under the rows,
   **Hidden** lists the hidden chats by title: click one to show it again, or **Show all**.
-- **Small tools, all optional:** Pomodoro / focus timer (it grows out of the notch while it
-  runs), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
+- **Small tools, all optional:** Pomodoro / focus timer (while it runs, a small ear on the
+  right of the notch shows the time, inside the menu bar, so nothing covers the browser tabs
+  under it; Settings → *Modules → Timer and Pomodoro → Show a running timer → Under the notch
+  (large)* makes the notch grow down with the time instead), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
   Spotify cover and controls, a clipboard shelf with pinning (one folded line in the panel:
   click it to see the copied items), weather, plan usage, battery,
   quiet hours and a silent mode.

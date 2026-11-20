@@ -121,6 +121,23 @@ enum SoundEvent: String, CaseIterable, Sendable {
 
 /// How long a panel a global shortcut opened stays open while the pointer never reaches it
 /// (Settings: "Keep the panel open when a shortcut opens it").
+/// Where a running (or paused) timer shows while the panel is closed.
+enum TimerStyle: String, CaseIterable, Sendable {
+  /// A small ear on the right of the notch, inside the menu bar: nothing drops below it, so
+  /// what is under the menu bar (a browser's tabs) stays in sight and clickable.
+  case beside
+  /// The notch grows down with the time inside: larger, but it covers what is under the menu
+  /// bar. The original look.
+  case below
+
+  var title: String {
+    switch self {
+    case .beside: return loc("Beside the notch (compact)")
+    case .below: return loc("Under the notch (large)")
+    }
+  }
+}
+
 enum PeekDuration: String, CaseIterable, Sendable {
   case short = "8"
   case normal = "15"
@@ -272,6 +289,10 @@ final class NotchSettings {
   var timerMinutes: Int {
     didSet { defaults.set(timerMinutes, forKey: "module.timerMinutes") }
   }
+  /// Where the running timer shows while the panel is closed (default: beside the notch).
+  var timerStyle: TimerStyle {
+    didSet { defaults.set(timerStyle.rawValue, forKey: "module.timerStyle") }
+  }
   var batteryEnabled: Bool {
     didSet { defaults.set(batteryEnabled, forKey: "module.battery") }
   }
@@ -377,6 +398,7 @@ final class NotchSettings {
     calendarOwnAlerts = defaults.object(forKey: "module.calendarOwnAlerts") as? Bool ?? true
     let minutes = defaults.integer(forKey: "module.timerMinutes")
     timerMinutes = (1...180).contains(minutes) ? minutes : 25
+    timerStyle = TimerStyle(rawValue: defaults.string(forKey: "module.timerStyle") ?? "") ?? .beside
     func stored(_ key: String, _ range: ClosedRange<Int>, _ fallback: Int) -> Int {
       let v = defaults.integer(forKey: key)
       return range.contains(v) ? v : fallback

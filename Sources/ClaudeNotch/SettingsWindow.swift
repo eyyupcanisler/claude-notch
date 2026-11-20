@@ -229,6 +229,14 @@ struct SettingsView: View {
           Toggle(
             "Timer (set with ⏲ in the panel’s top band)", isOn: $settings.timerEnabled)
           if settings.timerEnabled {
+            Picker("Show a running timer", selection: $settings.timerStyle) {
+              ForEach(TimerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            Text(settings.timerStyle == .beside
+              ? loc("A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free.")
+              : loc("The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs."))
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
             Picker("Pomodoro layout", selection: Binding(
               get: { PomoPreset.match(settings) }, set: { $0.apply(to: settings) })
             ) {

@@ -44,6 +44,27 @@ undo it) and, at the end, the questions to grill you on. Each ON entry ends with
 
 ---
 
+## ON16: The running timer sits beside the notch now
+
+**What:** while a timer runs (and the panel is closed), the time shows in a small black ear
+on the **right** of the notch, inside the menu bar. Before, the notch grew 22 pt down with
+the time inside and covered the top of your browser tabs. The old look stays as an option:
+Settings → Modules → Timer and Pomodoro → *Show a running timer* → *Under the notch (large)*.
+It is also used by itself on a screen without a menu bar (full screen), where an ear has no
+room.
+**Details:** right side, because app menus run in from the left (Chrome's reach the notch on
+a 13" screen); the ear may cover the menu bar icon closest to the notch. With Spotify playing,
+the timer takes the right ear and the cover keeps the left. While a notification's 4 s text
+is out the ear steps aside; next to a waiting mark (?, shield) it sits beside the mark. A
+click on the ear opens the panel.
+**Default changed:** the new style is the default, also for existing installs (you asked for
+it). **Revert:** pick *Under the notch (large)* in Settings, or `git revert` the
+"feat(timer)" commit.
+
+**A:**
+
+---
+
 ## ON15: Quit takes two clicks in the panel
 
 **What:** a power button in the panel's top bar, right after Settings. First click: it turns
@@ -304,6 +325,8 @@ log show --last 10m --style compact --predicate 'subsystem == "com.eyyupcan.clau
 9. **Upstream**: should any of this go back to `eyyupcanisler/claude-notch` as a pull request?
 10. **Quit** (ON15): two clicks in the panel, or one, or press and hold? And is beside
     Settings the right place?
+11. **Timer** (ON16): is the right side of the notch the right place? Should the ear also
+    show progress (a thin bar), or stay just the time?
 
 ---
 

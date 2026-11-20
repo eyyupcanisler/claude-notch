@@ -28,7 +28,14 @@ struct DotMatrixText: View {
     "%": ["11001", "11010", "00010", "00100", "01000", "01011", "10011"],
   ]
 
-  private var columns: [[Bool]] {
+  /// Width `text` takes at `pitch` (the same columns the view draws).
+  static func width(_ text: String, pitch: CGFloat) -> CGFloat {
+    CGFloat(columns(of: text).count) * pitch
+  }
+
+  private var columns: [[Bool]] { Self.columns(of: text) }
+
+  private static func columns(of text: String) -> [[Bool]] {
     var cols: [[Bool]] = []
     for (i, ch) in text.enumerated() {
       guard let g = Self.glyphs[ch] else { continue }

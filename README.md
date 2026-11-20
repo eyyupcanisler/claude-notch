@@ -72,7 +72,8 @@ This removes the app, the hooks and the status line bridge, and puts your old st
   **hide** one until it does something new.
 - **Plan usage:** your 5-hour and weekly limits in the panel, with a warning at 80% and 95%
   of the 5-hour limit (and of the weekly one, if you turn that on).
-- **Small extras, all optional:** focus timer, calendar reminders with a Join button, Spotify,
+- **Small extras, all optional:** focus timer (a small ear beside the notch while it runs, so
+  your browser tabs stay free), calendar reminders with a Join button, Spotify,
   clipboard shelf, weather, quiet hours, Do Not Disturb awareness.
 
 The app speaks English and Turkish: it follows your Mac's language (Settings → General →

@@ -462,3 +462,11 @@
 "Quit" = "Çık";
 "Click again to quit ClaudeNotch" = "ClaudeNotch’tan çıkmak için tekrar tıklayın";
 "Open ClaudeNotch again from Spotlight to start it." = "Yeniden başlatmak için ClaudeNotch’ı Spotlight’tan açın.";
+
+/* Where a running timer shows while the panel is closed. */
+"Beside the notch (compact)" = "Çentiğin yanında (küçük)";
+"Under the notch (large)" = "Çentiğin altında (büyük)";
+"Show a running timer" = "Çalışan zamanlayıcıyı göster";
+"Timer: %@ left" = "Zamanlayıcı: %@ kaldı";
+"A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free." = "Çentiğin sağında, menü çubuğunun içinde küçük bir kulak: altındaki tarayıcı sekmeleri açıkta kalır.";
+"The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs." = "Çentik, içinde süreyle aşağı uzar; menü çubuğunun hemen altındakini (tarayıcı sekmeleri gibi) örter.";

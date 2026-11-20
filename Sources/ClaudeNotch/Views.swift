@@ -205,8 +205,13 @@ struct NotchRootView: View {
     // The status line and the timer stay while the wings are out (a mark can linger for long);
     // on a screen without a menu bar the wings sit where the line would be, so it waits.
     let lineMode = mode == .collapsed || (mode == .peek && g.bandHeight > 0)
-    let pillShown = lineMode && surface.visible && modules.timerPillVisible
-      && (g.hasNotch || !segments.isEmpty)
+    let timerHere = surface.visible && (g.hasNotch || !segments.isEmpty)
+    let pillShown = lineMode && timerHere && modules.timerPill(on: g)
+    // The timer's ear beside the notch (the style "beside"): while collapsed, and next to the
+    // wings' small mark (it waits while their 4 s text is out).
+    let earShown = timerHere && modules.timerEar(on: g) > 0
+      && (mode == .collapsed
+        || (mode == .peek && surface.wingSide <= WingMetrics.markWidth + 0.5))
     ZStack(alignment: .top) {
       NotchBackground(mode: mode, theme: theme, band: g.toolbarHeight)
         .clipShape(shape)
@@ -243,9 +248,24 @@ struct NotchRootView: View {
       {
         SpotifyEars(
           spotify: modules.spotify, full: modules.earsFull || !g.hasNotch,
-          notchWidth: g.notchWidth, height: g.bandHeight)
+          notchWidth: g.notchWidth, height: g.bandHeight, trailing: !earShown)
           .onTapGesture { actions.expand(g.displayID) }
           .transition(.opacity)
+      }
+      if earShown {
+        // Anchored at the notch's right edge (or the right wing's mark), whatever the ear's
+        // width: it grows by itself when the time passes an hour.
+        let anchor = windowW / 2 + g.notchWidth / 2
+          + (mode == .peek ? surface.wingSide : 0) - SpotifyEars.overlap
+        HStack(spacing: 0) {
+          Color.clear.frame(width: max(0, anchor)).allowsHitTesting(false)
+          TimerEar(modules: modules, height: NotchMetrics.timerEarHeight(g))
+            .fixedSize()
+            .onTapGesture { actions.expand(g.displayID) }
+          Spacer(minLength: 0).allowsHitTesting(false)
+        }
+        .frame(width: windowW, height: NotchMetrics.timerEarHeight(g), alignment: .leading)
+        .transition(.opacity)
       }
       if pillShown {
         TimerPill(modules: modules)
@@ -263,7 +283,7 @@ struct NotchRootView: View {
         Color.clear
           .frame(
             width: g.notchWidth,
-            height: modules.timerPillVisible
+            height: modules.timerPill(on: g)
               ? NotchMetrics.pillZoneDepth(g) : NotchMetrics.lineZoneDepth(g))
           .contentShape(Rectangle())
           .onTapGesture { tap() }

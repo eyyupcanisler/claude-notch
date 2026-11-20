@@ -618,13 +618,14 @@ final class NotchController {
     let p = NSEvent.mouseLocation
     let now = Date()
     let live = hasSessions
-    let pill = modules.timerPillVisible
     let ears = modules.earsVisible
     for s in surfaces.values {
       let g0 = s.state.geometry
+      let pill = modules.timerPill(on: g0)
+      let timerEar = g0.hasNotch || live ? modules.timerEar(on: g0, at: now) : 0
       let rects = s.hitRects(
         hasSessions: live, pill: pill, ears: ears && (g0.hasNotch || live),
-        fullEars: modules.earsFull || !g0.hasNotch)
+        fullEars: modules.earsFull || !g0.hasNotch, timerEar: timerEar)
       if let start = s.pointerAtAppear, hypot(p.x - start.x, p.y - start.y) > 2 {
         s.pointerAtAppear = nil
       }
@@ -646,13 +647,14 @@ final class NotchController {
         let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
         let fired = s.intent.update(
           point: p, at: now, minX: notchMinX, maxX: notchMaxX, top: top, bottom: top - depth)
-        let primed = s.intent.dwellStart != nil && s.isLive(hasSessions: live, pill: pill)
+        let primed = s.intent.dwellStart != nil
+          && s.isLive(hasSessions: live, pill: pill, timerEar: timerEar)
         if s.state.primed != primed {
           withAnimation(Motion.reduce ? nil : Motion.prime) { s.state.primed = primed }
         }
         // Open-on-hover off: the dwell still primes the swell (the notch is clickable) but
         // never opens the panel; the intent is left as is, so the swell holds while it rests.
-        if fired, settings.openOnHover, s.isLive(hasSessions: live, pill: pill) {
+        if fired, settings.openOnHover, s.isLive(hasSessions: live, pill: pill, timerEar: timerEar) {
           s.intent.reset()
           expand(s.displayID, reason: .hover)
           return
@@ -1970,15 +1972,16 @@ final class NotchController {
     clickLog.notice(
       "press at \(Int(p.x)),\(Int(p.y)) on the panel, mode \(s.state.mode.rawValue, privacy: .public)")
     let live = hasSessions
-    let pill = modules.timerPillVisible
     let g = s.state.geometry
+    let pill = modules.timerPill(on: g)
     let cx = g.screenFrame.midX
     let top = g.screenFrame.maxY
     let depth = NotchMetrics.collapsedDepth(g, sessions: live, pill: pill)
     let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
     switch s.state.mode {
     case .collapsed:
-      guard notch.contains(p), s.isLive(hasSessions: live, pill: pill) else { return false }
+      guard notch.contains(p), s.isLive(hasSessions: live, pill: pill, timerEar: modules.timerEar(on: g))
+      else { return false }
       expand(s.displayID, reason: .click)
       return true
     case .peek:

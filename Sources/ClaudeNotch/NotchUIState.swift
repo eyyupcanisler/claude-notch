@@ -172,6 +172,12 @@ enum NotchMetrics {
 
   static func earWidth(full: Bool) -> CGFloat { full ? earWidth : thinEarWidth }
 
+  /// Height of the timer's ear beside the notch: the notch's own height, so their bottoms
+  /// line up (the menu bar can be a little taller than the notch), at most the menu bar's.
+  static func timerEarHeight(_ g: NotchGeometry) -> CGFloat {
+    g.hasNotch ? min(g.bandHeight, g.notchHeight) : g.bandHeight
+  }
+
   /// Running timer (collapsed only): the notch grows down by this much, the time inside.
   static let pillHeight: CGFloat = 22
   static let expandedWidth: CGFloat = 600

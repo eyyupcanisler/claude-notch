@@ -462,3 +462,11 @@
 "Quit" = "Quit";
 "Click again to quit ClaudeNotch" = "Click again to quit ClaudeNotch";
 "Open ClaudeNotch again from Spotlight to start it." = "Open ClaudeNotch again from Spotlight to start it.";
+
+/* Where a running timer shows while the panel is closed. */
+"Beside the notch (compact)" = "Beside the notch (compact)";
+"Under the notch (large)" = "Under the notch (large)";
+"Show a running timer" = "Show a running timer";
+"Timer: %@ left" = "Timer: %@ left";
+"A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free." = "A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free.";
+"The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs." = "The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs.";

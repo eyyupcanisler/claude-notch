@@ -287,12 +287,26 @@ final class ModuleCenter {
 
   // MARK: - Timer
 
-  /// The pill under the notch while the panel is closed: a timer that runs or is paused.
-  var timerPillVisible: Bool {
+  /// A timer runs or is paused: it shows while the panel is closed, beside or under the notch
+  /// (`TimerStyle`).
+  var timerShowing: Bool {
     switch timer.state {
     case .running, .paused: return settings.timerEnabled
     default: return false
     }
+  }
+
+  /// The notch grows down with the time inside on screen `g`: the style "under the notch", or
+  /// a screen without a menu bar (full screen), where an ear beside the notch has no room.
+  func timerPill(on g: NotchGeometry) -> Bool {
+    timerShowing && (settings.timerStyle == .below || g.bandHeight <= 0)
+  }
+
+  /// Width of the timer's ear beside the notch on screen `g` (the style "beside"); 0 when it
+  /// does not show there.
+  func timerEar(on g: NotchGeometry, at now: Date = Date()) -> CGFloat {
+    guard timerShowing, settings.timerStyle == .beside, g.bandHeight > 0 else { return 0 }
+    return TimerEar.width(remaining: timer.remaining(at: now))
   }
 
   static let draftRange = 1...180
