@@ -56,10 +56,11 @@ final class NotchSurface {
   /// and in peek mode nothing below the band except the status line under the notch.
   /// `timerEar`: width of the timer's ear right of the notch (0: none, see
   /// `ModuleCenter.timerEar`); it takes clicks while collapsed, and in peek mode beside the
-  /// wings' small mark.
+  /// wings' small mark. `roundEar`: width of the Pomodoro round's ear left of the notch
+  /// (`ModuleCenter.roundEar`), the timer's ear mirrored.
   func hitRects(
     hasSessions: Bool, pill: Bool = false, ears: Bool = false, fullEars: Bool = true,
-    timerEar: CGFloat = 0
+    timerEar: CGFloat = 0, roundEar: CGFloat = 0
   ) -> [NSRect] {
     guard isLive(hasSessions: hasSessions, pill: pill, ears: ears, timerEar: timerEar)
     else { return [] }
@@ -86,6 +87,12 @@ final class NotchSurface {
       } else if ears {
         rects.append(TopEdgeRect.hanging(minX: cx + g.notchWidth / 2, width: w, top: top, depth: h))
       }
+      if roundEar > 0, timerEar > 0 {
+        rects.append(
+          TopEdgeRect.hanging(
+            minX: cx - g.notchWidth / 2 - roundEar, width: roundEar, top: top,
+            depth: NotchMetrics.timerEarHeight(g)))
+      }
       return rects
     case .peek:
       let wings = TopEdgeRect.hanging(minX: cx - i.topWidth / 2, width: i.topWidth, top: top, depth: i.height)
@@ -97,7 +104,11 @@ final class NotchSurface {
         let ear = TopEdgeRect.hanging(
           minX: cx + g.notchWidth / 2 + state.wingSide, width: timerEar, top: top,
           depth: NotchMetrics.timerEarHeight(g))
-        return [wings, notch, ear]
+        guard roundEar > 0 else { return [wings, notch, ear] }
+        let round = TopEdgeRect.hanging(
+          minX: cx - g.notchWidth / 2 - state.wingSide - roundEar, width: roundEar, top: top,
+          depth: NotchMetrics.timerEarHeight(g))
+        return [wings, notch, ear, round]
       }
       return [wings, notch]
     case .expanded:

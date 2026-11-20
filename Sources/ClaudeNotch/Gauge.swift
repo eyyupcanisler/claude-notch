@@ -3,7 +3,7 @@ import SwiftUI
 
 // The "Gauge" look: dot-matrix numerals, tick strips and a soft corner glow on black.
 
-/// 5×7 dot-matrix numerals (digits and ':'). Unlit dots are drawn faintly, like an LED panel.
+/// 5×7 dot-matrix numerals (digits, ':' and '/'). Unlit dots are drawn faintly, like an LED panel.
 struct DotMatrixText: View {
   let text: String
   let color: Color
@@ -23,6 +23,7 @@ struct DotMatrixText: View {
     "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
     "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
     ":": ["0", "0", "1", "0", "1", "0", "0"],
+    "/": ["001", "001", "010", "010", "010", "100", "100"],
     "-": ["000", "000", "000", "111", "000", "000", "000"],
     "°": ["010", "101", "010", "000", "000", "000", "000"],
     "%": ["11001", "11010", "00010", "00100", "01000", "01011", "10011"],

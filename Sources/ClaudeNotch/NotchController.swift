@@ -623,9 +623,14 @@ final class NotchController {
       let g0 = s.state.geometry
       let pill = modules.timerPill(on: g0)
       let timerEar = g0.hasNotch || live ? modules.timerEar(on: g0, at: now) : 0
+      let spotifyLeft = ears && (g0.hasNotch || live) && s.state.mode == .collapsed
+      let roundEar = timerEar > 0
+        ? modules.roundEar(
+          on: g0, reach: s.state.mode == .peek ? s.state.wingSide : 0, spotifyLeft: spotifyLeft)
+        : 0
       let rects = s.hitRects(
         hasSessions: live, pill: pill, ears: ears && (g0.hasNotch || live),
-        fullEars: modules.earsFull || !g0.hasNotch, timerEar: timerEar)
+        fullEars: modules.earsFull || !g0.hasNotch, timerEar: timerEar, roundEar: roundEar)
       if let start = s.pointerAtAppear, hypot(p.x - start.x, p.y - start.y) > 2 {
         s.pointerAtAppear = nil
       }
@@ -2267,6 +2272,16 @@ final class NotchController {
           unit: m["unit"]?.stringValue, level: level, validUntil: Date().addingTimeInterval(60)))
     }
     if json["timer_toggle"] != nil { modules.toggleTimer() }
+    if json["pomodoro_start"] != nil { modules.startPomodoro() }
+    // {"menu_reach": 300 | null}: the front app's menu width the ears beside the notch plan
+    // around (the test copy has no Accessibility access to read it).
+    if let r = json["menu_reach"] {
+      if case .int(let v) = r {
+        modules.desktop.debugMenuReach = CGFloat(v)
+      } else {
+        modules.desktop.debugMenuReach = nil
+      }
+    }
     // Debug: answer the oldest held question with the given label(s) for every question.
     if let label = json["answer_question"]?.stringValue, let q = store.questions.first {
       let answers = Dictionary(uniqueKeysWithValues: q.questions.map { ($0.question, [label]) })

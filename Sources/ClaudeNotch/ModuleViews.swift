@@ -382,6 +382,39 @@ struct TimerEar: View {
   }
 }
 
+/// The Pomodoro round ("2/4") left of the notch: the timer's ear mirrored, so the pair sits
+/// balanced around the notch (`ModuleCenter.roundEar` says when it has room).
+struct RoundEar: View {
+  let modules: ModuleCenter
+  /// The visible ear's width (`ModuleCenter.roundEar`: the timer's ear's, mirrored).
+  let width: CGFloat
+  let height: CGFloat
+  @Environment(\.notchTheme) private var theme
+
+  /// Gap kept between the last menu title and the ear.
+  static let clearance: CGFloat = 8
+
+  static func width(text: String) -> CGFloat {
+    (DotMatrixText.width(text, pitch: TimerEar.pitch) + TimerEar.padding * 2).rounded(.up)
+  }
+
+  var body: some View {
+    let p = modules.pomodoro
+    let text = p.map(ModuleCenter.roundText) ?? ""
+    let base = p?.phase.isBreak == true ? theme.done : theme.working
+    let tint = modules.timer.isRunning ? base : base.opacity(0.55)
+    DotMatrixText(text: text, color: tint, pitch: TimerEar.pitch)
+      .frame(width: max(width, Self.width(text: text)), height: height)
+      // The part under the notch covers its rounded corner, so no gap shows where they meet.
+      .padding(.trailing, SpotifyEars.overlap)
+      .background(
+        UnevenRoundedRectangle(bottomLeadingRadius: 9, style: .continuous).fill(Color.black))
+      .contentShape(Rectangle())
+      .accessibilityElement()
+      .accessibilityLabel(loc("Pomodoro round \(text)"))
+  }
+}
+
 /// Spotify while playing and the panel is closed, fused to the notch (each ear starts inside
 /// it, so no gap shows). Full: a black ear on each side, the cover left, a waveform right.
 /// Tucked (an app in front whose menu might reach the notch): the black ears fold away and the

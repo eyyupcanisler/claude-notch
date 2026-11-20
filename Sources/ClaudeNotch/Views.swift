@@ -212,6 +212,14 @@ struct NotchRootView: View {
     let earShown = timerHere && modules.timerEar(on: g) > 0
       && (mode == .collapsed
         || (mode == .peek && surface.wingSide <= WingMetrics.markWidth + 0.5))
+    // The ears also flank an external screen's pill: the middle of a notchless menu bar is
+    // free, so they are always full there.
+    let spotifyShown = mode == .collapsed && surface.visible && modules.earsVisible
+      && (g.hasNotch || !segments.isEmpty)
+    // The Pomodoro round left of the notch balances the timer's ear (when the menus leave room).
+    let roundW = earShown
+      ? modules.roundEar(
+        on: g, reach: mode == .peek ? surface.wingSide : 0, spotifyLeft: spotifyShown) : 0
     ZStack(alignment: .top) {
       NotchBackground(mode: mode, theme: theme, band: g.toolbarHeight)
         .clipShape(shape)
@@ -241,11 +249,7 @@ struct NotchRootView: View {
         .opacity(lineMode && surface.visible && !segments.isEmpty ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-      // The ears also flank an external screen's pill: the middle of a notchless menu bar is
-      // free, so they are always full there.
-      if mode == .collapsed && surface.visible && modules.earsVisible
-        && (g.hasNotch || !segments.isEmpty)
-      {
+      if spotifyShown {
         SpotifyEars(
           spotify: modules.spotify, full: modules.earsFull || !g.hasNotch,
           notchWidth: g.notchWidth, height: g.bandHeight, trailing: !earShown)
@@ -265,6 +269,20 @@ struct NotchRootView: View {
           Spacer(minLength: 0).allowsHitTesting(false)
         }
         .frame(width: windowW, height: NotchMetrics.timerEarHeight(g), alignment: .leading)
+        .transition(.opacity)
+      }
+      if roundW > 0 {
+        // Mirrors the timer's ear: anchored at the notch's left edge (or the left wing's mark).
+        let anchor = windowW / 2 - g.notchWidth / 2
+          - (mode == .peek ? surface.wingSide : 0) + SpotifyEars.overlap
+        HStack(spacing: 0) {
+          Spacer(minLength: 0).allowsHitTesting(false)
+          RoundEar(modules: modules, width: roundW, height: NotchMetrics.timerEarHeight(g))
+            .fixedSize()
+            .onTapGesture { actions.expand(g.displayID) }
+          Color.clear.frame(width: max(0, windowW - anchor)).allowsHitTesting(false)
+        }
+        .frame(width: windowW, height: NotchMetrics.timerEarHeight(g), alignment: .trailing)
         .transition(.opacity)
       }
       if pillShown {

@@ -309,6 +309,24 @@ final class ModuleCenter {
     return TimerEar.width(remaining: timer.remaining(at: now))
   }
 
+  /// Width of the Pomodoro round's ear ("2/4") left of the notch on screen `g`, the mirror of
+  /// the timer's ear on the right; 0 when it does not show. It shows only with a Pomodoro
+  /// running and the timer's ear out, not while Spotify's cover has that side
+  /// (`spotifyLeft`), and only when the front app's menu titles end short of it: it must never
+  /// cover a menu (docs/adr/0001; unknown menus count as reaching it). `reach`: how far
+  /// something already sits left of the notch (the left wing's mark in peek).
+  func roundEar(on g: NotchGeometry, reach: CGFloat = 0, spotifyLeft: Bool) -> CGFloat {
+    guard let p = pomodoro, !spotifyLeft, timerEar(on: g) > 0, let menus = desktop.menuReach
+    else { return 0 }
+    // As wide as the timer's ear, so the two sit symmetric around the notch.
+    let w = max(RoundEar.width(text: Self.roundText(p)), timerEar(on: g))
+    let room = (g.screenFrame.width - g.notchWidth) / 2 - reach - w
+    return menus + RoundEar.clearance <= room ? w : 0
+  }
+
+  /// "2/4": the focus block being worked on or next up, of the set.
+  static func roundText(_ p: Pomodoro) -> String { "\(p.round)/\(p.roundsBeforeLong)" }
+
   static let draftRange = 1...180
 
   /// "Custom duration…": the tile opens with a − / + chooser at the last duration.
