@@ -5,7 +5,7 @@ import XCTest
 
 /// agy (Antigravity CLI) support in Core: hook payloads, linking helper conversations to the chat
 /// that started them, agy's CLI log lines, the plan meters and the per-process status line
-/// snapshot. Plan: docs/plans/2026-11-21-agy-in-the-notch.md. Payload shapes were measured on
+/// snapshot. Payload shapes were measured on
 /// agy 1.5.14 (2026-11-21).
 final class AgyTests: XCTestCase {
 

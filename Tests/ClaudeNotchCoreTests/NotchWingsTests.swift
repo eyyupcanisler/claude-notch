@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ClaudeNotchCore
 
-/// The notch wings (docs/plans/2026-11-17-grey-working-and-notch-wings.md): no island drops
+/// The notch wings: no island drops
 /// down any more; the notch grows sideways at band height, long text for 4 s, then a small
 /// mark that lingers only for what blocks Claude (permission, question, plan, waiting) until
 /// it is handled. Under a Focus only those show, and only as the mark.

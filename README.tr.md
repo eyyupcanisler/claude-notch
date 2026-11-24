@@ -52,7 +52,7 @@ bağlantısı varsa paneldeki takvim kartı başlangıçtan 15 dk önce **Katıl
 Terminal'e (herhangi bir terminale) yapıştır:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash
 ```
 
 Bu tek komut:
@@ -80,7 +80,7 @@ başlatmak için Spotlight'tan aç.
 **Kaldırmak için:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash -s -- --uninstall
 ```
 
 Uygulamayı, kancaları ve durum satırı köprüsünü kaldırır, eski durum satırını geri koyar.

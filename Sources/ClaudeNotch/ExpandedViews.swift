@@ -785,7 +785,7 @@ struct SessionRow: View {
           .truncationMode(.tail)
           .layoutPriority(2)
         if session.tool == .agy {
-          // An Antigravity CLI chat (docs/plans/2026-11-21-agy-in-the-notch.md).
+          // An Antigravity CLI chat.
           Text(verbatim: "agy")
             .font(.system(size: 9.5, weight: .bold))
             .foregroundStyle(Color(hex: 0x0B0B0C))

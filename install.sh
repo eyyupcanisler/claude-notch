@@ -1,14 +1,14 @@
 #!/bin/bash
 # ClaudeNotch installer and updater: one command does everything.
 #
-#   curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash
 #
 # It gets the app (the latest GitHub release when there is one, else it builds this repo from
 # source), puts it in Applications, connects Claude Code (hooks + the status line for plan
 # usage, both after a backup of ~/.claude/settings.json), turns on Open at login and starts
 # it. Running it again updates. Remove everything again with:
 #
-#   curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash -s -- --uninstall
+#   curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash -s -- --uninstall
 #
 # Options: --uninstall, --from-source (build even when a release exists), --no-hooks,
 # --no-statusline, --no-login, --ref <branch> (source to build, default main).
@@ -19,7 +19,7 @@
 main() {
   set -euo pipefail
 
-  local REPO="${CLAUDE_NOTCH_REPO:-furkanzt/claude-notch}"
+  local REPO="${CLAUDE_NOTCH_REPO:-eyyupcanisler/claude-notch}"
   local REF="${CLAUDE_NOTCH_REF:-main}"
   local BUNDLE_ID="com.eyyupcan.claudenotch"
   local SUPPORT="$HOME/Library/Application Support/ClaudeNotch"

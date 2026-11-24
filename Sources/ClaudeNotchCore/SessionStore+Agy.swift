@@ -5,7 +5,6 @@ import Foundation
 // its tab, pins and hiding as a Claude row. Helper (workflow) conversations of an agy process
 // show as subagents of its main chat: they share its pid, and an event of another conversation
 // with that pid would otherwise retire the main row (`retireSiblings`).
-// Plan: docs/plans/2026-11-21-agy-in-the-notch.md.
 extension SessionStore {
   /// One agy hook request (POST /agy/event). `event` is the name the hook command passes, used
   /// when the payload carries none. `snapshot` is the status line of the sending agy process,

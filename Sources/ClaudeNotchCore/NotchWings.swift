@@ -6,8 +6,6 @@ import Foundation
 // and carry a short text (style "long"), then they shrink to a small colored mark (style
 // "mark"). Only the marks of what blocks Claude (permission, question, plan, waiting) linger,
 // until the user has handled them. Under a Focus only those show, and only as the mark.
-//
-// See docs/plans/2026-11-17-grey-working-and-notch-wings.md.
 
 // MARK: - Setting
 

@@ -23,7 +23,7 @@ terminal, and jump to the right tab with one click.
 Paste this into Terminal (any terminal):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash
 ```
 
 That one command:
@@ -53,7 +53,7 @@ start it again.
 **Uninstall:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash -s -- --uninstall
 ```
 
 This removes the app, the hooks and the status line bridge, and puts your old status line back.
@@ -120,7 +120,7 @@ Change them in Settings → Shortcuts (there is a Caps Lock "Hyper key" preset t
 ## Build it yourself
 
 ```sh
-git clone https://github.com/furkanzt/claude-notch.git
+git clone https://github.com/eyyupcanisler/claude-notch.git
 cd claude-notch
 ./install.sh                  # builds this checkout and does everything the one-liner does
 swift build && swift test     # the Core library holds the logic and the tests

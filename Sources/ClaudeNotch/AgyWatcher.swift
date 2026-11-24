@@ -11,8 +11,6 @@ import Foundation
 ///   process keeps open, found once with lsof): the lines that say a permission prompt or a
 ///   question opened, or a prompt was answered (`AgyLogEvent`). Only new lines are read, every
 ///   `tick` seconds while agy chats exist.
-///
-/// Plan: docs/plans/2026-11-21-agy-in-the-notch.md.
 @MainActor
 final class AgyWatcher {
   static let folder = FileManager.default.homeDirectoryForCurrentUser

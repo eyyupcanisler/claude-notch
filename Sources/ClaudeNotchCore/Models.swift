@@ -91,7 +91,7 @@ public struct AgentActivity: Sendable, Equatable, Identifiable {
 /// The coding agent a chat runs in.
 public enum ChatTool: String, Sendable, Equatable {
   case claude
-  /// Antigravity CLI (`agy`), see `AgyLinker` and docs/plans/2026-11-21-agy-in-the-notch.md.
+  /// Antigravity CLI (`agy`), see `AgyLinker`.
   case agy
 }
 

@@ -42,7 +42,7 @@ if [ "$NOTES_LANG" = en ]; then
 The easiest way (downloads this release, connects Claude Code and starts the app):
 
 \`\`\`sh
-curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash
 \`\`\`
 
 By hand: download \`ClaudeNotch-$VERSION.zip\`, unzip it, move **ClaudeNotch.app** to **Applications**, open it (macOS blocks the first launch because the app has no Apple Developer ID: **System Settings → Privacy & Security → Open Anyway**), then open it again from Spotlight → Settings → **General → Claude Code connection → Connect**.
@@ -59,7 +59,7 @@ else
 2. İlk açılışta macOS uygulamayı engeller (Apple Developer ID ile imzalı değil): **System Settings → Privacy & Security → Open Anyway**. Ya da Terminal'de: \`xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app\`
 3. Spotlight'tan **ClaudeNotch**'ı tekrar aç → Ayarlar → **Genel → Claude Code bağlantısı → Bağla**.
 
-En kolayı: \`curl -fsSL https://raw.githubusercontent.com/furkanzt/claude-notch/main/install.sh | bash\` (bu sürümü indirir, Claude Code'u bağlar ve uygulamayı başlatır).
+En kolayı: \`curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash\` (bu sürümü indirir, Claude Code'u bağlar ve uygulamayı başlatır).
 
 Gereksinim: macOS 14+ (macOS 14'te \`brew install jq\`), Claude Code.
 
