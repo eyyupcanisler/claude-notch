@@ -26,7 +26,7 @@ public enum ShortcutAction: Sendable, Equatable {
   case pageDown(String)
   /// Risky request: start the hold (the decision comes when the hold completes).
   case holdStart(String)
-  /// The allow key came up before the hold completed: only the "Basılı tut" hint.
+  /// The allow key came up before the hold completed: only the "Hold" hint.
   case holdCancel(String)
   case allow(String)
   case deny(String)
@@ -124,7 +124,7 @@ public struct GlobalKeyLatch: Sendable {
   }
 }
 
-/// Which modifier sets a decision shortcut (İzin ver / Reddet) may use. Such a chord acts from
+/// Which modifier sets a decision shortcut (Allow / Deny) may use. Such a chord acts from
 /// every app, so it must never be something people type or press for other reasons:
 /// - ⌥ / ⌥⇧ alone types characters (⌥Q is @ on Turkish-Q),
 /// - ⌘ / ⌘⇧ alone is an app shortcut (⌘V, ⌘⇧Z ...),
@@ -136,7 +136,88 @@ public enum DecisionChord {
     return command && option
   }
 
-  public static let error =
-    "İzin ver ve Reddet için ⌃ ile birlikte bir değiştirici daha (ör. ⌃⌥) ya da ⌘⌥ kullanın; "
-    + "tek ⌥ karakter yazar, tek ⌘ uygulama kısayoludur, tek ⌃ terminal tuşudur."
+  public static func isAllowed(_ m: ChordModifiers) -> Bool {
+    isAllowed(
+      control: m.contains(.control), option: m.contains(.option), shift: m.contains(.shift),
+      command: m.contains(.command))
+  }
+
+  public static var error: String {
+    loc("For Allow and Deny, use ⌃ with one more modifier (e.g. ⌃⌥) or ⌘⌥; ⌥ alone types characters, ⌘ alone is an app shortcut, ⌃ alone is a terminal key.")
+  }
+}
+
+/// Modifier keys of a shortcut, without the Carbon / AppKit bit values.
+public struct ChordModifiers: OptionSet, Sendable, Hashable {
+  public let rawValue: Int
+  public init(rawValue: Int) { self.rawValue = rawValue }
+
+  public static let control = ChordModifiers(rawValue: 1 << 0)
+  public static let option = ChordModifiers(rawValue: 1 << 1)
+  public static let shift = ChordModifiers(rawValue: 1 << 2)
+  public static let command = ChordModifiers(rawValue: 1 << 3)
+
+  /// "⌃⌥⇧⌘" in Apple's order.
+  public var symbols: String {
+    (contains(.control) ? "⌃" : "") + (contains(.option) ? "⌥" : "")
+      + (contains(.shift) ? "⇧" : "") + (contains(.command) ? "⌘" : "")
+  }
+}
+
+/// One-click shortcut sets: every role keeps its default key, only the modifiers change.
+public enum ShortcutPreset: String, Sendable, CaseIterable {
+  /// ⌃⌥ + key: the defaults of a new install.
+  case standard
+  /// ⌃⌥⇧⌘ + key: one Caps Lock press when a tool (Raycast, Hyperkey, Karabiner-Elements)
+  /// turns Caps Lock into all four modifiers.
+  case hyper
+
+  public var modifiers: ChordModifiers {
+    switch self {
+    case .standard: return [.control, .option]
+    case .hyper: return [.control, .option, .shift, .command]
+    }
+  }
+}
+
+// MARK: - Jump shortcut
+
+/// Which session the "jump" shortcut (⌃⌥J by default) brings forward: the one that needs the
+/// user most. In order: the oldest permission request; else the oldest question, plan approval
+/// or input wait; else the newest unseen error; else the newest unseen "done". nil: nothing
+/// waits, the shortcut does nothing.
+public enum JumpTarget {
+  /// `permissionSessionIDs`: the sessions of the pending cards, oldest card first.
+  public static func sessionID(permissionSessionIDs: [String], sessions: [Session]) -> String? {
+    if let first = permissionSessionIDs.first { return first }
+    let asking = sessions.filter {
+      switch $0.status {
+      case .question, .planApproval, .waitingInput: return true
+      default: return false
+      }
+    }
+    if let oldest = asking.min(by: { ($0.statusSince, $0.id) < ($1.statusSince, $1.id) }) {
+      return oldest.id
+    }
+    func newestUnseen(_ match: (SessionStatus) -> Bool) -> String? {
+      sessions.filter { $0.unseen && match($0.status) }
+        .max(by: { ($0.statusSince, $0.id) < ($1.statusSince, $1.id) })?.id
+    }
+    if let id = newestUnseen({ if case .error = $0 { return true } else { return false } }) {
+      return id
+    }
+    return newestUnseen { if case .done = $0 { return true } else { return false } }
+  }
+}
+
+// MARK: - Key labels
+
+/// Uppercasing a key's character for its label. Every language uppercases ASCII the same way
+/// except `i` (Turkish and Azeri give `İ`); other scripts have their own rules (Greek accents,
+/// Lithuanian, Armenian). Only those need the keyboard layout's language, whose lookup makes
+/// macOS build ICU character sets (about 0.6 MB, kept for the life of the process).
+public enum KeyLabelCase {
+  public static func needsLayoutLocale(_ character: String) -> Bool {
+    character.unicodeScalars.contains { !$0.isASCII || $0 == "i" }
+  }
 }

@@ -92,13 +92,13 @@ public enum CalendarReminder {
       .min()
   }
 
-  /// "10 dk" / "şimdi" until the start, whole minutes rounded up.
+  /// "10 min" / "0 min" until the start, whole minutes rounded up.
   public static func untilText(_ item: CalendarItem, now: Date) -> (digits: String, unit: String) {
     let s = item.start.timeIntervalSince(now)
-    if s <= 30 { return ("0", "dk") }
+    if s <= 30 { return ("0", loc("min")) }
     let m = Int((s / 60).rounded(.up))
-    if m < 60 { return ("\(m)", "dk") }
-    return ("\(m / 60)", "sa")
+    if m < 60 { return ("\(m)", loc("min")) }
+    return ("\(m / 60)", loc("h"))
   }
 }
 
@@ -267,6 +267,72 @@ public struct NowPlaying: Sendable, Equatable {
 
 // MARK: - Shelf
 
+/// Settings > Modules > Shelf > "Remove unpinned items after". Stored as whole days (Int) under
+/// `defaultsKey` (app domain); a fresh install (nothing saved) is `.never`, the original
+/// behavior: unpinned items stay until the shelf is turned off or the app restarts.
+public enum ShelfExpiry: Int, CaseIterable, Sendable {
+  case never = 0
+  case oneDay = 1
+  case threeDays = 3
+  case sevenDays = 7
+
+  /// UserDefaults key (app domain), an Int: 0, 1, 3 or 7.
+  public static let defaultsKey = "shelf.removeUnpinnedAfterDays"
+  /// What an install without a saved choice uses: the original behavior.
+  public static let fallback: ShelfExpiry = .never
+
+  /// The stored day count, or the fallback when nothing (or an unknown value) is stored.
+  public init(stored: Any?) {
+    self = (stored as? Int).flatMap(ShelfExpiry.init(rawValue:)) ?? Self.fallback
+  }
+
+  /// How long an unpinned item stays, or nil for `.never` (no expiry check runs at all).
+  public var lifetime: TimeInterval? {
+    self == .never ? nil : TimeInterval(rawValue) * 24 * 60 * 60
+  }
+
+  /// "Never" / "1 day" / "3 days" / "7 days".
+  public var title: String {
+    switch self {
+    case .never: return loc("Never")
+    case .oneDay: return loc("1 day")
+    case .threeDays: return loc("3 days")
+    case .sevenDays: return loc("7 days")
+    }
+  }
+
+  /// The shelf caption in Settings, true for the chosen options. With the defaults it is the
+  /// original caption plus one sentence that pinned items stay (the original text left that out).
+  public static func settingsHelp(expiry: ShelfExpiry, deletePinsWhenOff: Bool) -> String {
+    var parts = [
+      loc("The clipboard is checked once a second; concealed copies from password managers are skipped. The shelf stays in a temporary folder and is deleted when turned off.")
+    ]
+    if expiry != .never {
+      parts.append(loc("Unpinned items are also removed \(expiry.title) after they were added."))
+    }
+    parts.append(
+      deletePinsWhenOff
+        ? loc("Turning the shelf off also deletes pinned items.")
+        : loc("Pinned items stay on disk; turning the shelf off does not delete them."))
+    return parts.joined(separator: " ")
+  }
+}
+
+/// Settings > Modules > Shelf > "Delete pinned items when the shelf is turned off". Stored as a
+/// Bool under `defaultsKey` (app domain); a fresh install (nothing saved) is off, the original
+/// behavior: pinned items stay on disk when the shelf is turned off.
+public enum ShelfPinsOnOff {
+  /// UserDefaults key (app domain), a Bool.
+  public static let defaultsKey = "shelf.deletePinsWhenOff"
+  /// What an install without a saved choice uses: pins are kept (the original behavior).
+  public static let fallback = false
+
+  /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
+  public static func deletesPins(stored: Any?) -> Bool {
+    stored as? Bool ?? fallback
+  }
+}
+
 /// One shelf item: copied text, a copied image (kept as a temp PNG) or a dropped / copied file.
 public struct ShelfItem: Sendable, Equatable, Identifiable {
   public enum Kind: Sendable, Equatable {
@@ -335,6 +401,19 @@ public struct Shelf: Sendable, Equatable {
   public mutating func clear() -> [ShelfItem] {
     defer { items = [] }
     return items
+  }
+
+  /// True once `lifetime` has passed since the item was added (exactly the lifetime counts).
+  public static func isExpired(_ item: ShelfItem, at now: Date, lifetime: TimeInterval) -> Bool {
+    now.timeIntervalSince(item.addedAt) >= lifetime
+  }
+
+  /// Removes the items older than `lifetime` and returns them (their temp files can go).
+  @discardableResult
+  public mutating func removeExpired(at now: Date, lifetime: TimeInterval) -> [ShelfItem] {
+    let gone = items.filter { Self.isExpired($0, at: now, lifetime: lifetime) }
+    if !gone.isEmpty { items.removeAll { Self.isExpired($0, at: now, lifetime: lifetime) } }
+    return gone
   }
 
   /// Clipboard types that mean "do not keep this" (password managers, transient data).
@@ -421,17 +500,17 @@ public struct WeatherNow: Sendable, Equatable {
       isDay: r.current.is_day == 1, rainChances: hours, readAt: t)
   }
 
-  /// Turkish label and an SF Symbol for a WMO weather code.
+  /// Localized label and an SF Symbol for a WMO weather code.
   public static func describe(code: Int, isDay: Bool) -> (text: String, symbol: String) {
     switch code {
-    case 0: return ("Açık", isDay ? "sun.max.fill" : "moon.stars.fill")
-    case 1, 2: return ("Parçalı bulutlu", isDay ? "cloud.sun.fill" : "cloud.moon.fill")
-    case 3: return ("Bulutlu", "cloud.fill")
-    case 45, 48: return ("Sisli", "cloud.fog.fill")
-    case 51...57: return ("Çiseliyor", "cloud.drizzle.fill")
-    case 61...67, 80...82: return ("Yağmurlu", "cloud.rain.fill")
-    case 71...77, 85, 86: return ("Karlı", "cloud.snow.fill")
-    case 95...99: return ("Fırtınalı", "cloud.bolt.rain.fill")
+    case 0: return (loc("Clear sky"), isDay ? "sun.max.fill" : "moon.stars.fill")
+    case 1, 2: return (loc("Partly cloudy"), isDay ? "cloud.sun.fill" : "cloud.moon.fill")
+    case 3: return (loc("Cloudy"), "cloud.fill")
+    case 45, 48: return (loc("Foggy"), "cloud.fog.fill")
+    case 51...57: return (loc("Drizzle"), "cloud.drizzle.fill")
+    case 61...67, 80...82: return (loc("Rainy"), "cloud.rain.fill")
+    case 71...77, 85, 86: return (loc("Snowy"), "cloud.snow.fill")
+    case 95...99: return (loc("Stormy"), "cloud.bolt.rain.fill")
     default: return ("", "cloud.fill")
     }
   }
@@ -468,8 +547,12 @@ public struct WeatherPlace: Sendable, Equatable, Codable {
 // MARK: - Claude plan usage (from the statusLine payload)
 
 /// Plan limits as Claude Code reports them to the status line (`rate_limits`): the 5-hour and
-/// the 7-day window, each a percentage and a reset time. Only Pro / Max / Ultra subscribers get
-/// them, and a window disappears once its reset time has passed.
+/// the 7-day window, each a percentage and a reset time (Unix seconds). The main window is
+/// chosen automatically: the 5-hour one whenever the input has it (the original behavior), else
+/// the weekly one (Claude Code 2.1.325 and later send only `seven_day`); a weekly main window
+/// warns only with `WeeklyUsageAlerts` on. Unknown keys are
+/// ignored. Only Pro / Max / Ultra subscribers get them, and a window disappears once its reset
+/// time has passed.
 public struct PlanUsage: Sendable, Equatable {
   public struct Window: Sendable, Equatable {
     public var percent: Double
@@ -489,6 +572,28 @@ public struct PlanUsage: Sendable, Equatable {
     self.fiveHour = fiveHour
     self.sevenDay = sevenDay
     self.readAt = readAt
+  }
+
+  public enum WindowKind: Sendable, Equatable {
+    case fiveHour
+    case sevenDay
+  }
+
+  /// The main window, which the 80% / 95% notes follow: the 5-hour one when the input has it
+  /// (the original), else the weekly one (which warns only with `WeeklyUsageAlerts` on).
+  public var primaryKind: WindowKind? {
+    fiveHour != nil ? .fiveHour : sevenDay != nil ? .sevenDay : nil
+  }
+
+  public var primary: Window? { fiveHour ?? sevenDay }
+
+  /// The ring in the panel band (the original rule): the fuller of the two windows, so with
+  /// only the weekly window sent it is the weekly one.
+  public var fuller: (kind: WindowKind, window: Window)? {
+    let all: [(kind: WindowKind, window: Window)] = [
+      fiveHour.map { (.fiveHour, $0) }, sevenDay.map { (.sevenDay, $0) },
+    ].compactMap { $0 }
+    return all.max { $0.window.percent < $1.window.percent }
   }
 
   /// Parses the statusLine stdin JSON; nil when it has no usable window.
@@ -514,15 +619,85 @@ public struct PlanUsage: Sendable, Equatable {
       sevenDay: sevenDay.flatMap { $0.resetsAt > now ? $0 : nil }, readAt: readAt)
   }
 
-  /// The warning mark the 5-hour window just reached (80, then 95), or nil. `shown` holds
-  /// "<reset>:<mark>" keys already warned for.
+  /// The warning mark the main window (`primary`) just reached (80, then 95), or nil. `shown`
+  /// holds "<reset>:<mark>" keys already warned for.
   public func newMark(shown: Set<String>) -> (mark: Int, key: String)? {
-    guard let w = fiveHour else { return nil }
+    guard let w = primary else { return nil }
     for mark in [95, 80] where w.percent >= Double(mark) {
       let key = "\(Int(w.resetsAt.timeIntervalSince1970)):\(mark)"
       return shown.contains(key) ? nil : (mark, key)
     }
     return nil
+  }
+
+  /// A note to show for this input at `now`, or nil. The main window is picked from the input
+  /// as read; only a running window warns, so a file older than its reset (Claude Code not run
+  /// since) shows nothing, and a stale 5-hour window never hands the note to the weekly one.
+  /// `weekly` (`WeeklyUsageAlerts`, off by default): whether a weekly main window warns at
+  /// all. Off keeps the original behavior, where only the 5-hour window warns.
+  public func alert(
+    shown: Set<String>, at now: Date, weekly: Bool = WeeklyUsageAlerts.fallback
+  ) -> UsageAlert? {
+    guard let kind = primaryKind, kind == .fiveHour || weekly else { return nil }
+    let live = live(at: now)
+    let running = kind == .fiveHour ? live.fiveHour : live.sevenDay
+    guard let w = running,
+      let m = PlanUsage(fiveHour: nil, sevenDay: w, readAt: readAt).newMark(shown: shown)
+    else { return nil }
+    return UsageAlert(mark: m.mark, key: m.key, kind: kind, window: w)
+  }
+
+  /// The warned keys ("<reset>:<mark>") whose window is still running at `now`; a passed reset
+  /// can never warn again, so its keys are dropped and the stored set stays tiny.
+  public static func liveWarnings(_ keys: Set<String>, at now: Date) -> Set<String> {
+    keys.filter { key in
+      guard let reset = key.split(separator: ":").first.flatMap({ Double($0) }) else {
+        return false
+      }
+      return Date(timeIntervalSince1970: reset) > now
+    }
+  }
+}
+
+/// Settings > Modules > "Warn at 80% and 95% of the weekly limit". Stored as a Bool under
+/// `defaultsKey` (app domain); a fresh install (nothing saved) is off, the original behavior:
+/// only the 5-hour window warns, so a status line that passes only the weekly window
+/// (`seven_day`, newer Claude Code) gives no note. The ring in the panel band is not affected.
+public enum WeeklyUsageAlerts {
+  /// UserDefaults key (app domain), a Bool.
+  public static let defaultsKey = "usage.weeklyAlerts"
+  /// What an install without a saved choice uses: no weekly notes (the original).
+  public static let fallback = false
+
+  /// The stored Bool, or the fallback when nothing (or something that is not a Bool) is stored.
+  public static func enabled(stored: Any?) -> Bool {
+    stored as? Bool ?? fallback
+  }
+}
+
+/// An 80% / 95% plan usage note: which window, which mark, and its title (the original texts
+/// for the 5-hour window, the weekly ones otherwise).
+public struct UsageAlert: Sendable, Equatable {
+  public var mark: Int
+  /// "<reset>:<mark>", the warned key.
+  public var key: String
+  public var kind: PlanUsage.WindowKind
+  public var window: PlanUsage.Window
+
+  public init(mark: Int, key: String, kind: PlanUsage.WindowKind, window: PlanUsage.Window) {
+    self.mark = mark
+    self.key = key
+    self.kind = kind
+    self.window = window
+  }
+
+  public var title: String {
+    switch kind {
+    case .fiveHour:
+      return mark >= 95 ? loc("5-hour limit almost used up") : loc("5-hour limit at 80%")
+    case .sevenDay:
+      return mark >= 95 ? loc("Weekly limit almost used up") : loc("Weekly limit at 80%")
+    }
   }
 }
 
@@ -589,7 +764,8 @@ public struct Pomodoro: Sendable, Equatable {
 // MARK: - Context window (from the statusLine payload)
 
 /// How much of a session's context window is left, from one statusLine payload
-/// (`session_id`, `context_window.remaining_percentage`).
+/// (`session_id`, `context_window.remaining_percentage`). A payload without them (a status line
+/// that passes only `rate_limits`) gives nil.
 public struct ContextLeft: Sendable, Equatable {
   public var sessionID: String
   public var percent: Double

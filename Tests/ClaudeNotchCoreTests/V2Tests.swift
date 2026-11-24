@@ -195,7 +195,6 @@ final class V2Tests: XCTestCase {
     let sources = [
       TerminalScript.ghosttyFocus(tty: "/dev/ttys012"),
       TerminalScript.ghosttyFocus(directory: "/tmp/a \"b\""),
-      TerminalScript.ghosttyFocusedTTY,
       TerminalScript.terminalAppFocus(tty: "/dev/ttys012")
     ]
     for (i, src) in sources.enumerated() {
@@ -214,8 +213,8 @@ final class V2Tests: XCTestCase {
   func testFocusOutcomeHint() {
     XCTAssertEqual(
       FocusOutcome.notAuthorized(app: "Ghostty").hint,
-      "Ghostty'yi kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon")
-    XCTAssertTrue(FocusOutcome.notAuthorized(app: "Terminal").hint?.hasPrefix("Terminal'i") == true)
+      "Ghostty needs control permission — System Settings > Privacy & Security > Automation")
+    XCTAssertTrue(FocusOutcome.notAuthorized(app: "Terminal").hint?.hasPrefix("Terminal needs") == true)
     XCTAssertNil(FocusOutcome.focusedTerminal.hint)
     XCTAssertTrue(FocusOutcome.focusedTerminal.reachedSession)
     XCTAssertFalse(FocusOutcome.notAuthorized(app: "Ghostty").reachedSession)
@@ -313,7 +312,7 @@ final class V2Tests: XCTestCase {
     clock.advance(2)
     store.sweep()
     XCTAssertEqual(status(), .quiet)
-    XCTAssertEqual(status()?.label, "Sessiz")
+    XCTAssertEqual(status()?.label, "Quiet")
     XCTAssertFalse(store.anyWorking)
     store.handleEvent(ev("PostToolUse", tool: "Bash"), context: ctx(nil, nil))
     XCTAssertEqual(status(), .working(tool: nil))
@@ -334,14 +333,14 @@ final class V2Tests: XCTestCase {
     XCTAssertTrue(store.sessions["s1"]?.isDoneUnseen == true)
     clock.advance(60)
     store.handleEvent(ev("Notification", ntype: "idle_prompt"), context: ctx(nil, nil))
-    XCTAssertEqual(status(), .done("Tamamlandı"))
+    XCTAssertEqual(status(), .done("Completed"))
     XCTAssertTrue(store.sessions["s1"]?.unseen == true)
-    XCTAssertEqual(store.attentionCount, 0, "done-unseen is not amber attention")
+    XCTAssertEqual(store.attentionCount, 0, "done-unseen is not needs-you attention")
     XCTAssertEqual(store.doneUnseenCount, 1)
     XCTAssertTrue(store.anyDone)
     XCTAssertFalse(store.markSeen(tty: "/dev/ttys099"))
     XCTAssertTrue(store.markSeen(tty: "/dev/ttys010"))
-    XCTAssertEqual(status(), .done("Tamamlandı"))
+    XCTAssertEqual(status(), .done("Completed"))
     XCTAssertEqual(store.doneUnseenCount, 0)
     XCTAssertFalse(store.anyDone)
   }
@@ -373,7 +372,7 @@ final class V2Tests: XCTestCase {
     store.handleEvent(ev("PreToolUse", tool: "AskUserQuestion", input: questionInput),
       context: ctx(nil, nil))
     XCTAssertEqual(status(), .question(text: "Hangi çatı? Seç", options: ["React", "Vue"]))
-    XCTAssertEqual(status()?.label, "Soru soruyor")
+    XCTAssertEqual(status()?.label, "Asking a question")
     XCTAssertEqual(store.attentionCount, 1)
     XCTAssertTrue(store.anyWaiting)
     // the forwarded PermissionRequest for the same call does not announce twice
@@ -422,7 +421,7 @@ final class V2Tests: XCTestCase {
     let input: JSONValue = .object(["plan": .string("\n## Kimlik doğrulamayı ayır\n1. ...")])
     store.handleEvent(ev("PreToolUse", tool: "ExitPlanMode", input: input), context: ctx(nil, nil))
     XCTAssertEqual(status(), .planApproval("Kimlik doğrulamayı ayır"))
-    XCTAssertEqual(status()?.label, "Plan onayı bekliyor")
+    XCTAssertEqual(status()?.label, "Waiting for plan approval")
     XCTAssertEqual(store.attentionCount, 1)
     store.handleEvent(ev("PermissionRequest", tool: "ExitPlanMode"), context: ctx(nil, nil))
     XCTAssertEqual(status(), .planApproval(nil))

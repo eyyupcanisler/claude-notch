@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 
 /// Builds the context menu (right-click / gear) and handles its actions.
 @MainActor
@@ -21,23 +22,23 @@ final class AppMenuController: NSObject {
     let menu = NSMenu()
     switch consent() {
     case .notDetermined:
-      addConsentItem(to: menu, title: "Ghostty iznini ver…")
+      addConsentItem(to: menu, title: loc("Grant Ghostty permission…"))
     case .denied:
-      addConsentItem(to: menu, title: "Ghostty iznini Sistem Ayarları'nda aç…")
+      addConsentItem(to: menu, title: loc("Turn on Ghostty permission in System Settings…"))
     case .granted, .unknown:
       break
     }
-    let settings = NSMenuItem(title: "Ayarlar…", action: #selector(showSettings), keyEquivalent: "")
+    let settings = NSMenuItem(title: loc("Settings…"), action: #selector(showSettings), keyEquivalent: "")
     settings.target = self
     menu.addItem(settings)
 
     let hooks = NSMenuItem(
-      title: "Claude Code kancaları…", action: #selector(showHookInstall), keyEquivalent: "")
+      title: loc("Claude Code hooks…"), action: #selector(showHookInstall), keyEquivalent: "")
     hooks.target = self
     menu.addItem(hooks)
 
     menu.addItem(.separator())
-    let quit = NSMenuItem(title: "ClaudeNotch’tan çık", action: #selector(quit), keyEquivalent: "")
+    let quit = NSMenuItem(title: loc("Quit ClaudeNotch"), action: #selector(quit), keyEquivalent: "")
     quit.target = self
     menu.addItem(quit)
     return menu
@@ -46,7 +47,7 @@ final class AppMenuController: NSObject {
   private func addConsentItem(to menu: NSMenu, title: String) {
     let item = NSMenuItem(title: title, action: #selector(requestConsent), keyEquivalent: "")
     item.target = self
-    item.toolTip = "Oturum satırına tıklayınca Ghostty'de doğru sekmeye geçmek için gerekir."
+    item.toolTip = loc("Needed to switch to the right Ghostty tab when you click a session row.")
     menu.addItem(item)
     menu.addItem(.separator())
   }
@@ -59,7 +60,7 @@ final class AppMenuController: NSObject {
     openSettings()
   }
 
-  /// The hooks are set up in Settings → Genel → Claude Code bağlantısı.
+  /// The hooks are set up in Settings → General → Claude Code connection.
   @objc private func showHookInstall() {
     openSettings()
   }

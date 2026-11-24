@@ -38,50 +38,82 @@ final class NotchSurface {
   /// Target outline of the current mode.
   var island: IslandGeometry {
     NotchMetrics.island(
-      state.mode, geometry: state.geometry, body: state.bodyHeight, peekWidth: state.peekWidth)
+      state.mode, geometry: state.geometry, body: state.bodyHeight, wingSide: state.wingSide)
   }
 
   /// Draws or reacts to anything at all (a hidden synthetic pill does not).
-  func isLive(hasSessions: Bool, pill: Bool = false, ears: Bool = false) -> Bool {
+  func isLive(
+    hasSessions: Bool, pill: Bool = false, ears: Bool = false, timerEar: CGFloat = 0
+  ) -> Bool {
     let g = state.geometry
     guard state.visible else { return false }
-    return g.hasNotch || state.mode != .collapsed || hasSessions || pill || ears
+    return g.hasNotch || state.mode != .collapsed || hasSessions || pill || ears || timerEar > 0
   }
 
-  /// Screen rectangles that take the pointer (Cocoa, y-up): the notch-wide band part plus the
-  /// island under it, or the notch plus the status line while collapsed. Never the menu-bar
-  /// band beside the notch, unless the panel is expanded (it then owns that band).
+  /// Screen rectangles that take the pointer (Cocoa, y-up): the notch plus the status line while
+  /// collapsed, the drawn wings (band height only) plus that same notch zone in peek mode, the
+  /// whole panel when expanded. Never the menu-bar band beside the notch outside what is drawn,
+  /// and in peek mode nothing below the band except the status line under the notch.
+  /// `timerEar`: width of the timer's ear right of the notch (0: none, see
+  /// `ModuleCenter.timerEar`); it takes clicks while collapsed, and in peek mode beside the
+  /// wings' small mark. `roundEar`: width of the Pomodoro round's ear left of the notch
+  /// (`ModuleCenter.roundEar`), the timer's ear mirrored.
   func hitRects(
-    hasSessions: Bool, pill: Bool = false, ears: Bool = false, fullEars: Bool = true
+    hasSessions: Bool, pill: Bool = false, ears: Bool = false, fullEars: Bool = true,
+    timerEar: CGFloat = 0, roundEar: CGFloat = 0
   ) -> [NSRect] {
-    guard isLive(hasSessions: hasSessions, pill: pill, ears: ears) else { return [] }
+    guard isLive(hasSessions: hasSessions, pill: pill, ears: ears, timerEar: timerEar)
+    else { return [] }
     let g = state.geometry
     let top = g.screenFrame.maxY
     let cx = g.screenFrame.midX
     let i = island
+    let h = g.bandHeight
     switch state.mode {
     case .collapsed:
       let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
-      let notch = NSRect(
-        x: cx - g.notchWidth / 2, y: top - depth, width: g.notchWidth, height: depth)
-      guard ears else { return [notch] }
+      let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
+      var rects = [notch]
       // The ears take clicks too (they cover the menu bar there anyway).
       let w = NotchMetrics.earWidth(full: fullEars)
-      let h = g.bandHeight
-      return [
-        notch, NSRect(x: cx - g.notchWidth / 2 - w, y: top - h, width: w, height: h),
-        NSRect(x: cx + g.notchWidth / 2, y: top - h, width: w, height: h),
-      ]
+      if ears {
+        rects.append(TopEdgeRect.hanging(minX: cx - g.notchWidth / 2 - w, width: w, top: top, depth: h))
+      }
+      if timerEar > 0 {
+        rects.append(
+          TopEdgeRect.hanging(
+            minX: cx + g.notchWidth / 2, width: timerEar, top: top,
+            depth: NotchMetrics.timerEarHeight(g)))
+      } else if ears {
+        rects.append(TopEdgeRect.hanging(minX: cx + g.notchWidth / 2, width: w, top: top, depth: h))
+      }
+      if roundEar > 0, timerEar > 0 {
+        rects.append(
+          TopEdgeRect.hanging(
+            minX: cx - g.notchWidth / 2 - roundEar, width: roundEar, top: top,
+            depth: NotchMetrics.timerEarHeight(g)))
+      }
+      return rects
     case .peek:
-      let band = NSRect(
-        x: cx - i.topWidth / 2, y: top - g.bandHeight, width: i.topWidth, height: g.bandHeight)
-      let body = NSRect(
-        x: cx - i.bodyWidth / 2, y: top - i.height, width: i.bodyWidth,
-        height: max(0, i.height - g.bandHeight))
-      return [band, body]
+      let wings = TopEdgeRect.hanging(minX: cx - i.topWidth / 2, width: i.topWidth, top: top, depth: i.height)
+      // The status line (and timer extension) under the notch still hovers / clicks.
+      let depth = NotchMetrics.collapsedDepth(g, sessions: hasSessions, pill: pill)
+      let notch = TopEdgeRect.hanging(minX: cx - g.notchWidth / 2, width: g.notchWidth, top: top, depth: depth)
+      // The timer's ear beside the right mark (not while the wings' text is out).
+      if timerEar > 0, state.wingSide <= WingMetrics.markWidth + 0.5 {
+        let ear = TopEdgeRect.hanging(
+          minX: cx + g.notchWidth / 2 + state.wingSide, width: timerEar, top: top,
+          depth: NotchMetrics.timerEarHeight(g))
+        guard roundEar > 0 else { return [wings, notch, ear] }
+        let round = TopEdgeRect.hanging(
+          minX: cx - g.notchWidth / 2 - state.wingSide - roundEar, width: roundEar, top: top,
+          depth: NotchMetrics.timerEarHeight(g))
+        return [wings, notch, ear, round]
+      }
+      return [wings, notch]
     case .expanded:
       let w = i.topWidth + i.shoulder * 2
-      return [NSRect(x: cx - w / 2, y: top - i.height, width: w, height: i.height)]
+      return [TopEdgeRect.hanging(minX: cx - w / 2, width: w, top: top, depth: i.height)]
     }
   }
 

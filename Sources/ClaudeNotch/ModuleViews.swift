@@ -6,6 +6,7 @@ import SwiftUI
 struct ModuleStrip: View {
   let modules: ModuleCenter
   let settings: NotchSettings
+  let ui: NotchUIState
 
   private var showCalendar: Bool {
     settings.calendarEnabled && (modules.nextEvent != nil || modules.calendarAccess == .denied)
@@ -26,7 +27,7 @@ struct ModuleStrip: View {
   var body: some View {
     if showCalendar || showTimer || showSpotify || showShelf {
       VStack(spacing: 8) {
-        if showShelf { ShelfRow(shelf: modules.shelf) }
+        if showShelf { ShelfRow(shelf: modules.shelf, ui: ui) }
         if showSpotify { SpotifyTile(spotify: modules.spotify) }
         if showCalendar || showTimer {
           HStack(spacing: 8) {
@@ -49,12 +50,12 @@ struct TimerStartMenu: View {
   var body: some View {
     Menu {
       ForEach(NotchSettings.timerChoices, id: \.self) { m in
-        Button("\(m) dk") { modules.startTimer(minutes: m) }
+        Button("\(m) min") { modules.startTimer(minutes: m) }
       }
       Divider()
-      Button("Özel süre…") { modules.beginTimerDraft() }
+      Button("Custom duration…") { modules.beginTimerDraft() }
       Divider()
-      Button("Pomodoro (\(settings.pomoFocus) dk odak · \(settings.pomoShort) dk mola)") {
+      Button("Pomodoro (\(settings.pomoFocus) min focus · \(settings.pomoShort) min break)") {
         modules.startPomodoro()
       }
     } label: {
@@ -69,8 +70,8 @@ struct TimerStartMenu: View {
     .menuIndicator(.hidden)
     .fixedSize()
     .onHover { hover = $0 }
-    .help("Zamanlayıcı kur")
-    .accessibilityLabel("Zamanlayıcı kur")
+    .help("Set a timer")
+    .accessibilityLabel("Set a timer")
   }
 }
 
@@ -118,10 +119,10 @@ struct CalendarTile: View {
   var body: some View {
     Group {
       if modules.calendarAccess == .denied {
-        ModuleTile(label: "TAKVİM", tint: theme.needs) {
-          Text("İzin yok").font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.ink)
+        ModuleTile(label: loc("CALENDAR"), tint: theme.needs) {
+          Text("No access").font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.ink)
         } sub: {
-          Text("Sistem Ayarları’nda aç").font(.system(size: 10.5)).foregroundStyle(theme.tertiary)
+          Text("Turn it on in System Settings").font(.system(size: 10.5)).foregroundStyle(theme.tertiary)
         }
       } else if let event = modules.nextEvent {
         // Minutes to go change once a minute; the tile is only alive while the panel is open.
@@ -129,14 +130,14 @@ struct CalendarTile: View {
           let now = context.date
           let running = event.start <= now
           let until = CalendarReminder.untilText(event, now: now)
-          ModuleTile(label: running ? "TAKVİM · ŞİMDİ" : "TAKVİM", tint: Self.tint) {
+          ModuleTile(label: running ? loc("CALENDAR · NOW") : loc("CALENDAR"), tint: Self.tint) {
             HStack(alignment: .lastTextBaseline, spacing: 3) {
               if running {
-                Text(ModuleCenter.clock(event.end) + "’e kadar")
+                Text(loc("until \(ModuleCenter.clock(event.end))"))
                   .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Self.tint)
               } else {
                 DotMatrixText(text: until.digits, color: Self.tint, pitch: 2.2)
-                Text(until.unit + " sonra").font(.system(size: 10, weight: .semibold))
+                Text(loc("\(until.unit) to go")).font(.system(size: 10, weight: .semibold))
                   .foregroundStyle(Self.tint.opacity(0.85))
               }
             }
@@ -147,7 +148,7 @@ struct CalendarTile: View {
               // The meeting link from 15 min before until it ends.
               if let link = event.joinURL, running || event.start.timeIntervalSince(now) <= 900 {
                 Spacer(minLength: 0)
-                SmallButton(title: "Katıl", style: .primary) { NSWorkspace.shared.open(link) }
+                SmallButton(title: loc("Join"), style: .primary) { NSWorkspace.shared.open(link) }
                   .help(link.host ?? link.absoluteString)
               }
             }
@@ -156,7 +157,7 @@ struct CalendarTile: View {
       }
     }
     .onTapGesture { modules.openCalendar() }
-    .help("Takvimi aç")
+    .help("Open Calendar")
   }
 }
 
@@ -195,25 +196,25 @@ struct TimerTile: View {
       }
       .buttonStyle(.plain)
       .padding(6)
-      .help("Zamanlayıcıyı kapat")
-      .accessibilityLabel("Zamanlayıcıyı kapat")
+      .help("Close the timer")
+      .accessibilityLabel("Close the timer")
     }
   }
 
-  /// "Özel süre…": − minutes + and Başlat.
+  /// "Custom duration…": − minutes + and Start.
   private func draftTile(_ minutes: Int) -> some View {
     let tint = theme.working
-    return ModuleTile(label: "ZAMANLAYICI · SÜRE", tint: tint) {
+    return ModuleTile(label: loc("TIMER · DURATION"), tint: tint) {
       HStack(alignment: .center, spacing: 8) {
         stepButton("minus", up: false, enabled: minutes > ModuleCenter.draftRange.lowerBound)
         HStack(alignment: .lastTextBaseline, spacing: 3) {
           DotMatrixText(text: "\(minutes)", color: tint, pitch: 2.2)
-          Text("dk").font(.system(size: 10, weight: .semibold)).foregroundStyle(tint.opacity(0.85))
+          Text("min").font(.system(size: 10, weight: .semibold)).foregroundStyle(tint.opacity(0.85))
         }
         .frame(minWidth: 44)
         stepButton("plus", up: true, enabled: minutes < ModuleCenter.draftRange.upperBound)
         Button { modules.startTimerDraft() } label: {
-          Text("Başlat")
+          Text("Start")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(theme.primaryText)
             .padding(.horizontal, 10)
@@ -223,7 +224,7 @@ struct TimerTile: View {
         .buttonStyle(.plain)
       }
     } sub: {
-      Text("1–180 dk").font(.system(size: 10.5)).foregroundStyle(theme.tertiary)
+      Text("1–180 min").font(.system(size: 10.5)).foregroundStyle(theme.tertiary)
     }
   }
 
@@ -239,7 +240,7 @@ struct TimerTile: View {
     .buttonStyle(.plain)
     .opacity(enabled ? 1 : 0.35)
     .disabled(!enabled)
-    .accessibilityLabel(up ? "Süreyi artır" : "Süreyi azalt")
+    .accessibilityLabel(up ? "Longer" : "Shorter")
   }
 
   private func tile(at now: Date) -> some View {
@@ -248,23 +249,23 @@ struct TimerTile: View {
     let onBreak = pomo?.phase.isBreak == true
     let tint = onBreak ? theme.done : theme.working
     let name: String = {
-      guard let p = pomo else { return "ZAMANLAYICI" }
+      guard let p = pomo else { return loc("TIMER") }
       switch p.phase {
-      case .focus: return "POMODORO · ODAK \(p.round)/\(p.roundsBeforeLong)"
-      case .shortBreak: return "POMODORO · MOLA"
-      case .longBreak: return "POMODORO · UZUN MOLA"
+      case .focus: return loc("POMODORO · FOCUS \(p.round)/\(p.roundsBeforeLong)")
+      case .shortBreak: return loc("POMODORO · BREAK")
+      case .longBreak: return loc("POMODORO · LONG BREAK")
       }
     }()
     let (label, line): (String, String) = {
       switch timer.state {
       case .idle: return (name, "")
-      case .running: return (name, "Duraklatmak için tıkla")
-      case .paused: return (name + " · DURDU", "Sürdürmek için tıkla")
+      case .running: return (name, loc("Click to pause"))
+      case .paused: return (name + loc(" · PAUSED"), loc("Click to resume"))
       case .finished:
         if let p = pomo {
-          return (name, "Odak \(p.round)/\(p.roundsBeforeLong)’i başlatmak için tıkla")
+          return (name, loc("Click to start focus \(p.round)/\(p.roundsBeforeLong)"))
         }
-        return (name + " · BİTTİ", "Kapatmak için tıkla")
+        return (name + loc(" · DONE"), loc("Click to close"))
       }
     }()
     return ModuleTile(label: label, tint: timer.isRunning ? tint : tint.opacity(0.5)) {
@@ -302,27 +303,208 @@ struct TimerPill: View {
       }
     }
     .accessibilityElement()
-    .accessibilityLabel("Zamanlayıcı")
+    .accessibilityLabel("Timer")
   }
 
   private func pill(at now: Date) -> some View {
-    let running = modules.timer.isRunning
-    let base = modules.pomodoro?.phase.isBreak == true ? theme.done : theme.working
-    let tint = running ? base : base.opacity(0.55)
+    let tint = TimerEar.tint(modules, theme: theme)
+    let shape = UnevenRoundedRectangle(
+      bottomLeadingRadius: 11, bottomTrailingRadius: 11, style: .continuous)
     return HStack(spacing: 5) {
-      Image(systemName: running ? "timer" : "pause.fill")
+      Image(systemName: TimerEar.symbol(modules))
         .font(.system(size: 9, weight: .bold))
         .foregroundStyle(tint)
+        .contentTransition(.symbolEffect(.replace))
       DotMatrixText(
-        text: DotClock.countdown(modules.timer.remaining(at: now)), color: tint, pitch: 1.7)
+        text: DotClock.countdown(modules.earSeconds(at: now)), color: tint, pitch: 1.7)
     }
+    .modifier(EarDip(running: modules.timer.isRunning, anchor: .center))
     .padding(.top, NotchMetrics.pillOverlap)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     // The notch growing down: straight sides, rounded bottom.
-    .background(
-      UnevenRoundedRectangle(
-        bottomLeadingRadius: 11, bottomTrailingRadius: 11, style: .continuous
-      ).fill(Color.black))
+    .modifier(EarFlash(modules: modules, key: "pill", tint: tint, shape: shape))
+    .background(shape.fill(Color.black))
+  }
+}
+
+/// The running (or paused) timer while the panel is closed, in the style "beside the notch":
+/// a small black ear on the right of the notch at menu-bar height, fused to it like Spotify's
+/// ears, with the time inside. Nothing drops below the menu bar, so a browser's tabs under it
+/// stay in sight and clickable. The right side, because app menus run in from the left.
+struct TimerEar: View {
+  let modules: ModuleCenter
+  let height: CGFloat
+  @Environment(\.notchTheme) private var theme
+
+  static let pitch: CGFloat = 2.0
+  /// The time while focusing (or on a plain timer): near-white, readable on the black ear at
+  /// a glance. The status "working" colour is a dim grey in the default theme; breaks keep
+  /// the "done" colour.
+  static let focusTint = Color.white.opacity(0.92)
+  static let icon: CGFloat = 10
+  static let gap: CGFloat = 4
+  /// Inner padding at the ear's outer end and next to the notch.
+  static let padding: CGFloat = 8
+
+  /// The visible ear's width for this remaining time ("24:59" or "1:59:59").
+  static func width(remaining: TimeInterval) -> CGFloat {
+    (DotMatrixText.width(DotClock.countdown(remaining), pitch: pitch) + icon + gap + padding * 2)
+      .rounded(.up)
+  }
+
+  var body: some View {
+    Group {
+      if modules.timer.isRunning {
+        TimelineView(.periodic(from: .now, by: 1)) { context in ear(at: context.date) }
+      } else {
+        ear(at: Date())
+      }
+    }
+    .accessibilityElement()
+    .accessibilityLabel(label)
+  }
+
+  private var label: String {
+    if modules.pomodoroWaiting, let p = modules.pomodoro {
+      return loc("Focus \(p.round)/\(p.roundsBeforeLong) is ready: open the notch to start it")
+    }
+    return loc("Timer: \(DotClock.countdown(modules.timer.remaining(at: Date()))) left")
+  }
+
+  /// Tint of the ears: white while focusing (or a plain timer), the "done" colour on a break
+  /// and when a plain timer has ended; half as bright while paused or waiting.
+  static func tint(_ modules: ModuleCenter, theme: NotchTheme) -> Color {
+    let ended: Bool = {
+      if case .finished = modules.timer.state { return modules.pomodoro == nil }
+      return false
+    }()
+    let base = modules.pomodoro?.phase.isBreak == true || ended ? theme.done : focusTint
+    return modules.timer.isRunning || ended ? base : base.opacity(0.55)
+  }
+
+  private var symbol: String { Self.symbol(modules) }
+
+  /// The ear's icon: running, paused, a Pomodoro waiting for its next block (play), a plain
+  /// timer that ended (check).
+  static func symbol(_ modules: ModuleCenter) -> String {
+    switch modules.timer.state {
+    case .running: return "timer"
+    case .paused: return "pause.fill"
+    case .finished: return modules.pomodoro != nil ? "play.fill" : "checkmark"
+    case .idle: return "timer"
+    }
+  }
+
+  private func ear(at now: Date) -> some View {
+    let tint = Self.tint(modules, theme: theme)
+    let seconds = modules.earSeconds(at: now)
+    let shape = UnevenRoundedRectangle(bottomTrailingRadius: 9, style: .continuous)
+    return HStack(spacing: Self.gap) {
+      Image(systemName: symbol)
+        .font(.system(size: 9, weight: .bold))
+        .foregroundStyle(tint)
+        .contentTransition(.symbolEffect(.replace))
+        .frame(width: Self.icon)
+      DotMatrixText(text: DotClock.countdown(seconds), color: tint, pitch: Self.pitch)
+    }
+    .modifier(EarDip(running: modules.timer.isRunning, anchor: .leading))
+    .frame(width: Self.width(remaining: seconds), height: height)
+    // The part under the notch covers its rounded corner, so no gap shows where they meet.
+    .padding(.leading, SpotifyEars.overlap)
+    .modifier(EarFlash(modules: modules, key: "timer", tint: tint, shape: shape))
+    .background(shape.fill(Color.black))
+    .contentShape(Rectangle())
+  }
+}
+
+/// The Pomodoro round ("2/4") left of the notch: the timer's ear mirrored, so the pair sits
+/// balanced around the notch (`ModuleCenter.roundEar` says when it has room).
+struct RoundEar: View {
+  let modules: ModuleCenter
+  /// The visible ear's width (`ModuleCenter.roundEar`: the timer's ear's, mirrored).
+  let width: CGFloat
+  let height: CGFloat
+  @Environment(\.notchTheme) private var theme
+
+  /// Gap kept between the last menu title and the ear.
+  static let clearance: CGFloat = 8
+
+  static func width(text: String) -> CGFloat {
+    (DotMatrixText.width(text, pitch: TimerEar.pitch) + TimerEar.padding * 2).rounded(.up)
+  }
+
+  var body: some View {
+    let text = modules.pomodoro.map(ModuleCenter.roundText) ?? ""
+    let tint = TimerEar.tint(modules, theme: theme)
+    let shape = UnevenRoundedRectangle(bottomLeadingRadius: 9, style: .continuous)
+    DotMatrixText(text: text, color: tint, pitch: TimerEar.pitch)
+      .modifier(EarDip(running: modules.timer.isRunning, anchor: .trailing))
+      .frame(width: max(width, Self.width(text: text)), height: height)
+      // The part under the notch covers its rounded corner, so no gap shows where they meet.
+      .padding(.trailing, SpotifyEars.overlap)
+      .modifier(EarFlash(modules: modules, key: "round", tint: tint, shape: shape))
+      .background(shape.fill(Color.black))
+      .contentShape(Rectangle())
+      .accessibilityElement()
+      .accessibilityLabel(loc("Pomodoro round \(text)"))
+  }
+}
+
+/// Pause / resume: the ear's content dips and comes back (a press-like acknowledgement of the
+/// change, about a quarter second; the icon swaps at the same time). No movement with Reduce
+/// Motion: the icon swap and the dimming say it.
+private struct EarDip: ViewModifier {
+  let running: Bool
+  /// The notch side: the content shrinks toward the notch.
+  let anchor: UnitPoint
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content.keyframeAnimator(initialValue: 1.0, trigger: running) { view, scale in
+      view.scaleEffect(reduceMotion ? 1 : scale, anchor: anchor)
+    } keyframes: { _ in
+      CubicKeyframe(0.84, duration: 0.09)
+      SpringKeyframe(1.0, duration: 0.24, spring: .init(response: 0.24, dampingRatio: 0.7))
+    }
+  }
+}
+
+/// A phase change (a break started, a break or the timer ended): the ear lights up in the
+/// timer's colour three times (about 1.5 s; under 3 flashes a second), so the change is seen
+/// without a sound, also in a Focus. An ear that comes out late (the wings' text had that
+/// side) plays the flash then, if it is under 10 s old; each ear plays each flash once.
+/// Reduce Motion: the same three, slower.
+private struct EarFlash<S: Shape>: ViewModifier {
+  let modules: ModuleCenter
+  let key: String
+  let tint: Color
+  let shape: S
+  @State private var trigger = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content
+      .keyframeAnimator(initialValue: 0.0, trigger: trigger) { view, glow in
+        view.background(shape.fill(tint.opacity(glow)))
+      } keyframes: { _ in
+        let k = reduceMotion ? 1.8 : 1.0
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0.08, duration: 0.26 * k)
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0.08, duration: 0.26 * k)
+        CubicKeyframe(0.6, duration: 0.1 * k)
+        CubicKeyframe(0, duration: 0.6 * k)
+      }
+      .onAppear { play() }
+      .onChange(of: modules.timerFlash?.id) { play() }
+  }
+
+  private func play() {
+    guard let f = modules.timerFlash, modules.timerFlashPlayed[key] != f.id,
+      Date().timeIntervalSince(f.at) < 10
+    else { return }
+    modules.timerFlashPlayed[key] = f.id
+    trigger += 1
   }
 }
 
@@ -336,6 +518,8 @@ struct SpotifyEars: View {
   let full: Bool
   let notchWidth: CGFloat
   let height: CGFloat
+  /// The right ear (the waveform) shows; false while the timer's ear has that side.
+  var trailing = true
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let green = Color(hex: 0x1ED760)
@@ -351,7 +535,7 @@ struct SpotifyEars: View {
     HStack(spacing: 0) {
       side(leading: true, width: w)
       Color.clear.frame(width: notchWidth - Self.overlap * 2)
-      side(leading: false, width: w)
+      side(leading: false, width: w).opacity(trailing ? 1 : 0)
     }
     .frame(height: height)
     .animation(
@@ -471,11 +655,11 @@ struct SpotifyTile: View {
         }
       }
       HStack(spacing: 4) {
-        control("backward.fill", label: "Önceki şarkı", action: spotify.previous)
+        control("backward.fill", label: loc("Previous track"), action: spotify.previous)
         control(
-          now.isPlaying ? "pause.fill" : "play.fill", label: now.isPlaying ? "Duraklat" : "Oynat",
+          now.isPlaying ? "pause.fill" : "play.fill", label: now.isPlaying ? loc("Pause") : loc("Play"),
           big: true, action: spotify.playPause)
-        control("forward.fill", label: "Sonraki şarkı", action: spotify.next)
+        control("forward.fill", label: loc("Next track"), action: spotify.next)
       }
     }
     .padding(.horizontal, 11)
@@ -522,7 +706,7 @@ struct SeekBar: View {
     }
     .frame(height: 14)
     .accessibilityElement()
-    .accessibilityLabel("Şarkıda ilerleme")
+    .accessibilityLabel("Track position")
   }
 }
 
@@ -533,46 +717,85 @@ struct SeekBar: View {
 /// × removes it. Buttons only: a right click in the panel opens the app menu.
 struct ShelfRow: View {
   let shelf: ShelfModule
+  /// Folded to one line until clicked (`ui.shelfOpen`): the shelf is used now and then, and its
+  /// chips took about 90 pt of every panel. It folds again whenever the panel closes.
+  let ui: NotchUIState
+  private var open: Bool { ui.shelfOpen }
   @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let chipHeight: CGFloat = 58
+
+  private var count: Int { shelf.pinned.count + shelf.shelf.items.count }
+
+  private func toggle() {
+    // An occasional open / close of a section: strong ease-out under 300 ms.
+    withAnimation(reduceMotion ? nil : Motion.rowHide) { ui.shelfOpen.toggle() }
+  }
 
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
     VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text("RAF")
+      HStack(spacing: 6) {
+        Image(systemName: "doc.on.clipboard")
+          .font(.system(size: 9.5, weight: .semibold))
+          .foregroundStyle(theme.tertiary)
+        Text("SHELF")
           .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
           .foregroundStyle(theme.tertiary)
-        Text("tıkla: kopyala · sürükle: bırak")
-          .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
+        Text(String(count))
+          .font(.system(size: 9.5, weight: .semibold)).monospacedDigit()
+          .foregroundStyle(theme.tertiary.opacity(0.8))
+        if open {
+          Text("click: copy · drag: drop")
+            .font(.system(size: 9.5)).foregroundStyle(theme.tertiary.opacity(0.8))
+            .transition(.opacity)
+        }
         Spacer()
-        Button("Temizle") { shelf.clear() }
-          .help("Sabitlenenler kalır")
-          .buttonStyle(.plain)
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(theme.secondary)
+        if open {
+          Button("Clear") { shelf.clear() }
+            .help("Pinned items stay")
+            .buttonStyle(.plain)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(theme.secondary)
+            .transition(.opacity)
+        }
+        Image(systemName: "chevron.right")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(theme.tertiary)
+          .rotationEffect(.degrees(open ? 90 : 0))
       }
-      ScrollView(.horizontal) {
-        HStack(spacing: 6) {
-          ForEach(shelf.pinned) { item in
-            ShelfChip(item: item, shelf: shelf)
-          }
-          if !shelf.pinned.isEmpty && !shelf.shelf.items.isEmpty {
-            Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40)
-          }
-          ForEach(shelf.shelf.items) { item in
-            ShelfChip(item: item, shelf: shelf)
+      .frame(height: 14)
+      // The whole line opens / folds the shelf ("Clear" keeps its own click).
+      .contentShape(Rectangle())
+      .onTapGesture { toggle() }
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits(.isButton)
+      .accessibilityLabel(open ? loc("Hide the shelf") : loc("Show the shelf"))
+      .accessibilityAction { toggle() }
+      if open {
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) {
+            ForEach(shelf.pinned) { item in
+              ShelfChip(item: item, shelf: shelf)
+            }
+            if !shelf.pinned.isEmpty && !shelf.shelf.items.isEmpty {
+              Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40)
+            }
+            ForEach(shelf.shelf.items) { item in
+              ShelfChip(item: item, shelf: shelf)
+            }
           }
         }
+        .scrollIndicators(.never)
+        .transition(.opacity)
       }
-      .scrollIndicators(.never)
     }
     .padding(.horizontal, 10)
-    .padding(.vertical, 8)
+    .padding(.vertical, open ? 8 : 6)
     .background(
       shape.fill(theme.raised)
-        .overlay(CornerGlow(color: Color(hex: 0xC3A8FF), strength: 0.28, radius: 160))
+        .overlay(CornerGlow(color: Color(hex: 0xC3A8FF), strength: open ? 0.28 : 0.12, radius: 160))
         .clipShape(shape))
     .overlay(shape.strokeBorder(theme.hairline, lineWidth: 0.5))
   }
@@ -598,7 +821,7 @@ struct ShelfChip: View {
         if shelf.copiedID == item.id {
           shape.fill(Color.black.opacity(0.65))
             .overlay(
-              Label("Kopyalandı", systemImage: "checkmark")
+              Label("Copied", systemImage: "checkmark")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(theme.done))
             .transition(.opacity)
@@ -615,8 +838,8 @@ struct ShelfChip: View {
                 .background(Circle().fill(Color.black.opacity(0.7)))
             }
             .buttonStyle(.plain)
-            .help(pinned ? "Sabitlemeyi kaldır" : "Sabitle (rafın 6’lık sınırına sayılmaz)")
-            .accessibilityLabel(pinned ? "Sabitlemeyi kaldır" : "Sabitle")
+            .help(pinned ? "Unpin" : "Pin (does not count toward the shelf’s limit of 6)")
+            .accessibilityLabel(pinned ? "Unpin" : "Pin")
             if !pinned {
               Button { shelf.remove(item.id) } label: {
                 Image(systemName: "xmark")
@@ -626,7 +849,7 @@ struct ShelfChip: View {
                   .background(Circle().fill(Color.black.opacity(0.7)))
               }
               .buttonStyle(.plain)
-              .accessibilityLabel("Raftan kaldır")
+              .accessibilityLabel("Remove from shelf")
             }
           }
           .padding(3)
@@ -684,8 +907,8 @@ struct ShelfChip: View {
 
   private var help: String {
     switch item.kind {
-    case .text: return "Metni panoya kopyala"
-    case .image(_, _, let w, let h): return "Görüntüyü panoya kopyala (\(w)×\(h))"
+    case .text: return loc("Copy the text to the clipboard")
+    case .image(_, _, let w, let h): return loc("Copy the image to the clipboard (\(String(w))×\(String(h)))")
     case .file(let u): return u.path
     }
   }
@@ -707,7 +930,7 @@ struct BandWeather: View {
     }
     .help(d.text)
     .accessibilityElement()
-    .accessibilityLabel("Hava: \(d.text), \(weather.degrees)")
+    .accessibilityLabel("Weather: \(d.text), \(weather.degrees)")
   }
 }
 
@@ -720,10 +943,8 @@ struct BandUsage: View {
   @Environment(\.notchTheme) private var theme
 
   private var main: (label: String, window: PlanUsage.Window)? {
-    let all = [("5 sa", usage.fiveHour), ("Hafta", usage.sevenDay)].compactMap { l, w in
-      w.map { (l, $0) }
-    }
-    return all.max { $0.1.percent < $1.1.percent }
+    guard let f = usage.fuller else { return nil }
+    return (f.kind == .fiveHour ? loc("5 h") : loc("Week"), f.window)
   }
 
   var body: some View {
@@ -741,27 +962,88 @@ struct BandUsage: View {
       }
       .help(help)
       .accessibilityElement()
-      .accessibilityLabel("Claude planı, \(label): yüzde \(Int(w.percent.rounded()))")
+      .accessibilityLabel("Claude plan, \(label): \(Int(w.percent.rounded())) percent")
     }
   }
 
   private var help: String {
     var parts: [String] = []
     if let w = usage.fiveHour {
-      parts.append("5 saatlik: %\(Int(w.percent.rounded())) · \(ModuleCenter.clock(w.resetsAt))’de")
+      parts.append(loc("5-hour: \(Int(w.percent.rounded()))% · resets at \(ModuleCenter.clock(w.resetsAt))"))
     }
     if let w = usage.sevenDay {
-      parts.append("Haftalık: %\(Int(w.percent.rounded())) · \(Self.day(w.resetsAt))’de sıfırlanır")
+      parts.append(loc("Weekly: \(Int(w.percent.rounded()))% · resets \(Self.day(w.resetsAt))"))
     }
-    return "Claude planı\n" + parts.joined(separator: "\n")
+    return loc("Claude plan") + "\n" + parts.joined(separator: "\n")
   }
 
-  /// "Pzt 07:53".
+  /// "Mon 07:53" (weekday in the app's language).
   static func day(_ d: Date) -> String {
     let f = DateFormatter()
-    f.locale = Locale(identifier: "tr_TR")
+    f.locale = AppLanguage.locale
     f.dateFormat = "EEE HH:mm"
     return f.string(from: d)
+  }
+}
+
+/// agy (Antigravity CLI) plan usage in the panel band, beside Claude's ring: "agy", a ring and
+/// the fullest agy window as % used. agy-bridge refreshes the reading only while an agy chat
+/// runs, so a reading older than 15 minutes is greyed and shows its age. Every window in the
+/// tooltip.
+struct BandAgyUsage: View {
+  let usage: AgyUsage
+  let now: Date
+  @Environment(\.notchTheme) private var theme
+
+  var body: some View {
+    if let f = usage.fullest {
+      let stale = usage.isStale(at: now)
+      let tint =
+        stale ? Color.white.opacity(0.5)
+        : f.percent >= 95 ? theme.error : f.percent >= 80 ? theme.needs : theme.working
+      HStack(spacing: 4) {
+        Text(verbatim: "agy")
+          .font(.system(size: 9.5, weight: .bold))
+          .foregroundStyle(Color(hex: 0x8AB4F8))
+        ZStack {
+          Circle().stroke(Color.white.opacity(0.16), lineWidth: 2)
+          Circle().trim(from: 0, to: f.percent / 100)
+            .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 11, height: 11)
+        DotMatrixText(text: "\(Int(f.percent.rounded()))%", color: NotchTheme.bandInk, pitch: 1.75)
+        if stale {
+          Text(RelativeTime.short(now.timeIntervalSince(usage.readAt)))
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundStyle(NotchTheme.bandSecondary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+      }
+      .opacity(stale ? 0.55 : 1)
+      .help(help)
+      .accessibilityElement()
+      .accessibilityLabel(loc("agy plan, \(Int(f.percent.rounded())) percent used"))
+    }
+  }
+
+  private var help: String {
+    var lines = [loc("agy plan")]
+    for p in usage.pools {
+      switch (p.fiveHour, p.weekly) {
+      case let (five?, week?):
+        lines.append(loc("\(p.label): 5-hour \(Int(five.rounded()))% · week \(Int(week.rounded()))%"))
+      case let (five?, nil):
+        lines.append(loc("\(p.label): 5-hour \(Int(five.rounded()))%"))
+      case let (nil, week?):
+        lines.append(loc("\(p.label): week \(Int(week.rounded()))%"))
+      case (nil, nil):
+        continue
+      }
+    }
+    lines.append(loc("Read \(RelativeTime.short(now.timeIntervalSince(usage.readAt)))"))
+    return lines.joined(separator: "\n")
   }
 }
 
@@ -778,6 +1060,6 @@ struct RoundDots: View {
       }
     }
     .accessibilityElement()
-    .accessibilityLabel("\(done)/\(total) odak tamamlandı")
+    .accessibilityLabel("\(done) of \(total) focus blocks done")
   }
 }

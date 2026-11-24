@@ -5,8 +5,8 @@
 # ClaudeNotch
 
 **Your MacBook notch, watching your Claude Code sessions.**
-Know when a run finishes, answer permission prompts and questions without going back to the
-terminal, and keep a few handy tools one glance away.
+See when a chat finishes or needs you, answer permission prompts without going back to the
+terminal, and jump to the right tab with one click.
 
 **English** · [Türkçe](README.tr.md)
 
@@ -18,83 +18,80 @@ terminal, and keep a few handy tools one glance away.
 
 </div>
 
-> The interface is in Turkish for now. ClaudeNotch is a personal open-source project, not an
-> Anthropic product.
-
-## What it does
-
-- **Live status under the notch.** One thin segment per Claude Code session: orange while it
-  works, amber when it needs you, green when it finished and you have not looked yet.
-- **Permission requests in the notch.** An island drops down with the command; allow or deny
-  with a click or **⌃⌥Y / ⌃⌥N** from any app. Risky commands (`rm -rf`, `sudo`, `curl … | sh`,
-  `git push --force`, `git reset --hard`, uploads of local files…) need a short hold. Nothing is ever allowed by default.
-- **Answer Claude's questions.** `AskUserQuestion` options show up as buttons; pick with a click
-  or **⌃⌥1…4**, send with **⌃⌥Y**. Free text and plan approval stay in the terminal.
-- **The panel.** Hover the notch: every session with its status, the turn's elapsed time in
-  dot-matrix digits, a rhythm strip of its tool calls, subagents, and context left. Click a row
-  to jump to its Ghostty / Terminal / iTerm2 tab.
-- **Small tools, all optional:** Pomodoro / focus timer (it grows out of the notch while it
-  runs), calendar reminders with a **Join** button (macOS Calendar or Google Calendar directly),
-  Spotify cover and controls, a clipboard shelf with pinning, weather, plan usage, battery,
-  quiet hours and a silent mode.
-- **Light on the machine.** Event-driven: no polling loops while idle, ~40 MB with the panel
-  closed. Works on external displays too (a pill stands in for the notch).
-
 ## Install
 
-You need a Mac on **macOS 14 or later** (a notch is nice, not required) and
-[Claude Code](https://claude.com/claude-code). On macOS 14 also `brew install jq` (macOS 15+
-ships it).
-
-### Option 1: download the app
-
-1. Download `ClaudeNotch-<version>.zip` from the
-   [latest release](https://github.com/eyyupcanisler/claude-notch/releases/latest), unzip it and
-   move **ClaudeNotch.app** to **Applications**.
-2. Open it. macOS blocks the first launch because the app is not signed with an Apple Developer
-   ID: go to **System Settings → Privacy & Security** and click **Open Anyway**.
-   (Or in Terminal: `xattr -dr com.apple.quarantine /Applications/ClaudeNotch.app`.)
-3. Open **ClaudeNotch** again from Spotlight to get its Settings, then
-   **Genel → Claude Code bağlantısı → Kancaları kur** (install hooks). It adds the hooks to
-   `~/.claude/settings.json` after backing it up and leaves the rest of the file alone.
-
-That's it: your next Claude Code message shows up in the notch.
-
-### Option 2: build from source
-
-Needs Xcode or the Command Line Tools (`xcode-select --install`) and `jq`.
+Paste this into Terminal (any terminal):
 
 ```sh
-git clone https://github.com/eyyupcanisler/claude-notch.git
-cd claude-notch
-scripts/make-signing-identity.sh   # once: a local signing identity, so macOS permissions stick
-scripts/build-app.sh               # builds build.noindex/ClaudeNotch.app
-scripts/install-app.sh             # copies it to ~/Applications and starts it
-scripts/install-hooks.sh           # adds the hooks to ~/.claude/settings.json (backs it up first)
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash
 ```
 
-Either way: ClaudeNotch has no Dock icon, launching it again opens its Settings. Turn on
-*Oturum açılışında başlat* (start at login) in the General tab.
+That one command:
 
-Optional:
+1. gets the app (it builds it on your Mac, 1-3 minutes) and puts it in `~/Applications`;
+2. connects Claude Code: hooks for status and permission requests, and the status line for
+   your plan usage (it backs up `~/.claude/settings.json` first; your other settings, and
+   any status line you already have, keep working as they are);
+3. turns on *Open at login* and starts the app.
 
-- `scripts/install-statusline.sh` adds one line to your status line script so the notch can show
-  your plan usage (Claude Code only reports it to the status line).
-- `scripts/install-hooks.sh --uninstall` removes the hooks again.
+Your next Claude Code message shows up in the notch. Run the same command again to update.
 
-## How it works
+**You need:** macOS 14 or later and [Claude Code](https://claude.com/claude-code). The build
+needs Apple's Command Line Tools; if they are missing, the installer opens their install
+window, and you run the command again afterwards. On macOS 14 it also needs `jq` (it installs
+it with Homebrew when Homebrew is there; macOS 15 and later have it).
 
+**First click on a chat:** macOS asks once whether ClaudeNotch may control your terminal
+(*Automation*). Click **Allow**, or the click cannot select the chat's tab.
+
+**Settings:** ClaudeNotch has no Dock icon. Open it again from Spotlight to see its Settings.
+
+**Quit:** the power button in the panel's top bar (click it, then click the red **Quit**), or
+Settings → General → **Quit ClaudeNotch** (⌘Q works there too). Open it from Spotlight to
+start it again.
+
+**Uninstall:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/eyyupcanisler/claude-notch/main/install.sh | bash -s -- --uninstall
 ```
-Claude Code ── hook ──▶ hooks/claude-notch-hook.sh ── curl ──▶ Unix socket ──▶ ClaudeNotch.app
-                                              ~/Library/Application Support/ClaudeNotch/notch.sock
-```
 
-- The socket lives in a `0700` folder, the socket itself is `0600`; there is no TCP port.
-- `PermissionRequest` waits for your answer (up to ~10 min) side by side with the terminal
-  prompt; answering in either place wins. If the app is not running the hook exits silently and
-  Claude Code asks in the terminal as usual.
-- A `PreToolUse` hook on `AskUserQuestion` holds the question until you answer it in the notch;
-  switching to that session's terminal tab hands it back to the terminal.
+This removes the app, the hooks and the status line bridge, and puts your old status line back.
+
+## What you get
+
+- **A status line under the notch:** one segment per chat. Grey = working, amber = needs you,
+  blue = finished and not looked at yet, red = error.
+- **Wings beside the notch** say which chat wants what (a permission, a question, a finished
+  run) for 4 seconds, then shrink to a small mark. Nothing ever drops down over your tabs.
+- **Permission requests in the notch:** allow or deny with **⌃⌥Y / ⌃⌥N** from any app. Risky
+  commands need a short hold.
+- **Answer Claude's questions** with a click or **⌃⌥1…4**.
+- **The panel** (hover the notch): every chat with its status and time. Click a row to jump to
+  its terminal tab. **Pin** a chat to keep it on top, **drag** rows into your own order, or
+  **hide** one until it does something new.
+- **Plan usage:** your 5-hour and weekly limits in the panel, with a warning at 80% and 95%
+  of the 5-hour limit (and of the weekly one, if you turn that on).
+- **Small extras, all optional:** focus timer (a small ear beside the notch while it runs, so
+  your browser tabs stay free), calendar reminders with a Join button, Spotify,
+  clipboard shelf, weather, quiet hours, Do Not Disturb awareness.
+
+The app speaks English and Turkish: it follows your Mac's language (Settings → General →
+Language changes it). Every feature in detail, with its settings:
+[docs/FEATURES.md](docs/FEATURES.md).
+
+## Terminals
+
+| Terminal | Click a chat | Tab titles, "seen when you look", "you are here", tab order |
+| --- | --- | --- |
+| Ghostty | selects the exact tab or split | yes |
+| iTerm2 | selects the exact tab and pane | not yet |
+| Terminal | selects the exact tab | not yet |
+| Anything else (Warp, WezTerm, kitty, VS Code, Cursor…) | brings the app to the front | no |
+
+ClaudeNotch learns the terminal from each chat itself, also when the terminal sets no
+`TERM_PROGRAM`. A chat inside tmux brings its terminal app to the front (the tmux pane is not
+selected).
 
 ## Shortcuts
 
@@ -102,37 +99,42 @@ Claude Code ── hook ──▶ hooks/claude-notch-hook.sh ── curl ──�
 | --- | --- |
 | ⌃⌥Space | Open the panel with the keyboard |
 | ⌃⌥Y / ⌃⌥N | Allow / deny the request on screen (questions: send / answer in terminal) |
-| ⌃⌥1 … ⌃⌥4 | Pick an option of the question on screen (only while one is shown) |
-| ⌃⌥P | Start / pause a Pomodoro |
-| ⌃⌥V | Copy the newest shelf item back to the clipboard |
+| ⌃⌥1 … ⌃⌥4 | Pick an option of the question on screen |
+| ⌃⌥J | Jump to the chat that needs you |
+| ⌃⌥P | Start / pause the focus timer |
+| ⌃⌥V | Copy the newest shelf item back |
 
-All of them can be changed in Settings → *Kısayollar*.
+Change them in Settings → Shortcuts (there is a Caps Lock "Hyper key" preset too).
 
-## Google Calendar (optional)
+## Something is off?
 
-ClaudeNotch can read Google Calendar directly with **your own** OAuth client (read-only):
-create a Google Cloud project, enable the Calendar API, add an OAuth consent screen and a
-**Desktop app** client, download its JSON and pick it in Settings → *Modüller* → *Takvim*. The
-step-by-step guide is in the [Turkish README](README.tr.md#google-takvim-doğrudan-bağlantı).
-Your client and tokens stay on your Mac in a `0600` file; nothing is sent anywhere but Google.
+- **"Can't tell which terminal …"**: the chat started before ClaudeNotch was connected, or
+  with an old hook. Run the install command again, then send one message in that chat.
+- **No plan usage %**: Settings → General → *Claude Code connection* → *Status line* →
+  **Connect**. The numbers appear
+  after Claude Code next updates its status line (send any message).
+- **A click does nothing**: System Settings → Privacy & Security → Automation → ClaudeNotch →
+  turn your terminal on.
+- **See what happened**: `log show --last 1h --style compact --predicate 'subsystem == "com.eyyupcan.claudenotch"'`
+
+## Build it yourself
+
+```sh
+git clone https://github.com/eyyupcanisler/claude-notch.git
+cd claude-notch
+./install.sh                  # builds this checkout and does everything the one-liner does
+swift build && swift test     # the Core library holds the logic and the tests
+```
+
+`./install.sh --help` lists its options (`--no-statusline`, `--no-login`, …).
 
 ## Privacy
 
-Everything runs locally. ClaudeNotch talks to Claude Code through a local socket and to the
-network only for the modules you turn on (weather from Open-Meteo, Google Calendar, Spotify
-artwork). The clipboard shelf never keeps items marked concealed by password managers.
-
-## Development
-
-```sh
-swift build && swift test   # the Core library has the logic and the tests
-scripts/demo/record.sh      # re-records docs/demo.gif with made-up sessions (needs ffmpeg)
-scripts/make-release.sh 1.0.1  # builds the zip and publishes a GitHub release
-```
-
-`CLAUDE_NOTCH_DEBUG=1` enables `/debug/*` routes on the socket for UI tests; see the Turkish
-README for the details.
+Everything runs on your Mac. Claude Code talks to the app through a local socket (no network
+port). The network is used only by the modules you turn on (weather, Google Calendar, Spotify
+artwork). Details: [docs/FEATURES.md#privacy](docs/FEATURES.md#privacy).
 
 ## License
 
-[MIT](LICENSE) © 2026 Eyyupcan Isler
+[MIT](LICENSE) © 2026 Eyyupcan Isler. ClaudeNotch is a personal open-source project, not an
+Anthropic product.

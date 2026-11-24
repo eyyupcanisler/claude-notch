@@ -71,7 +71,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(store.sessions["s1"]?.status, .done("tamam bitti"))
     XCTAssertTrue(effects.contains(.sound("Glass")))
     XCTAssertTrue(effects.contains(.autoExpand(seconds: SessionStore.autoExpandSeconds)))
-    // v2: done is not amber attention; it stays done (unseen) until seen
+    // v2: done is not "needs you" attention; it stays done (unseen) until seen
     XCTAssertEqual(store.attentionCount, 0)
     XCTAssertEqual(store.doneUnseenCount, 1)
     store.dismiss(sessionID: "s1")
@@ -110,8 +110,8 @@ final class StoreTests: XCTestCase {
     store.handleEvent(ev("PermissionRequest", tool: "AskUserQuestion"), termProgram: nil)
     // v2: AskUserQuestion is a question (no payload here: generic text)
     XCTAssertEqual(
-      store.sessions["s1"]?.status, .question(text: "Claude bir soru soruyor", options: []))
-    XCTAssertEqual(store.sessions["s1"]?.status.label, "Soru soruyor")
+      store.sessions["s1"]?.status, .question(text: "Claude is asking a question", options: []))
+    XCTAssertEqual(store.sessions["s1"]?.status.label, "Asking a question")
     XCTAssertTrue(store.pending.isEmpty)
   }
 

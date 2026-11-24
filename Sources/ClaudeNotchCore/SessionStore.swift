@@ -9,10 +9,10 @@ import Observation
 //   sessions[id] / orderedSessions   Stable order: needs-you (card, question, plan, waiting,
 //                                    unseen error) > done-unseen > working/quiet > rest; inside
 //                                    a group by start time. sortedSessions = most recent first.
-//   Session.status                   idle | working(tool) | quiet ("Sessiz", 10 min without
+//   Session.status                   idle | working(tool) | quiet ("Quiet", 10 min without
 //                                    events) | done(msg) | waitingInput(msg) |
 //                                    question(text, options) | planApproval(summary) | error(msg).
-//                                    .label is the Turkish label, .kind a stable string.
+//                                    .label is the localized label, .kind a stable string.
 //   Session.unseen / isDoneUnseen    done (or error) the user has not looked at yet.
 //   Session.tty / pid / branch       Identity from the hook (validated). ttySuffix = "s012".
 //   Session.activeAgents             Subagents seen recently (agent_id / agent_type / tool).
@@ -22,8 +22,8 @@ import Observation
 //
 // Attention
 //   needsAttention(_:)               Card pending, or question / plan / waiting / unseen error.
-//   attentionCount                   Distinct sessions needing the user (amber badge).
-//   doneUnseenSessions / doneUnseenCount   Separate green signal, not in the amber badge.
+//   attentionCount                   Distinct sessions needing the user ("needs you" badge).
+//   doneUnseenSessions / doneUnseenCount   Separate "done" signal, not in that badge.
 //   anyWorking, workingCount, anyWaiting, anyError, anyDone (= any done-unseen).
 //   activeWorkingCount / anyActiveWorking   Working and not blocked on a card / question
 //                                    (what the ears, chips and header spark show).
@@ -38,7 +38,7 @@ import Observation
 //                                    for allow / always, needsExpansion + the full-text view.
 //   denyAll(sessionID:)              Denies every card of a session at once.
 //   PendingPermission.risk           Risk reason from the raw command (hold-to-allow / ⌘⏎).
-//   PendingPermission.fitsPeek       The peek's one line is the whole request.
+//   PendingPermission.fitsWing       The right wing's one line is the whole request.
 //
 // Actions
 //   markSeen(sessionID:)             Row click / focus: clears unseen, waiting -> idle.
@@ -47,12 +47,15 @@ import Observation
 //                                    claude processes (and their cards), marks quiet sessions.
 //   processExited(sessionID:pid:)    Exit watch (probe.watchExit) fired: removes the row at once.
 //
-// Effects (onEffect): .sound(name), .autoExpand(seconds), .attention(sessionID:kind:).
+// Effects (onEffect): .sound(name), .autoExpand(seconds), .attention(sessionID:kind:),
+// .bell(sessionID:notificationType:).
 
 @MainActor
 @Observable
 public final class SessionStore {
   public internal(set) var sessions: [String: Session] = [:]
+  /// agy processes, their main chats and helper conversations (see SessionStore+Agy.swift).
+  @ObservationIgnored var agyLinker = AgyLinker()
   /// Pending permission cards, oldest first.
   public private(set) var pending: [PendingPermission] = []
   /// `AskUserQuestion` calls held until answered from the notch or released to the terminal.
@@ -63,8 +66,27 @@ public final class SessionStore {
   @ObservationIgnored public var probe: ProcessProbe
   /// Position of each tty in Ghostty's tab order (see `applyTabOrder`); empty when unknown.
   public private(set) var tabOrder: [String: Int] = [:]
+  /// The panel's own order: pinned chats and the user's drags (`ChatOrder`, `panelOrder`).
+  public internal(set) var chatOrder = ChatOrder()
+  /// Called after every change of `chatOrder` (the app saves it).
+  @ObservationIgnored public var onChatOrderChange: (@MainActor (ChatOrder) -> Void)?
+  /// When `touchOrder` last dropped entries of ended chats.
+  @ObservationIgnored var lastOrderPrune = Date.distantPast
+  /// Hidden terminal -> the terminal of the tab showing it, from the last process scan
+  /// (`ClaudeProcess.tabTTYs`): chats Claude Code's background daemon runs.
+  public internal(set) var tabTTYs: [String: String] = [:]
+  /// The terminal the user is in: Ghostty's focused tab or split while Ghostty is the front
+  /// app, nil otherwise (see `setFocusedTTY`). Its chats' status line segments get the white
+  /// "you are here" base (`hereSessionIDs`).
+  public private(set) var focusedTTY: String?
   @ObservationIgnored public private(set) var lastRemovalAt = Date.distantPast
   @ObservationIgnored private var recentPre: [String: [(key: String, at: Date)]] = [:]
+  /// The tool a session is asking with (AskUserQuestion / ExitPlanMode), by session id. Hook
+  /// events arrive async and can be out of order, so while it asks, only that tool's own end
+  /// (or a new prompt, the end of the turn) may clear the asking state; a late event of
+  /// another tool must not turn its "needs you" segment back to working. Matched by tool name,
+  /// not by the call's input: the answers can be added to the input before PostToolUse.
+  @ObservationIgnored private var askingCall: [String: String] = [:]
   /// Exit watches of the sessions' claude processes (session id -> pid + watch).
   @ObservationIgnored private var exitWatches: [String: (pid: Int32, watch: ExitWatch)] = [:]
   /// pids whose session just ended (SessionEnd), with the time: not re-discovered for a moment.
@@ -141,6 +163,37 @@ public final class SessionStore {
     disambiguator(for: s).map { "\(s.project) · \($0)" } ?? s.project
   }
 
+  /// Tab title Claude Code shows before a chat has a name; it names no chat.
+  static let genericTabTitle = "Claude Code"
+
+  /// The chat's own title: its terminal tab's title (Claude Code names the tab after the chat,
+  /// e.g. "BTY book QR code mismatch"), nil while the tab is unknown or still unnamed.
+  public func chatTitle(for s: Session) -> String? {
+    guard let title = s.tabTitle?.trimmingCharacters(in: .whitespaces), !title.isEmpty,
+      title != Self.genericTabTitle
+    else { return nil }
+    return title
+  }
+
+  /// A row's two names. The chat's title leads (bold) and the project follows (grey), with
+  /// the disambiguator when the project's title alone does not tell same-project chats apart:
+  /// ("voice-clip-word-check", "tofu"). A chat without a title yet keeps the project in front
+  /// and the tab title / disambiguator behind (`secondaryText`).
+  public func rowNames(for s: Session) -> (primary: String, secondary: String?) {
+    guard let title = chatTitle(for: s) else { return (s.project, secondaryText(for: s)) }
+    var second = s.project
+    if let d = disambiguator(for: s), d != title { second += " · " + d }
+    return title == second ? (title, nil) : (title, second)
+  }
+
+  /// How the panel names a chat in a sentence or a chip: "chat title · project", or the
+  /// project with its disambiguator when the chat has no title yet.
+  public func chatLabel(for s: Session) -> String {
+    guard chatTitle(for: s) != nil else { return displayName(for: s) }
+    let names = rowNames(for: s)
+    return names.secondary.map { "\(names.primary) · \($0)" } ?? names.primary
+  }
+
   /// Secondary text of a row: the terminal tab title (when known), plus the disambiguator when
   /// the title alone does not tell same-project sessions apart.
   public func secondaryText(for s: Session) -> String? {
@@ -154,7 +207,7 @@ public final class SessionStore {
   /// title, clears it for sessions whose tty is not listed. Writes only what changed.
   public func applyTabTitles(_ titles: [String: String]) {
     for (id, s) in sessions {
-      let title = s.tty.flatMap { titles[$0] }
+      let title = s.terminal.flatMap { titles[$0] }
       if s.tabTitle != title { sessions[id]?.tabTitle = title }
     }
   }
@@ -190,8 +243,9 @@ public final class SessionStore {
     sessions.values.reduce(0) { $0 + ($1.isDoneUnseen ? 1 : 0) }
   }
 
+  /// Shown sessions that work (a hidden chat is out of sight, also in the counts).
   public var workingCount: Int {
-    sessions.values.reduce(0) { $0 + ($1.status.isWorking ? 1 : 0) }
+    sessions.values.reduce(0) { $0 + ($1.status.isWorking && !$1.hidden ? 1 : 0) }
   }
 
   public var anyWorking: Bool { workingCount > 0 }
@@ -200,7 +254,7 @@ public final class SessionStore {
   /// question / plan / input request). The ears, chips and header spark use this.
   public var activeWorkingCount: Int {
     sessions.values.reduce(0) { n, s in
-      n + (s.status.isWorking && !needsAttention(s) ? 1 : 0)
+      n + (s.status.isWorking && !needsAttention(s) && !s.hidden ? 1 : 0)
     }
   }
 
@@ -223,6 +277,71 @@ public final class SessionStore {
       case .waitingInput, .question, .planApproval: return true
       default: return false
       }
+    }
+  }
+
+  /// The session the "jump" shortcut brings forward (see `JumpTarget`), nil when none waits.
+  public var jumpTarget: String? {
+    JumpTarget.sessionID(
+      permissionSessionIDs: pending.map(\.sessionID), sessions: Array(sessions.values))
+  }
+
+  // MARK: - Hidden chats
+
+  /// Chats the user hid, in tab order (the panel's "Hidden" line).
+  public var hiddenSessions: [Session] { tabOrdered.filter(\.hidden) }
+
+  /// Any chat the panel and the status line show (hidden ones do not count).
+  public var hasVisibleSessions: Bool { sessions.values.contains { !$0.hidden } }
+
+  /// Whether the row may offer "Hide": never while a permission card, a held question, a
+  /// question / plan approval, a permission prompt or dialog in the terminal, or an unseen
+  /// error waits, so nothing that blocks Claude can be hidden. The idle "waiting for input"
+  /// can (`waitsForPrompt`): it is the chat waiting for its next prompt, the most common
+  /// long-dead state, and looking at it already turns it idle (`markSeen`), as hiding does.
+  public func canHide(_ s: Session) -> Bool {
+    guard !hasPending(for: s.id), question(for: s.id) == nil, !s.status.isBlocking else {
+      return false
+    }
+    switch s.status {
+    case .error: return !s.unseen
+    case .waitingInput: return s.waitsForPrompt
+    default: return true
+    }
+  }
+
+  /// Hides the chat until it does something new (`reveals`). Also marks it seen, so a hidden
+  /// chat never counts as an unseen "done". False when it is unknown or needs the user.
+  @discardableResult
+  public func hide(sessionID: String) -> Bool {
+    guard let s = sessions[sessionID], canHide(s) else { return false }
+    markSeen(sessionID: sessionID)
+    sessions[sessionID]?.hidden = true
+    return true
+  }
+
+  /// Brings one hidden chat back.
+  public func unhide(sessionID: String) {
+    guard sessions[sessionID]?.hidden == true else { return }
+    sessions[sessionID]?.hidden = false
+  }
+
+  /// Brings every hidden chat back.
+  public func unhideAll() {
+    for (id, s) in sessions where s.hidden { sessions[id]?.hidden = false }
+  }
+
+  /// Whether event `name` (applied, leaving `session` in its new state) is "something new" that
+  /// brings a hidden chat back: the user typed in it or started a session there, a turn really
+  /// ended (done or failed), or it needs the user now. Tool calls of a running turn, subagents,
+  /// a compaction (also the idle one Claude Code runs on its own) and the "waiting for your
+  /// input" notice a minute after a turn are not: a hidden chat stays hidden through those.
+  static func reveals(_ name: String, source: String?, session: Session) -> Bool {
+    switch name {
+    case "SessionStart": return source != "compact"
+    case "UserPromptSubmit", "StopFailure", "PermissionRequest": return true
+    case "Stop": return !session.waitsForBackground
+    default: return session.needsAttention
     }
   }
 
@@ -289,6 +408,7 @@ public final class SessionStore {
     apply(context, to: &session)
     adoptDiscovered(context, into: &session, isNew: isNew)
     if e.name != "SessionEnd" { retireSiblings(of: e.sessionID, pid: context.pid) }
+    carryOrder(to: e.sessionID, context: context)
     let before = session.status
     if let agent = e.agentID, e.name != "SubagentStop" {
       let old = session.agents[agent]
@@ -305,12 +425,14 @@ public final class SessionStore {
     case "SessionStart":
       flushPending(e.sessionID)
       session.agents = [:]
+      session.waitsForBackground = false
       session.activity = nil
       session.turnToolCount = 0
       session.rhythm = nil
       setStatus(&session, .idle, at: t)
     case "UserPromptSubmit":
       flushPending(e.sessionID)
+      session.waitsForBackground = false
       session.turnStartedAt = t
       session.turnToolCount = 0
       session.rhythm = ActivityRhythm(start: t)
@@ -327,34 +449,65 @@ public final class SessionStore {
       }
       if let status = interactiveStatus(e) {
         setStatus(&session, status, at: t)
+        askingCall[e.sessionID] = e.toolName
+      } else if keepsAsking(session, despite: e) {
+        break
       } else if !(e.agentID != nil && session.status.isBlocking) {
         setStatus(&session, .working(tool: e.toolName), at: t)
       }
     case "PostToolUse", "PostToolUseFailure":
       resolveMatching(e)
+      if keepsAsking(session, despite: e) { break }
       if !(e.agentID != nil && session.status.isBlocking) {
         setStatus(&session, .working(tool: nil), at: t)
       }
     case "Stop":
       flushPending(e.sessionID, agentID: e.agentID)
       session.agents = [:]
-      setStatus(&session, .done(Self.clean(e.lastAssistantMessage, fallback: "Tamamlandı")), at: t)
+      let continuing = BackgroundWork.continuing(e.backgroundTasks)
+      session.waitsForBackground = !continuing.isEmpty
+      if session.waitsForBackground {
+        // A workflow or background agent still runs and wakes the session when it is back:
+        // not done yet (no wing, chime or done bar); the Stop after it is the real end.
+        session.activity = nil
+        setStatus(&session, .working(tool: BackgroundWork.summary(continuing)), at: t)
+        break
+      }
+      setStatus(&session, .done(Self.clean(e.lastAssistantMessage, fallback: loc("Completed"))), at: t)
       session.unseen = true
       announce(e.sessionID, "done", sound: "Glass")
     case "StopFailure":
       flushPending(e.sessionID, agentID: e.agentID)
+      session.waitsForBackground = false
       session.agents = [:]
       let text = e.errorText ?? e.lastAssistantMessage
-      setStatus(&session, .error(Self.clean(text, fallback: "Bir hata oluştu")), at: t)
+      setStatus(&session, .error(Self.clean(text, fallback: loc("An error occurred"))), at: t)
       session.unseen = true
       announce(e.sessionID, "error", sound: "Basso")
     case "Notification":
+      // Claude Code's "waiting for your input" while a workflow it started still runs: the
+      // session is not waiting for the user, so no status change, card flush or bell.
+      if e.notificationType == "idle_prompt", session.waitsForBackground { break }
+      // A hidden chat waiting for its next prompt is exactly what the user hid: no "needs
+      // you" state (it would light up a segment nobody can see), no bell. A turn that ended
+      // without a Stop (Esc) still settles: working / quiet becomes idle, so the chat neither
+      // counts as working nor turns "quiet" later, and comes back idle when shown.
+      if e.notificationType == "idle_prompt", session.hidden {
+        if session.status.isWorking || session.status == .quiet {
+          setStatus(&session, .idle, at: t)
+        }
+        break
+      }
       handleNotification(e, session: &session, at: t)
+      if TerminalBell.rings(notificationType: e.notificationType) {
+        emit(.bell(sessionID: e.sessionID, notificationType: e.notificationType))
+      }
     case "PermissionRequest":
       // Forwarded as an event by the bridge: the tool needs interaction in the terminal.
       let status = interactiveStatus(e)
-        ?? .waitingInput("Girdi bekliyor: \(e.toolName ?? "araç")")
+        ?? .waitingInput(loc("Waiting for input: \(e.toolName ?? loc("tool"))"))
       setStatus(&session, status, at: t)
+      if interactiveStatus(e) != nil { askingCall[e.sessionID] = e.toolName }
     case "SubagentStart":
       break
     case "SubagentStop":
@@ -365,6 +518,9 @@ public final class SessionStore {
       return
     default:
       return
+    }
+    if session.hidden, Self.reveals(e.name, source: e.source, session: session) {
+      session.hidden = false
     }
     session.lastUpdate = t
     sessions[e.sessionID] = session
@@ -378,7 +534,7 @@ public final class SessionStore {
     switch e.toolName {
     case "AskUserQuestion":
       let q = e.question
-      let text = q?.text.isEmpty == false ? q?.text ?? "" : "Claude bir soru soruyor"
+      let text = q?.text.isEmpty == false ? q?.text ?? "" : loc("Claude is asking a question")
       return .question(text: text, options: q?.options ?? [])
     case "ExitPlanMode":
       return .planApproval(e.planSummary)
@@ -389,7 +545,7 @@ public final class SessionStore {
 
   private func handleNotification(_ e: HookEvent, session: inout Session, at t: Date) {
     let type = e.notificationType ?? ""
-    let text = Self.clean(e.message ?? e.title, fallback: "Girdi bekliyor")
+    let text = Self.clean(e.message ?? e.title, fallback: loc("Waiting for input"))
     switch type {
     case "permission_prompt":
       // The card (or the question / plan dialog) already says it.
@@ -405,8 +561,10 @@ public final class SessionStore {
       case .question, .planApproval:
         guard t.timeIntervalSince(session.statusSince) > Self.mismatchGrace else { return }
         setStatus(&session, .waitingInput(text), at: t)
+        session.waitsForPrompt = true
       default:
         setStatus(&session, .waitingInput(text), at: t)
+        session.waitsForPrompt = true
       }
     case "agent_needs_input", "elicitation_dialog", "elicitation_url_dialog":
       setStatus(&session, .waitingInput(text), at: t)
@@ -418,16 +576,19 @@ public final class SessionStore {
   private func newSession(_ e: HookEvent, context: HookContext, at t: Date) -> Session {
     Session(
       id: e.sessionID, project: e.projectName, cwd: e.cwd, termProgram: context.termProgram,
-      status: .idle, startedAt: t, lastUpdate: t)
+      termBundle: context.termBundle, status: .idle, startedAt: t, lastUpdate: t)
   }
 
   private func apply(_ context: HookContext, to session: inout Session) {
+    if let tool = context.tool { session.tool = tool }
     if let term = context.termProgram, !term.isEmpty { session.termProgram = term }
+    if let bundle = context.termBundle { session.termBundle = bundle }
     if let tty = context.tty, let pid = context.pid {
       session.tty = tty
       session.pid = pid
       watchExit(sessionID: session.id, pid: pid)
     }
+    link(&session)
     if let branch = context.branch { session.branch = branch }
   }
 
@@ -440,6 +601,8 @@ public final class SessionStore {
   private func retireSiblings(of sessionID: String, pid: Int32?) {
     guard let pid else { return }
     for s in sessions.values where s.id != sessionID && !s.isDiscovered && s.pid == pid {
+      // The same chat under its new id: it keeps its pin and place.
+      updateOrder { $0.rename(s.id, to: sessionID) }
       removeSession(s.id)
     }
   }
@@ -448,12 +611,28 @@ public final class SessionStore {
     for placeholder in discoveredMatches(context) where placeholder.id != session.id {
       if isNew { session.startedAt = min(session.startedAt, placeholder.startedAt) }
       if session.termProgram == nil { session.termProgram = placeholder.termProgram }
+      if session.termBundle == nil { session.termBundle = placeholder.termBundle }
+      // The user hid the placeholder: the hook session that replaces it stays hidden (the
+      // event that adopted it may still reveal it, see `reveals`).
+      if isNew, placeholder.hidden { session.hidden = true }
+      updateOrder { $0.rename(placeholder.id, to: session.id) }
       sessions.removeValue(forKey: placeholder.id)
       exitWatches.removeValue(forKey: placeholder.id)?.watch.cancel()
     }
   }
 
+  /// The session is asking (question / plan approval) with a known tool, and `e` belongs to
+  /// another tool: a late, out-of-order event that must not end the asking state.
+  private func keepsAsking(_ s: Session, despite e: HookEvent) -> Bool {
+    guard s.status.kind == "question" || s.status.kind == "plan",
+      let call = askingCall[s.id]
+    else { return false }
+    return e.toolName != call
+  }
+
   private func setStatus(_ s: inout Session, _ status: SessionStatus, at t: Date) {
+    if status.kind != "question" && status.kind != "plan" { askingCall[s.id] = nil }
+    s.waitsForPrompt = false
     if s.status.kind != status.kind { s.statusSince = t }
     s.status = status
     s.unseen = false
@@ -515,6 +694,8 @@ public final class SessionStore {
     adoptDiscovered(context, into: &session, isNew: isNew)
     session.lastUpdate = t
     session.unseen = false
+    // A permission request blocks Claude: a hidden chat comes back.
+    session.hidden = false
     sessions[e.sessionID] = session
     let tool = e.toolName ?? "?"
     let key = CallKey.make(sessionID: e.sessionID, toolName: tool, input: e.toolInput)
@@ -546,7 +727,7 @@ public final class SessionStore {
     return true
   }
 
-  /// Denies every card of the session in one step ("Tümünü reddet"). The per-card arm guard
+  /// Denies every card of the session in one step ("Deny all"). The per-card arm guard
   /// after a removal must not stop cards 2...N of an explicit bulk action. Returns the count.
   @discardableResult
   public func denyAll(sessionID: String, message: String = PermissionDecision.defaultDenyMessage)
@@ -589,6 +770,8 @@ public final class SessionStore {
       agentID: e.agentID, questions: qs, toolInput: input, createdAt: now(),
       reply: PermissionReply(reply))
     questions.append(q)
+    // A held question blocks Claude: a hidden chat comes back.
+    unhide(sessionID: e.sessionID)
     return q
   }
 
@@ -617,6 +800,11 @@ public final class SessionStore {
 
   public func releaseQuestions(sessionID: String) {
     for q in questions where q.sessionID == sessionID { releaseQuestion(id: q.id) }
+  }
+
+  /// Hands every held question to its terminal (the user switched to terminal-only questions).
+  public func releaseAllQuestions() {
+    for q in questions { releaseQuestion(id: q.id) }
   }
 
   /// Flushes every card of the session.
@@ -673,13 +861,28 @@ public final class SessionStore {
   public func markSeen(tty: String) -> Bool {
     guard HookContext.validTTY(tty) != nil else { return false }
     // The user is at that terminal: a held question goes back to it.
-    for s in sessions.values where s.tty == tty { releaseQuestions(sessionID: s.id) }
+    for s in sessions.values where s.terminal == tty { releaseQuestions(sessionID: s.id) }
     var any = false
-    for s in sessions.values where s.tty == tty && (s.unseen || s.status.kind == "waiting") {
+    for s in sessions.values where s.terminal == tty && (s.unseen || s.status.kind == "waiting") {
       markSeen(sessionID: s.id)
       any = true
     }
     return any
+  }
+
+  /// The terminal the user is in changed: `tty` (validated; anything else counts as none), or
+  /// nil when no terminal of a known chat is in front. Writes only on a change, so the 0.5 s
+  /// focus poll does not wake the views each time it gets the same answer.
+  public func setFocusedTTY(_ tty: String?) {
+    let tty = HookContext.validTTY(tty)
+    if focusedTTY != tty { focusedTTY = tty }
+  }
+
+  /// Sessions running in the terminal the user is in (`focusedTTY`); empty while none is known.
+  /// Usually one; two when an old chat on the same tty has not been swept yet.
+  public var hereSessionIDs: Set<String> {
+    guard let tty = focusedTTY else { return [] }
+    return Set(sessions.values.lazy.filter { $0.terminal == tty }.map(\.id))
   }
 
   /// v1 name of `markSeen(sessionID:)`.
@@ -700,6 +903,7 @@ public final class SessionStore {
   /// Returns the removed session ids.
   @discardableResult
   public func sweep() -> [String] {
+    touchOrder()
     let t = now()
     var removed: [String] = []
     for (id, s) in sessions {
@@ -709,11 +913,13 @@ public final class SessionStore {
         continue
       }
       var u = s
-      if s.status.isWorking, !hasPending(for: id),
+      // A session waiting for its workflow may hear nothing for long: not stuck.
+      if s.status.isWorking, !s.waitsForBackground, !hasPending(for: id),
         t.timeIntervalSince(s.lastUpdate) >= Self.quietAfter
       {
         setStatus(&u, .quiet, at: t)
-        emit(.attention(sessionID: id, kind: "quiet"))
+        // No "quiet for 10 min" note for a chat the user hid.
+        if !s.hidden { emit(.attention(sessionID: id, kind: "quiet")) }
       }
       u.agents = u.agents.filter { t.timeIntervalSince($0.value.lastSeen) < Self.agentStaleAfter }
       if u != s { sessions[id] = u }
@@ -726,6 +932,7 @@ public final class SessionStore {
     flushPending(id)
     sessions.removeValue(forKey: id)
     recentPre.removeValue(forKey: id)
+    askingCall.removeValue(forKey: id)
     exitWatches.removeValue(forKey: id)?.watch.cancel()
   }
 
@@ -747,6 +954,7 @@ public final class SessionStore {
   /// The watched claude process of `sessionID` exited.
   public func processExited(sessionID: String, pid: Int32) {
     guard let s = sessions[sessionID], s.pid == pid else { return }
+    if s.tool == .agy { agyLinker.forget(pid: pid) }
     removeSession(sessionID)
   }
 
@@ -773,10 +981,13 @@ public final class SessionStore {
       var options: JSONValue = .null
       if case .question(_, let o) = s.status { options = .array(o.map { .string($0) }) }
       return .object([
-        "session_id": .string(s.id), "project": .string(s.project), "cwd": .string(s.cwd),
-        "term": opt(s.termProgram), "tty": opt(s.tty),
+        "session_id": .string(s.id), "tool": .string(s.tool.rawValue),
+        "model": opt(s.modelLabel), "project": .string(s.project), "cwd": .string(s.cwd),
+        "term": opt(s.termProgram), "term_bundle": opt(s.termBundle),
+        "host": opt(s.hostBundleID), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
         "discovered": .bool(s.isDiscovered), "tab_title": opt(s.tabTitle),
+        "hidden": .bool(s.hidden), "pinned": .bool(chatOrder.isPinned(s.id)),
         "secondary": opt(secondaryText(for: s)),
         "disambiguator": opt(disambiguator(for: s)),
         "status": .string(s.status.kind), "label": .string(s.status.label),

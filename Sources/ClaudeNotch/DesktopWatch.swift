@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Observation
 
 /// "The menu bar has room for the full ears": the desktop is in front (Finder active, none of
@@ -9,6 +10,11 @@ import Observation
 @Observable
 final class DesktopWatch {
   private(set) var isRoomy = false
+  /// How far the front app's menu titles reach from the menu bar's left edge, in points (nil:
+  /// unknown, without Accessibility access or a menu bar). Read on every app switch (and once
+  /// more a second later, while a launching app builds its menus), so anything drawn left of
+  /// the notch can stay clear of a menu the user wants to click (docs/adr/0001).
+  private(set) var menuReach: CGFloat?
   @ObservationIgnored private var observer: NSObjectProtocol?
   @ObservationIgnored private var poll: Timer?
 
@@ -19,7 +25,12 @@ final class DesktopWatch {
     observer = nc.addObserver(
       forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
     ) { [weak self] _ in
-      Task { @MainActor in self?.check() }
+      Task { @MainActor in
+        self?.check()
+        self?.readMenus()
+        try? await Task.sleep(for: .seconds(1))
+        self?.readMenus()
+      }
     }
     spaceObserver = nc.addObserver(
       forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
@@ -31,6 +42,69 @@ final class DesktopWatch {
       }
     }
     check()
+    readMenus()
+  }
+
+  /// Debug (`/debug/ui` `menu_reach`): a menu width to use instead of the front app's.
+  var debugMenuReach: CGFloat? {
+    didSet { readMenus() }
+  }
+
+  private func readMenus() {
+    if let forced = debugMenuReach {
+      menuReach = forced
+      return
+    }
+    let reach = NSWorkspace.shared.frontmostApplication.flatMap {
+      Self.menuReach(pid: $0.processIdentifier)
+    }
+    if reach != menuReach { menuReach = reach }
+  }
+
+  /// Width of the app's menu titles (Apple menu to the last title) via Accessibility; a slow
+  /// app gets a quarter second.
+  static func menuReach(pid: pid_t) -> CGFloat? {
+    guard AXIsProcessTrusted() else { return nil }
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.25)
+    var bar: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(app, kAXMenuBarAttribute as CFString, &bar) == .success,
+      let bar, CFGetTypeID(bar) == AXUIElementGetTypeID()
+    else { return nil }
+    var kids: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(
+        bar as! AXUIElement, kAXChildrenAttribute as CFString, &kids) == .success,
+      let items = kids as? [AXUIElement], !items.isEmpty
+    else { return nil }
+    var lo = CGFloat.infinity
+    var hi = -CGFloat.infinity
+    for item in items {
+      guard let origin = point(item, kAXPositionAttribute), let size = size(item),
+        size.width > 0
+      else { continue }
+      lo = min(lo, origin.x)
+      hi = max(hi, origin.x + size.width)
+    }
+    return hi > lo ? hi - lo : nil
+  }
+
+  private static func point(_ e: AXUIElement, _ attr: String) -> CGPoint? {
+    var v: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(e, attr as CFString, &v) == .success, let v,
+      CFGetTypeID(v) == AXValueGetTypeID()
+    else { return nil }
+    var p = CGPoint.zero
+    return AXValueGetValue(v as! AXValue, .cgPoint, &p) ? p : nil
+  }
+
+  private static func size(_ e: AXUIElement) -> CGSize? {
+    var v: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(e, kAXSizeAttribute as CFString, &v) == .success, let v,
+      CFGetTypeID(v) == AXValueGetTypeID()
+    else { return nil }
+    var s = CGSize.zero
+    return AXValueGetValue(v as! AXValue, .cgSize, &s) ? s : nil
   }
 
   private func check() {

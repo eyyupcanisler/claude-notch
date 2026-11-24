@@ -15,18 +15,18 @@ public enum SessionStatus: Sendable, Equatable {
 
   public var label: String {
     switch self {
-    case .idle: return "Boşta"
-    case .working: return "Çalışıyor"
-    case .quiet: return "Sessiz"
-    case .done: return "Bitti"
-    case .waitingInput: return "Girdi bekliyor"
-    case .question: return "Soru soruyor"
-    case .planApproval: return "Plan onayı bekliyor"
-    case .error: return "Hata"
+    case .idle: return loc("Idle")
+    case .working: return loc("Working")
+    case .quiet: return loc("Quiet")
+    case .done: return loc("Done")
+    case .waitingInput: return loc("Waiting for input")
+    case .question: return loc("Asking a question")
+    case .planApproval: return loc("Waiting for plan approval")
+    case .error: return loc("Error")
     }
   }
 
-  /// The status itself asks for the user (amber). `done` is not attention (see `Session.unseen`);
+  /// The status itself asks for the user ("needs you" color). `done` is not attention (see `Session.unseen`);
   /// an `error` only counts while unseen (`Session.needsAttention`).
   public var needsAttention: Bool {
     switch self {
@@ -88,15 +88,34 @@ public struct AgentActivity: Sendable, Equatable, Identifiable {
   }
 }
 
+/// The coding agent a chat runs in.
+public enum ChatTool: String, Sendable, Equatable {
+  case claude
+  /// Antigravity CLI (`agy`), see `AgyLinker`.
+  case agy
+}
+
 public struct Session: Sendable, Identifiable, Equatable {
   public var id: String
+  /// Claude Code, or agy (its rows carry an "agy" mark and its model).
+  public var tool: ChatTool = .claude
+  /// agy: the model and effort, e.g. "Gemini 4 Neon · medium" (nil for Claude chats).
+  public var modelLabel: String?
   public var project: String
   public var cwd: String
   public var termProgram: String?
+  /// Bundle id of the app the chat runs in, from its inherited `__CFBundleIdentifier`
+  /// (validated, see `TerminalHost`); nil when the hook or the process did not carry one.
+  public var termBundle: String?
   /// Controlling terminal of the claude process, e.g. "/dev/ttys012" (validated).
   public var tty: String?
   /// pid of the claude process that owns `tty`.
   public var pid: Int32?
+  /// The terminal of the tab showing the chat, when it is not `tty`: a chat Claude Code's
+  /// background daemon runs (after `/restart` in Claude Code 2.1.328) has its process on a
+  /// hidden terminal, and its tab shows it through a client. The process scan links the two
+  /// by Ghostty's tab id (`ClaudeProcess.tabTTYs`).
+  public var tabTTY: String?
   /// Git branch at SessionStart / last prompt (nil: unknown, detached or not a repo).
   public var branch: String?
   /// Found by the process scan (no hook event yet): an idle placeholder until hooks arrive.
@@ -121,9 +140,21 @@ public struct Session: Sendable, Identifiable, Equatable {
   public var turnToolCount: Int
   /// When those calls happened (the row's rhythm strip); nil before the first turn.
   public var rhythm: ActivityRhythm?
+  /// The turn ended while a workflow or background agent it started still runs: the session
+  /// keeps working until that work wakes it (see `BackgroundWork`). Cleared by the next Stop,
+  /// prompt or session start.
+  public var waitsForBackground = false
+  /// The user hid the chat (the row's hide button): it leaves the panel list and the status
+  /// line until it does something new (see `SessionStore.reveals`). The process keeps running.
+  public var hidden = false
+  /// The current "waiting for input" is only Claude Code's idle notice (waiting for the next
+  /// prompt), not a permission prompt or a dialog in the terminal: the chat may be hidden.
+  /// Cleared by every status change.
+  public var waitsForPrompt = false
 
   public init(
-    id: String, project: String, cwd: String, termProgram: String?, tty: String? = nil,
+    id: String, project: String, cwd: String, termProgram: String?, termBundle: String? = nil,
+    tty: String? = nil,
     pid: Int32? = nil, branch: String? = nil, status: SessionStatus, isDiscovered: Bool = false,
     tabTitle: String? = nil, unseen: Bool = false,
     agents: [String: AgentActivity] = [:], startedAt: Date, lastUpdate: Date,
@@ -134,6 +165,7 @@ public struct Session: Sendable, Identifiable, Equatable {
     self.project = project
     self.cwd = cwd
     self.termProgram = termProgram
+    self.termBundle = termBundle
     self.tty = tty
     self.pid = pid
     self.branch = branch
@@ -151,9 +183,14 @@ public struct Session: Sendable, Identifiable, Equatable {
     self.rhythm = rhythm
   }
 
-  /// "s012" for "/dev/ttys012".
+  /// The terminal of the tab the chat is in: `tabTTY`, else `tty`. Everything about the tab
+  /// (tab order and title, focusing it, "you are here", seen, the bell) uses this; whether the
+  /// process still lives is checked against `tty`.
+  public var terminal: String? { tabTTY ?? tty }
+
+  /// "s012" for "/dev/ttys012" (the tab's terminal).
   public var ttySuffix: String? {
-    guard let tty, tty.hasPrefix("/dev/tty") else { return nil }
+    guard let tty = terminal, tty.hasPrefix("/dev/tty") else { return nil }
     return String(tty.dropFirst("/dev/tty".count))
   }
 
@@ -162,7 +199,7 @@ public struct Session: Sendable, Identifiable, Equatable {
     return false
   }
 
-  /// Amber attention from the status alone (cards are counted by the store).
+  /// "Needs you" attention from the status alone (cards are counted by the store).
   public var needsAttention: Bool {
     if case .error = status { return unseen }
     return status.needsAttention
@@ -208,23 +245,7 @@ public struct PendingPermission: Sendable, Identifiable {
   /// There is more to see than the collapsed card shows.
   public var hasMore: Bool { needsExpansion || extra != nil }
 
-  /// Display columns of the peek's one-line text (monospaced 11.5 pt in a 392 pt line).
-  public static let peekLimit = 50
-
-  /// One line for the peek (head…tail when long).
-  public var peekText: String {
-    TextShortener.oneLine(fullText.isEmpty ? toolName : fullText, limit: Self.peekLimit)
-  }
-
-  /// The peek's one line shows the whole request (nothing folded, cut or elided, no written
-  /// content / edit behind it), so allowing from the peek is allowed. Otherwise the peek can
-  /// only open the panel.
-  public var fitsPeek: Bool {
-    extra == nil && !fullText.isEmpty && peekText == fullText
-      && ToolSummary.displayWidth(fullText) <= Self.peekLimit
-  }
-
-  /// Rule text for the "Her zaman" section (whole and sanitized), if a suggestion exists.
+  /// Rule text for the "Always" section (whole and sanitized), if a suggestion exists.
   public var alwaysDescription: String? {
     let pick = suggestions.first { $0["type"]?.stringValue == "addRules" } ?? suggestions.first
     return pick.map { ToolSummary.describeSuggestion($0) }
@@ -261,4 +282,8 @@ public enum StoreEffect: Sendable, Equatable {
   /// A session entered a state worth a peek. `kind` is a `SessionStatus.kind` ("done", "error",
   /// "waiting", "question", "plan") or "permission" for a new card.
   case attention(sessionID: String, kind: String)
+  /// Claude Code sent a Notification hook event for this session (`TerminalBell.rings`): the
+  /// moment to ring the session's terminal bell when that option is on. The type decides
+  /// whether it rings in silent mode (`TerminalBell.ringsNow`).
+  case bell(sessionID: String, notificationType: String?)
 }

@@ -4,7 +4,8 @@ import Observation
 import SwiftUI
 
 /// The three shapes: collapsed (exactly the notch, plus the status line while sessions exist),
-/// peek (an island dropping out of the notch) and the expanded panel.
+/// peek (the notch grown sideways into "wings" at band height, see `WingPlanner`; nothing drops
+/// below the menu-bar band) and the expanded panel.
 enum NotchMode: String, Sendable {
   case collapsed
   case peek
@@ -15,34 +16,42 @@ enum NotchMode: String, Sendable {
 @MainActor
 @Observable
 final class NotchUIState {
-  /// Live activity shown on the active surface (nil: none).
+  /// What the wings show on the active surface (nil: nothing, the notch is collapsed).
+  var wings: WingDisplay?
+  /// The item in its 4 s wing phase (`wings?.item`; nil once only a mark lingers).
   var peek: PeekItem?
   /// Keeps the expanded panel open (header pin).
   var pinned = false
+  /// The clipboard shelf in the panel is open (its chips show); folded to one line otherwise.
+  /// Folds again whenever the panel closes (`collapse`).
+  var shelfOpen = false
   /// The panel is key (opened with the hotkey): keyboard shortcuts apply.
   var keyMode = false
   var selectedCardID: String?
   var selectedSessionID: String?
   /// Session order captured when the pointer entered the panel (no reordering under it).
   var frozenOrder: [String]?
+  /// The row being dragged to a new place (its session id), nil otherwise. While set, row
+  /// clicks are dropped and the panel stays open even when the pointer leaves it.
+  var draggingRowID: String?
   /// Sessions drawn as rich (needs-you) rows at freeze time: a session that starts or stops
   /// needing the user while the pointer is over the list keeps its row shape.
   var frozenRich: Set<String> = []
   /// No card was pending at freeze time: a new card does not push the list down under the
-  /// pointer (the "N izin" chip shows it instead).
+  /// pointer (the "N permissions" chip shows it instead).
   var slotFrozenEmpty = false
   /// Card ids whose full text the user opened (allowing a long request needs that first).
   var openedCards: Set<String> = []
-  /// Card whose ⋯ section ("Her zaman" rule) is open.
+  /// Card whose ⋯ section ("Always" rule) is open.
   var moreCardID: String?
-  /// "Her zaman" (click or ⌘⇧⏎) is accepted from then on: the rule it adds must have been on
+  /// "Always" (click or ⌘⇧⏎) is accepted from then on: the rule it adds must have been on
   /// screen for a moment.
   var moreArmedAt = Date.distantPast
   /// Opened cards whose full text was scrolled to its end (allowing a long request needs it).
   var readToEnd: Set<String> = []
   /// Page-down requests for an opened card's text (Space while it is not read to the end).
   var detailPage: [String: Int] = [:]
-  /// Cards whose "Her zaman" rule has been on screen down to its end (saving it needs that).
+  /// Cards whose "Always" rule has been on screen down to its end (saving it needs that).
   var ruleRead: Set<String> = []
   /// Page-down requests for a card's rule text (Space while the rule is not read).
   var rulePage: [String: Int] = [:]
@@ -64,9 +73,9 @@ final class NotchUIState {
   var questionArmedAt: [String: Date] = [:]
   /// Hold-to-allow progress (0...1) of the card held with the global allow shortcut.
   var holdProgress: [String: Double] = [:]
-  /// Card whose hold runs with the global allow shortcut (label "Tutun…", set without motion).
+  /// Card whose hold runs with the global allow shortcut (label "Hold…", set without motion).
   var keyHoldCardID: String?
-  /// A tap (not a hold) of the global allow shortcut on this risky card: "Basılı tutun".
+  /// A tap (not a hold) of the global allow shortcut on this risky card: "Press and hold".
   var holdHintCardID: String?
   /// The panel was opened by a global shortcut (full text of a request) while the pointer was
   /// elsewhere: it stays open until the pointer has been over it, a decision, or the peek time.
@@ -74,7 +83,7 @@ final class NotchUIState {
   /// Keycaps of the registered global shortcuts ("⌃⌥Y"), nil when not registered.
   var allowKey: String?
   var denyKey: String?
-  /// One-time line under the permission peek ("⌃⌥Y izin ver · ⌃⌥N reddet"), nil once used.
+  /// One-time line under the permission peek ("⌃⌥Y allow · ⌃⌥N deny"), nil once used.
   var shortcutHint: String?
   /// Last known Automation status towards Ghostty (see `GhosttyConsent`).
   var ghosttyAutomation: Int32?
@@ -119,10 +128,10 @@ final class SurfaceState {
   var mode: NotchMode = .collapsed
   /// Built-in notch surface (full UI) or a synthetic pill on another screen.
   var isPrimary: Bool
-  /// Measured height of the content under the band, per mode.
-  var bodyHeight: [NotchMode: CGFloat] = [.peek: 52, .expanded: 220]
-  /// Island width of the current peek (one line for done / error, two lines for a card).
-  var peekWidth: CGFloat = NotchMetrics.finishedWidth
+  /// Measured height of the content under the band (the expanded panel; the wings have none).
+  var bodyHeight: [NotchMode: CGFloat] = [.expanded: 220]
+  /// Width of each wing beside the notch (see `WingMetrics.sideWidth`).
+  var wingSide: CGFloat = WingMetrics.markWidth
   /// The pill is shown at all (a synthetic pill with nothing to show is hidden).
   var visible = true
   /// The pointer is on the collapsed notch (dwell running): the shape swells a little at once,
@@ -163,14 +172,14 @@ enum NotchMetrics {
 
   static func earWidth(full: Bool) -> CGFloat { full ? earWidth : thinEarWidth }
 
+  /// Height of the timer's ear beside the notch: the notch's own height, so their bottoms
+  /// line up (the menu bar can be a little taller than the notch), at most the menu bar's.
+  static func timerEarHeight(_ g: NotchGeometry) -> CGFloat {
+    g.hasNotch ? min(g.bandHeight, g.notchHeight) : g.bandHeight
+  }
+
   /// Running timer (collapsed only): the notch grows down by this much, the time inside.
   static let pillHeight: CGFloat = 22
-  /// Done / error peek: one line.
-  static let finishedWidth: CGFloat = 300
-  static let moduleWidth: CGFloat = 340
-  /// Permission / question peek: two lines and compact buttons.
-  static let permissionMinWidth: CGFloat = 380
-  static let peekPadding: CGFloat = 14
   static let expandedWidth: CGFloat = 600
   static let maxHeight: CGFloat = 560
   static let windowWidth: CGFloat = 660
@@ -190,15 +199,6 @@ enum NotchMetrics {
   static func expandedWidth(screen: CGFloat) -> CGFloat {
     max(320, min(expandedWidth, screen - 2 * (expandedShoulder + 12)))
   }
-
-  /// A permission peek wide enough for `PendingPermission.peekLimit` monospaced columns.
-  @MainActor
-  static let permissionWidth: CGFloat = {
-    let font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-    let advance = ("0" as NSString).size(withAttributes: [.font: font]).width
-    let text = ceil(advance * CGFloat(PendingPermission.peekLimit)) + 4
-    return max(permissionMinWidth, text + peekPadding * 2)
-  }()
 
   /// Status line width (notch minus the insets; never negative).
   static func lineWidth(notch: CGFloat) -> CGFloat { max(24, notch - lineInset * 2) }
@@ -233,7 +233,7 @@ enum NotchMetrics {
 
   @MainActor
   static func island(
-    _ mode: NotchMode, geometry g: NotchGeometry, body: [NotchMode: CGFloat], peekWidth: CGFloat
+    _ mode: NotchMode, geometry g: NotchGeometry, body: [NotchMode: CGFloat], wingSide: CGFloat
   ) -> IslandGeometry {
     switch mode {
     case .collapsed:
@@ -245,9 +245,12 @@ enum NotchMetrics {
         height: g.notchHeight - inset, shoulder: 0,
         bottomRadius: g.hasNotch ? 10 : min(10, g.notchHeight / 2))
     case .peek:
+      // The wings: the notch grown sideways, exactly the band's height (no flare, nothing
+      // below the band), so the page under the menu bar stays clickable.
+      let w = WingMetrics.totalWidth(side: wingSide, notchWidth: g.notchWidth)
+      let h = WingMetrics.height(bandHeight: g.bandHeight)
       return IslandGeometry(
-        topWidth: g.notchWidth, bodyWidth: max(g.notchWidth, peekWidth),
-        height: g.bandHeight + (body[.peek] ?? 52), shoulder: 0, bottomRadius: 20)
+        topWidth: w, bodyWidth: w, height: h, shoulder: 0, bottomRadius: min(10, h / 2))
     case .expanded:
       let w = expandedWidth(screen: g.screenFrame.width)
       let h = min(g.toolbarHeight + (body[.expanded] ?? 220), maxHeight)

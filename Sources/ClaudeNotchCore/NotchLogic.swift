@@ -2,17 +2,17 @@ import CoreGraphics
 import Foundation
 
 // Pure UI policy (no AppKit) so it can be unit tested: risky commands, text shortening, the
-// peek planner, hover intent and the display order of the session list.
+// peek rules (the wings' items), hover intent and the display order of the session list.
 
 // MARK: - Risky commands
 
 public enum RiskClassifier {
-  /// Short Turkish reason when the request is destructive enough to need hold-to-allow (or
+  /// Short localized reason when the request is destructive enough to need hold-to-allow (or
   /// ⌘⏎), nil otherwise. Only shell commands are classified. `text` may be raw or the
   /// sanitized display text (a literal `\n` / `\t` is treated as a separator).
   public static func risk(toolName: String, text: String) -> String? {
     guard toolName == "Bash" else { return nil }
-    if text.count > ToolSummary.fullLimit { return "çok uzun komut" }
+    if text.count > ToolSummary.fullLimit { return loc("very long command") }
     let cmd = normalize(text)
     if hasRecursiveForceRemove(cmd) { return "rm -rf" }
     for (pattern, reason) in patterns where matches(pattern, cmd) { return reason }
@@ -124,26 +124,26 @@ public enum RiskClassifier {
   /// nil otherwise.
   static func exfiltration(_ cmd: String) -> String? {
     let masked = maskQuoted(cmd)
-    for p in uploadPatterns where matches(p, masked) { return "dosya yükleme" }
+    for p in uploadPatterns where matches(p, masked) { return loc("file upload") }
     for (name, args) in commands(cmd) {
       let operands = args.filter { !$0.hasPrefix("-") }
       switch name {
       case "sftp":
-        return "uzak sunucuya kopya"
+        return loc("copy to a remote server")
       case "scp":
-        if operands.contains(where: isRemotePath) { return "uzak sunucuya kopya" }
+        if operands.contains(where: isRemotePath) { return loc("copy to a remote server") }
       case "rsync":
         if operands.contains(where: { isRemotePath($0) || $0.hasPrefix("rsync://") }) {
-          return "uzak sunucuya kopya"
+          return loc("copy to a remote server")
         }
       case "nc", "ncat", "netcat", "socat":
-        return "ağ bağlantısı (\(name))"
+        return loc("network connection (\(name))")
       default:
         break
       }
     }
     if matches(secretPattern, cmd) && matches(carrierPattern, cmd) {
-      return "gizli dosya aktarımı"
+      return loc("secret file transfer")
     }
     return nil
   }
@@ -164,12 +164,16 @@ public enum RiskClassifier {
   }
 
   /// Line breaks become `;`, every other whitespace (tabs, NBSP, ...) one space; the sanitizer's
-  /// `\n` / `\t` / `⟨N boşluk⟩` markers are undone the same way.
+  /// `\n` / `\t` / `⟨N spaces⟩` markers (`⟨N boşluk⟩` in Turkish) are undone the same way.
+  /// N may carry a thousands separator (`1,234`, `1.234`, a no-break space), in case it was
+  /// formatted for a locale.
   static func normalize(_ text: String) -> String {
     // Not the `\r` marker: that would turn the alias bypass `\rm` into `m`.
     var s = text.replacingOccurrences(of: "\\n", with: " ; ")
       .replacingOccurrences(of: "\\t", with: " ")
-    if let re = try? NSRegularExpression(pattern: "⟨[0-9]+ boşluk⟩") {
+    if let re = try? NSRegularExpression(
+      pattern: "⟨[0-9][0-9.,'\\u00A0\\u202F ]* (spaces|boşluk)⟩")
+    {
       s = re.stringByReplacingMatches(
         in: s, range: NSRange(s.startIndex..., in: s), withTemplate: " ")
     }
@@ -281,7 +285,7 @@ extension ToolSummary {
       return URL(string: full)?.host ?? TextShortener.middle(full, limit: 48)
     case "AskUserQuestion":
       let q = AskedQuestion.parse(input)?.first?.question
-      return q.map { "Soru: " + TextShortener.oneLine($0, limit: 54) } ?? "Soru soruyor"
+      return q.map { loc("Question: \(TextShortener.oneLine($0, limit: 54))") } ?? loc("Asking a question")
     default:
       return TextShortener.oneLine(full, limit: 60)
     }
@@ -291,24 +295,16 @@ extension ToolSummary {
 // MARK: - Peek planner
 
 public enum PeekKind: String, Sendable {
-  /// A new permission card (the user's setting, default 15 s; hover keeps it).
+  /// A new permission card.
   case permission
-  /// Question / plan approval / waiting for input (4 s).
+  /// Question / plan approval / waiting for input (`asking` for a question Claude asks in the
+  /// terminal).
   case attention
-  /// Done / error, coalesced (2.5 s).
+  /// Done / error, coalesced (`PeekPlanner.coalesceWindow`).
   case finished
-  /// A module note (meeting soon, timer done, charging): the lowest priority, never over a
-  /// Claude peek, and any Claude peek replaces it at once.
+  /// A module note (meeting soon, timer done, charging): never over a Claude item in the
+  /// wings, and any Claude arrival replaces it at once.
   case module
-
-  var priority: Int {
-    switch self {
-    case .permission: return 3
-    case .attention: return 2
-    case .finished: return 1
-    case .module: return 0
-    }
-  }
 }
 
 /// What a module peek shows: a dot-matrix value with a unit, a title and a subtitle.
@@ -332,7 +328,7 @@ public struct ModuleNote: Sendable, Equatable {
   public var unit: String?
   /// 0…1 for a level bar (battery).
   public var level: Double?
-  /// A link the peek offers as a button (a meeting's video link: "Katıl").
+  /// A link the peek offers as a button (a meeting's video link: "Join").
   public var link: URL?
   /// A note that waited behind a Claude peek is dropped after this (a meeting that started).
   public var validUntil: Date
@@ -364,26 +360,17 @@ public struct PeekItem: Sendable, Equatable {
   public var until: Date
   /// Payload of a module peek.
   public var module: ModuleNote? = nil
+  /// Terminal-only question mode: an attention item for a question Claude asks in the
+  /// terminal. A click on the wings goes to that terminal; the item goes once that session
+  /// stops asking.
+  public var asking: Bool = false
 }
 
-/// Decides what the peek shows. Pure state machine driven by the store's attention effects.
-public struct PeekPlanner: Sendable {
+/// Shared rules of the notch's Claude items, used by `WingPlanner` (the state machine of the
+/// wings beside the notch) and the wings' text.
+public enum PeekPlanner {
+  /// Done / error arrivals this close together merge into one item.
   public static let coalesceWindow: TimeInterval = 1.5
-  public static let finishedDuration: TimeInterval = 2.5
-  public static let attentionDuration: TimeInterval = 4
-  /// Default of a bare `PeekPlanner()`; the app passes the user's setting.
-  public static let permissionDuration: TimeInterval = 6
-  public static let moduleDuration: TimeInterval = 4
-
-  public private(set) var current: PeekItem?
-  /// A module note that arrived while a Claude peek was up: shown once that one is gone.
-  public private(set) var pendingModule: ModuleNote?
-  /// How long an unanswered permission peek stays; nil keeps it until the card is answered.
-  public var permissionHold: TimeInterval?
-
-  public init(permissionHold: TimeInterval? = PeekPlanner.permissionDuration) {
-    self.permissionHold = permissionHold
-  }
 
   public static func kind(for attention: String) -> PeekKind {
     switch attention {
@@ -393,114 +380,15 @@ public struct PeekPlanner: Sendable {
     }
   }
 
-  /// Seconds the peek stays; nil means until it is answered (no expiry).
-  func duration(_ kind: PeekKind) -> TimeInterval? {
-    switch kind {
-    case .permission: return permissionHold
-    case .attention: return Self.attentionDuration
-    case .finished: return Self.finishedDuration
-    case .module: return Self.moduleDuration
-    }
-  }
-
-  /// Feeds a module note. Shown at once unless a Claude peek is up; then it waits (one slot,
-  /// the newest wins) and shows when that peek is gone. Returns true when the peek changed.
-  @discardableResult
-  public mutating func receive(module note: ModuleNote, at t: Date) -> Bool {
-    if let cur = current, cur.until > t, cur.kind != .module {
-      pendingModule = note
-      return false
-    }
-    if current?.module?.id == note.id { return false }
-    present(note, at: t)
-    return true
-  }
-
-  private mutating func present(_ note: ModuleNote, at t: Date) {
-    current = PeekItem(
-      kind: .module, sessionIDs: [], errorIDs: [], cardID: nil, startedAt: t,
-      until: t.addingTimeInterval(Self.moduleDuration), module: note)
-  }
-
-  /// Feeds one attention effect. Returns true when the visible peek changed.
-  @discardableResult
-  public mutating func receive(
-    attention: String, sessionID: String, cardID: String? = nil, at t: Date
-  ) -> Bool {
-    let kind = Self.kind(for: attention)
-    if let cur = current, cur.until > t {
-      if cur.kind.priority > kind.priority { return false }
-      if cur.kind == .finished, kind == .finished,
-        t.timeIntervalSince(cur.startedAt) <= Self.coalesceWindow
-      {
-        var merged = cur
-        if !merged.sessionIDs.contains(sessionID) { merged.sessionIDs.append(sessionID) }
-        if attention == "error" { merged.errorIDs.insert(sessionID) }
-        merged.until = t.addingTimeInterval(Self.finishedDuration)
-        current = merged
-        return true
-      }
-    }
-    current = PeekItem(
-      kind: kind, sessionIDs: [sessionID],
-      errorIDs: attention == "error" ? [sessionID] : [], cardID: cardID, startedAt: t,
-      until: duration(kind).map { t.addingTimeInterval($0) } ?? .distantFuture)
-    return true
-  }
-
-  /// Shows the permission peek for `cardID` again (a global shortcut pressed while nothing was
-  /// shown, or the next card after a decision), for the usual permission time.
-  public mutating func show(cardID: String, sessionID: String, at t: Date) {
-    current = PeekItem(
-      kind: .permission, sessionIDs: [sessionID], errorIDs: [], cardID: cardID, startedAt: t,
-      until: permissionHold.map { t.addingTimeInterval($0) } ?? .distantFuture)
-  }
-
-  /// Keeps the peek up at least until `t + seconds` (pointer over it).
-  public mutating func hold(at t: Date, seconds: TimeInterval = 1.5) {
-    guard var cur = current else { return }
-    cur.until = max(cur.until, t.addingTimeInterval(seconds))
-    current = cur
-  }
-
-  /// Drops the peek once its time is over, then shows a waiting module note (if still
-  /// valid). Returns true when the peek changed.
-  @discardableResult
-  public mutating func expire(at t: Date) -> Bool {
-    var changed = false
-    if let cur = current, cur.until <= t {
-      current = nil
-      changed = true
-    }
-    if current == nil, let note = pendingModule {
-      pendingModule = nil
-      if note.validUntil > t {
-        present(note, at: t)
-        changed = true
-      }
-    }
-    return changed
-  }
-
-  /// Hides the peek. A waiting module note stays (it shows on the next `expire`).
-  public mutating func clear() {
-    current = nil
-  }
-
-  /// Panel opened: the user sees everything there, nothing waits.
-  public mutating func clearAll() {
-    current = nil
-    pendingModule = nil
-  }
-
-  /// "api bitti", "api hata verdi", "3 oturum bitti", "3 oturum bitti · 1 hata".
+  /// "api done", "api failed", "3 sessions done", "2 sessions done · 1 error".
   public static func finishedTitle(names: [String], errors: Int) -> String {
     if names.count == 1 {
-      return errors > 0 ? "\(names[0]) hata verdi" : "\(names[0]) bitti"
+      return errors > 0 ? loc("\(names[0]) failed") : loc("\(names[0]) done")
     }
     let done = names.count - errors
-    if done == 0 { return "\(names.count) oturumda hata" }
-    return errors > 0 ? "\(done) oturum bitti · \(errors) hata" : "\(names.count) oturum bitti"
+    if done == 0 { return loc("Errors in \(names.count) sessions") }
+    return errors > 0
+      ? loc("\(done) sessions done · \(errors) errors") : loc("\(names.count) sessions done")
   }
 }
 
@@ -575,13 +463,16 @@ public struct HoverIntent: Sendable {
 
 /// Color role of one status-line segment (collapsed notch).
 public enum LineState: String, Sendable {
-  /// Running and not blocked on the user: Claude orange with a shimmer.
+  /// Running and not blocked on the user: a neutral grey with a
+  /// moving shine.
   case working
-  /// Card pending, question, plan approval or input request: amber, breathing.
+  /// Card pending, question, plan approval or input request: amber (colorblind: yellow), a
+  /// slow fade (breathing).
   case needs
-  /// Finished and not seen yet: green.
+  /// Finished and not seen yet: blue (both palettes), a solid steady bar.
   case done
-  /// Failed and not seen yet: red.
+  /// Failed and not seen yet: red, a solid bar (colorblind: pink-red, a broken bar of three
+  /// short dashes), static.
   case error
   /// Idle, quiet or already seen: faint white.
   case idle
@@ -610,8 +501,9 @@ public struct LineSegment: Sendable, Equatable, Identifiable {
 }
 
 extension SessionStore {
-  /// At most this many segments; more sessions keep the most urgent ones.
-  public static let maxLineSegments = 6
+  /// At most this many segments (about 10 pt each on a 14" notch's 131 pt line); more sessions
+  /// keep the chat you are in, then the most urgent ones.
+  public static let maxLineSegments = 10
 
   public func lineState(of s: Session) -> LineState {
     if hasPending(for: s.id) { return .needs }
@@ -624,13 +516,18 @@ extension SessionStore {
     }
   }
 
-  /// One segment per session in tab order (a segment never moves when its session changes
-  /// state); with more than `maxLineSegments` sessions the most urgent ones are shown.
+  /// One segment per shown session in tab order (a segment never moves when its session
+  /// changes state; hidden chats have none); with more than `maxLineSegments` sessions the
+  /// chat you are in and then the most urgent ones are shown.
   public var statusLine: [LineSegment] {
-    var picked = tabOrdered.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
+    var picked = displayOrder.map { LineSegment(sessionID: $0.id, state: lineState(of: $0)) }
     if picked.count > Self.maxLineSegments {
       let rank = Dictionary(uniqueKeysWithValues: picked.enumerated().map { ($1.sessionID, $0) })
-      let key = { (x: LineSegment) in (x.state.priority, rank[x.sessionID] ?? 0) }
+      // The chat you are in always keeps its place (its segment carries the white base).
+      let here = hereSessionIDs
+      let key = { (x: LineSegment) in
+        (here.contains(x.sessionID) ? -1 : x.state.priority, rank[x.sessionID] ?? 0)
+      }
       picked = Array(picked.sorted { key($0) < key($1) }.prefix(Self.maxLineSegments))
       picked.sort { (rank[$0.sessionID] ?? 0) < (rank[$1.sessionID] ?? 0) }
     }
@@ -658,13 +555,14 @@ extension SessionStore {
   }
 
   /// The panel list: same order as the terminal tabs (`tabOrdered`), whatever the status; the
-  /// status shows on the row (`group(of:)`), it does not move the row.
-  public var displayOrder: [Session] { tabOrdered }
+  /// status shows on the row (`group(of:)`), it does not move the row. Hidden chats are left
+  /// out (see `hiddenSessions`).
+  public var displayOrder: [Session] { tabOrdered.filter { !$0.hidden } }
 
   /// Ghostty tab order (by tty, see `applyTabOrder`); sessions not in a known tab follow, in
   /// creation order.
   public var tabOrdered: [Session] {
-    let pos = { (s: Session) in s.tty.flatMap { self.tabOrder[$0] } ?? Int.max }
+    let pos = { (s: Session) in s.terminal.flatMap { self.tabOrder[$0] } ?? Int.max }
     return sessions.values.sorted {
       (pos($0), $0.startedAt, $0.id) < (pos($1), $1.startedAt, $1.id)
     }
@@ -738,21 +636,21 @@ public struct DecisionKeyGate: Sendable {
   }
 }
 
-/// One short Turkish time format for session rows: "şimdi", "45 sn önce", "5 dk önce",
-/// "2 sa önce", "3 gün önce". Only the largest unit is shown so rows stay scannable.
+/// One short time format for session rows: "now", "45 s ago", "5 min ago", "2 h ago",
+/// "3 days ago". Only the largest unit is shown so rows stay scannable.
 public enum RelativeTime {
   public static func short(_ seconds: TimeInterval) -> String {
     let s = max(0, Int(seconds))
-    if s < 10 { return "şimdi" }
-    if s < 60 { return "\(s) sn önce" }
-    if s < 3600 { return "\(s / 60) dk önce" }
-    if s < 86_400 { return "\(s / 3600) sa önce" }
-    return "\(s / 86_400) gün önce"
+    if s < 10 { return loc("now") }
+    if s < 60 { return loc("\(s) s ago") }
+    if s < 3600 { return loc("\(s / 60) min ago") }
+    if s < 86_400 { return loc("\(s / 3600) h ago") }
+    return loc("\(s / 86_400) days ago")
   }
 }
 
-/// Elapsed time for the dot-matrix gauge: "mm:ss" under an hour, then whole hours ("3" + "sa")
-/// or days ("2" + "gün"). The unit is drawn as small text beside the dots.
+/// Elapsed time for the dot-matrix gauge: "mm:ss" under an hour, then whole hours ("3" + "h")
+/// or days ("2" + "d"). The unit is drawn as small text beside the dots.
 public enum DotClock {
   public struct Reading: Equatable, Sendable {
     public let digits: String
@@ -764,8 +662,8 @@ public enum DotClock {
     if s < 3600 {
       return Reading(digits: String(format: "%02d:%02d", s / 60, s % 60), unit: nil)
     }
-    if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: "sa") }
-    return Reading(digits: "\(s / 86_400)", unit: "gün")
+    if s < 86_400 { return Reading(digits: "\(s / 3600)", unit: loc("h")) }
+    return Reading(digits: "\(s / 86_400)", unit: loc("d"))
   }
 
   /// A countdown: "mm:ss", or "h:mm:ss" from an hour up (timers up to 180 min).
@@ -775,10 +673,10 @@ public enum DotClock {
     return String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60)
   }
 
-  /// Whole minutes at least ("12" + "dk"), for times that need no seconds (idle rows).
+  /// Whole minutes at least ("12" + "min"), for times that need no seconds (idle rows).
   public static func coarse(_ seconds: TimeInterval) -> Reading {
     let s = max(0, Int(seconds))
-    if s < 3600 { return Reading(digits: "\(max(1, s / 60))", unit: "dk") }
+    if s < 3600 { return Reading(digits: "\(max(1, s / 60))", unit: loc("min")) }
     return reading(seconds)
   }
 }
@@ -828,5 +726,16 @@ public struct ActivityRhythm: Sendable, Equatable {
       for i in half..<Self.slots { counts[i] = 0 }
       slotWidth *= 2
     }
+  }
+}
+
+/// Click rectangles that hang down from the top of a screen. At the very top pixel row the
+/// pointer's y is exactly the screen's top edge, which a rect ending at the top edge does not
+/// contain (`NSRect.contains` leaves out the max edge): a click there would pass through to the
+/// menu bar. These rects reach 1 pt past the top so that row counts.
+public enum TopEdgeRect {
+  public static func hanging(minX: CGFloat, width: CGFloat, top: CGFloat, depth: CGFloat) -> CGRect
+  {
+    CGRect(x: minX, y: top - depth, width: width, height: depth + 1)
   }
 }

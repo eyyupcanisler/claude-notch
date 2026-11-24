@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- English plural forms ("1 session" / "2 sessions"). Keys are Localizable.strings keys;
+     an entry here wins over the plain value there. Turkish needs no plural forms. -->
+<plist version="1.0">
+<dict>
+  <key>%lld permissions</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld permission</string>
+      <key>other</key><string>%lld permissions</string>
+    </dict>
+  </dict>
+  <key>%lld errors</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld error</string>
+      <key>other</key><string>%lld errors</string>
+    </dict>
+  </dict>
+  <key>· %lld subagents</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>· %#@n@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld subagent</string>
+      <key>other</key><string>%lld subagents</string>
+    </dict>
+  </dict>
+  <key> · %lld subagents</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string> · %#@n@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld subagent</string>
+      <key>other</key><string>%lld subagents</string>
+    </dict>
+  </dict>
+  <key>Show all (%lld characters)</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>Show all (%#@n@)</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld character</string>
+      <key>other</key><string>%lld characters</string>
+    </dict>
+  </dict>
+  <key>%lld minutes left</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ left</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld minute</string>
+      <key>other</key><string>%lld minutes</string>
+    </dict>
+  </dict>
+  <key>%lld actions</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld action</string>
+      <key>other</key><string>%lld actions</string>
+    </dict>
+  </dict>
+  <key>%lld sessions working</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ working</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld session</string>
+      <key>other</key><string>%lld sessions</string>
+    </dict>
+  </dict>
+  <key>%lld permissions waiting</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ waiting</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld permission</string>
+      <key>other</key><string>%lld permissions</string>
+    </dict>
+  </dict>
+  <key>%lld sessions awaiting reply</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ awaiting reply</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld session</string>
+      <key>other</key><string>%lld sessions</string>
+    </dict>
+  </dict>
+  <key>%lld sessions done</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ done</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld session</string>
+      <key>other</key><string>%lld sessions</string>
+    </dict>
+  </dict>
+  <key>%lld days ago</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@n@ ago</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld day</string>
+      <key>other</key><string>%lld days</string>
+    </dict>
+  </dict>
+  <key>%lld sessions done · %lld errors</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>%#@done@ · %#@errors@</string>
+    <key>done</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld session done</string>
+      <key>other</key><string>%lld sessions done</string>
+    </dict>
+    <key>errors</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld error</string>
+      <key>other</key><string>%lld errors</string>
+    </dict>
+  </dict>
+  <key>content (%lld characters): %@</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string>content (%#@n@): %@</string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld character</string>
+      <key>other</key><string>%lld characters</string>
+    </dict>
+  </dict>
+  <key> … [%lld characters hidden] … </key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key><string> … [%#@n@ hidden] … </string>
+    <key>n</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key><string>lld</string>
+      <key>one</key><string>%lld character</string>
+      <key>other</key><string>%lld characters</string>
+    </dict>
+  </dict>
+</dict>
+</plist>

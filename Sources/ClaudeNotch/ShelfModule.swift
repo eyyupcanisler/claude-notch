@@ -9,7 +9,11 @@ import UniformTypeIdentifiers
 /// dropped on the notch. The clipboard has no change notification, so only its change counter
 /// (one integer) is read once a second while the module is on. Images go straight to a temp PNG;
 /// memory keeps only small previews. Password managers' concealed copies are never taken. The
-/// temp folder is emptied when the module turns off and when the app starts.
+/// temp folder is emptied when the module turns off and when the app starts; pinned items stay.
+/// Two opt-in settings (both off by default, the original behavior): unpinned items can leave
+/// 1 / 3 / 7 days after they were added (checked hourly, at start and on wake, never in the
+/// clipboard poll; with "Never" no check runs at all), and turning the module off can also
+/// delete the pinned items and their folder.
 @MainActor
 @Observable
 final class ShelfModule {
@@ -19,12 +23,18 @@ final class ShelfModule {
   /// Pinned items: kept across launches (Application Support), outside the 6-item limit.
   private(set) var pinned: [ShelfItem] = []
   static let maxPinned = 6
-  static let pinFolder = FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent("Library/Application Support/ClaudeNotch/Pinned", isDirectory: true)
+  /// A demo recording (`CLAUDE_NOTCH_DEMO=1`) pins into its own temp folder: it never reads or
+  /// deletes the user's real pins.
+  static let pinFolder =
+    NotchSettings.isDemo
+    ? FileManager.default.temporaryDirectory
+      .appendingPathComponent("ClaudeNotchDemoPinned", isDirectory: true)
+    : FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/ClaudeNotch/Pinned", isDirectory: true)
   private static var pinIndex: URL { pinFolder.appendingPathComponent("pins.json") }
   /// Small previews of image items, by item id.
   private(set) var previews: [String: NSImage] = [:]
-  /// The item just copied back from the shelf (a short "Kopyalandı" on its chip).
+  /// The item just copied back from the shelf (a short "Copied" on its chip).
   private(set) var copiedID: String?
   /// The chip being dragged (a session row accepts only shelf drags).
   @ObservationIgnored var draggingID: String?
@@ -33,14 +43,24 @@ final class ShelfModule {
     pinned.first { $0.id == id } ?? shelf.items.first { $0.id == id }
   }
 
-  /// A new image arrived (the controller shows "Rafa eklendi").
+  /// A new image arrived (the controller shows "Added to the shelf").
   @ObservationIgnored var onImage: (@MainActor (ShelfItem) -> Void)?
   @ObservationIgnored private var timer: Timer?
+  /// Hourly expiry check and the wake observer (only while the module is on and an expiry is
+  /// chosen).
+  @ObservationIgnored private var expiryTimer: Timer?
+  @ObservationIgnored private var wakeObserver: NSObjectProtocol?
+  /// Settings > Modules > Shelf options (set by `configure` before `setEnabled`).
+  @ObservationIgnored private var expiry: ShelfExpiry = .fallback
+  @ObservationIgnored private var deletePinsWhenOff = ShelfPinsOnOff.fallback
+  /// Everything was deleted since the module was last on (a later "off" has nothing to do).
+  @ObservationIgnored private var wipedWhileOff = false
   @ObservationIgnored private var lastChange = NSPasteboard.general.changeCount
   @ObservationIgnored private var copiedTask: Task<Void, Never>?
 
   static let folder: URL = FileManager.default.temporaryDirectory
-    .appendingPathComponent("ClaudeNotchShelf", isDirectory: true)
+    .appendingPathComponent(
+      NotchSettings.isDemo ? "ClaudeNotchDemoShelf" : "ClaudeNotchShelf", isDirectory: true)
 
   init() {
     // Leftovers of an earlier run.
@@ -131,8 +151,18 @@ final class ShelfModule {
 
   var isPolling: Bool { timer != nil }
 
+  /// The shelf options from Settings. A changed expiry takes effect at once while the module
+  /// is on (the hourly check starts or stops); the pins choice applies at the next "off".
+  func configure(expiry: ShelfExpiry, deletePinsWhenOff: Bool) {
+    self.deletePinsWhenOff = deletePinsWhenOff
+    guard expiry != self.expiry else { return }
+    self.expiry = expiry
+    if timer != nil { startExpiryChecks() }
+  }
+
   func setEnabled(_ on: Bool) {
     if on, timer == nil {
+      wipedWhileOff = false
       lastChange = NSPasteboard.general.changeCount
       let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
         Task { @MainActor in self?.poll() }
@@ -140,11 +170,69 @@ final class ShelfModule {
       t.tolerance = 0.3
       RunLoop.main.add(t, forMode: .common)
       timer = t
+      startExpiryChecks()
+    } else if !on, deletePinsWhenOff, timer != nil || !wipedWhileOff {
+      // Opt-in: everything goes, also at a start with the module off (pins left from a run
+      // before the module was turned off).
+      timer?.invalidate()
+      timer = nil
+      stopExpiryChecks()
+      deleteAll()
+      wipedWhileOff = true
     } else if !on, let t = timer {
+      // The original: the shelf and its temp folder go, the pins stay.
       t.invalidate()
       timer = nil
+      stopExpiryChecks()
       clear()
     }
+  }
+
+  /// Starts the hourly / on-wake expiry check for the chosen lifetime and runs it once; with
+  /// "Never" nothing runs.
+  private func startExpiryChecks() {
+    stopExpiryChecks()
+    guard expiry.lifetime != nil else { return }
+    let e = Timer(timeInterval: 60 * 60, repeats: true) { [weak self] _ in
+      Task { @MainActor in self?.removeExpired() }
+    }
+    e.tolerance = 5 * 60
+    RunLoop.main.add(e, forMode: .common)
+    expiryTimer = e
+    wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor in self?.removeExpired() }
+    }
+    removeExpired()
+  }
+
+  private func stopExpiryChecks() {
+    expiryTimer?.invalidate()
+    expiryTimer = nil
+    if let o = wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
+    wakeObserver = nil
+  }
+
+  /// Unpinned items older than the chosen lifetime leave, with their temp files.
+  private func removeExpired() {
+    guard let lifetime = expiry.lifetime else { return }
+    let now = Date()
+    // Read first: a no-op mutation would still redraw the shelf row.
+    guard shelf.items.contains(where: { Shelf.isExpired($0, at: now, lifetime: lifetime) })
+    else { return }
+    for item in shelf.removeExpired(at: now, lifetime: lifetime) { discard(item) }
+  }
+
+  /// The module turned off with "Delete pinned items" on: the shelf, the pins, the temp folder
+  /// and the Pinned folder go.
+  private func deleteAll() {
+    for item in shelf.clear() { discard(item) }
+    pinned = []
+    previews = [:]
+    copiedID = nil
+    try? FileManager.default.removeItem(at: Self.folder)
+    try? FileManager.default.removeItem(at: Self.pinFolder)
   }
 
   private func poll() {

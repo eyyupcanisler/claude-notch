@@ -14,29 +14,31 @@ struct ExpandedToolbar: View {
   let actions: NotchActions
   let notchWidth: CGFloat
   let sideWidth: CGFloat
+  @Environment(\.notchTheme) private var theme
 
   var body: some View {
     HStack(spacing: 0) {
       HStack(spacing: 2) {
         BandIconButton(
           icon: ui.pinned ? "pin.fill" : "pin",
-          label: ui.pinned ? "Sabitlemeyi kaldır" : "Sabitle", active: ui.pinned,
+          label: ui.pinned ? loc("Unpin") : loc("Pin"), active: ui.pinned,
           action: actions.togglePin)
         BandIconButton(
-          icon: "gearshape", label: "Ayarlar", active: false, action: actions.openSettings)
+          icon: "gearshape", label: loc("Settings"), active: false, action: actions.openSettings)
+        BandQuitButton(quit: actions.quit)
         BandIconButton(
           icon: settings.silentMode ? "bell.slash.fill" : "bell",
           label: settings.silentMode
-            ? "Sessiz mod açık: yalnız izin istekleri ve sorular" : "Sessiz modu aç",
+            ? loc("Silent mode is on: only permission requests and questions") : loc("Turn on silent mode"),
           active: settings.silentMode,
-          tint: settings.silentMode ? NotchTheme.bandNeeds : nil
+          tint: settings.silentMode ? theme.needs : nil
         ) { settings.silentMode.toggle() }
         if settings.timerEnabled, case .idle = modules.timer.state, modules.timerDraft == nil {
           TimerStartMenu(modules: modules, settings: settings)
         }
         if ui.ghosttyConsent.missing {
           BandIconButton(
-            icon: "lock.shield", label: consentLabel, active: false, tint: NotchTheme.bandNeeds,
+            icon: "lock.shield", label: consentLabel, active: false, tint: theme.needs,
             action: actions.ghosttyConsent)
         }
         Spacer(minLength: 0)
@@ -49,10 +51,11 @@ struct ExpandedToolbar: View {
       .notchEnter(0)
       Color.clear.frame(width: notchWidth)
       HStack(spacing: 8) {
-        if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()),
-          u.fiveHour != nil || u.sevenDay != nil
-        {
+        if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()), u.primary != nil {
           BandUsage(usage: u)
+        }
+        if settings.usageEnabled, let a = modules.usage.agy {
+          BandAgyUsage(usage: a, now: Date())
         }
         BandChips(store: store, actions: actions)
       }
@@ -64,29 +67,30 @@ struct ExpandedToolbar: View {
 
   private var consentLabel: String {
     ui.ghosttyConsent == .denied
-      ? "Ghostty izni kapalı: Sistem Ayarları'nda aç"
-      : "Ghostty izni: sekmesine geçmek için izin ver"
+      ? loc("Ghostty permission is off: turn it on in System Settings")
+      : loc("Ghostty permission: allow switching to its tabs")
   }
 }
 
-/// "N izin" (shows the oldest card) and "N çalışıyor", in the band.
+/// "N permissions" (shows the oldest card) and "N working", in the band.
 struct BandChips: View {
   let store: SessionStore
   let actions: NotchActions
+  @Environment(\.notchTheme) private var theme
 
   var body: some View {
     HStack(spacing: 5) {
       Spacer(minLength: 0)
       if !store.pending.isEmpty {
         Button(action: actions.showCards) {
-          BandChip(text: "\(store.pending.count) izin", color: NotchTheme.bandNeeds, solid: true)
+          BandChip(text: loc("\(store.pending.count) permissions"), color: theme.needs, solid: true)
         }
         .buttonStyle(.plain)
-        .help("En eski isteği göster")
+        .help("Show the oldest request")
       }
       if store.activeWorkingCount > 0 {
         BandChip(
-          text: "\(store.activeWorkingCount) çalışıyor", color: NotchTheme.bandWorking,
+          text: loc("\(store.activeWorkingCount) working"), color: theme.working,
           solid: false)
       }
     }
@@ -102,12 +106,75 @@ struct BandChip: View {
     Text(text)
       .font(.system(size: 11, weight: .semibold))
       .monospacedDigit()
-      .foregroundStyle(solid ? Color.black : color)
+      .foregroundStyle(solid ? NotchTheme.onStatus : color)
       .lineLimit(1)
       .fixedSize()
       .padding(.horizontal, 8)
       .frame(height: 20)
       .background(Capsule().fill(solid ? color : color.opacity(0.18)))
+  }
+}
+
+/// Quits the app, in plain sight in the band (it used to be only in the right-click menu). A
+/// first click arms it: it turns into a red "Quit" pill for 3 s, and a second click quits. One
+/// stray click on a panel that opens under the pointer must not end the app, and neither does
+/// a double-click (its second click lands within the system double-click time).
+struct BandQuitButton: View {
+  let quit: () -> Void
+  @State private var armedAt: Date?
+  @State private var hover = false
+  @State private var disarm: Task<Void, Never>?
+  @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  static let armedFor: Duration = .seconds(3)
+
+  private var armed: Bool { armedAt != nil }
+
+  var body: some View {
+    Button(action: press) {
+      HStack(spacing: 4) {
+        Image(systemName: "power")
+          .font(.system(size: 11.5, weight: armed ? .bold : .medium))
+        if armed {
+          Text("Quit")
+            .font(.system(size: 11, weight: .semibold))
+            .fixedSize()
+            .transition(.opacity)
+        }
+      }
+      .foregroundStyle(
+        armed ? NotchTheme.onStatus : (hover ? NotchTheme.bandInk : NotchTheme.bandSecondary))
+      .padding(.horizontal, armed ? 8 : 0)
+      .frame(minWidth: 24, minHeight: 24)
+      .background(Capsule().fill(armed ? theme.error : .white.opacity(hover ? 0.12 : 0)))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hover = $0 }
+    .help(armed ? loc("Click again to quit ClaudeNotch") : loc("Quit ClaudeNotch"))
+    .accessibilityLabel(armed ? loc("Click again to quit ClaudeNotch") : loc("Quit ClaudeNotch"))
+    .onDisappear {
+      disarm?.cancel()
+      armedAt = nil
+    }
+  }
+
+  private func press() {
+    if let at = armedAt {
+      // The second click of a double-click is not a decision.
+      guard Date().timeIntervalSince(at) > NSEvent.doubleClickInterval else { return }
+      clickLog.notice("quit from the panel")
+      quit()
+      return
+    }
+    withAnimation(reduceMotion ? nil : Motion.armQuit) { armedAt = Date() }
+    disarm?.cancel()
+    disarm = Task { @MainActor in
+      try? await Task.sleep(for: Self.armedFor)
+      guard !Task.isCancelled else { return }
+      withAnimation(reduceMotion ? nil : Motion.armQuit) { armedAt = nil }
+    }
   }
 }
 
@@ -149,17 +216,41 @@ struct ExpandedBody: View {
   @State private var topHeight: CGFloat = 0
   /// Height of the module tiles under the rows (0 when none show).
   @State private var stripHeight: CGFloat = 0
+  /// Height of the "Hidden" line under the rows (0 when no chat is hidden).
+  @State private var hiddenHeight: CGFloat = 0
   /// Measured natural height of the rows (nil until the first layout; an estimate is used
   /// meanwhile: a zero-height ScrollView would never lay out its content to report a size).
   @State private var measuredRows: CGFloat?
+  /// The row being dragged to a new place (see `rowDrag(for:rows:)`).
+  @State private var drag: RowDragState?
+  /// Each row's place in the list (`rowSpace`), measured before any drag offset.
+  @State private var rowSpans: [String: RowReorder.Span] = [:]
   @Environment(\.notchTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let spacing: CGFloat = 6
   static let topPadding: CGFloat = 4
   static let bottomPadding: CGFloat = 12
+  /// The rows' coordinate space (drag translation and row places).
+  nonisolated static let rowSpace = "panelRows"
+  /// How far the pointer moves before a press on a row becomes a drag (a click jumps).
+  nonisolated static let dragThreshold: CGFloat = 6
+
+  /// A row on its way to a new place: its group (pinned rows, or the others) as it was when
+  /// the drag started, where it started and where it would land now.
+  struct RowDragState: Equatable {
+    var id: String
+    var group: [String]
+    var start: Int
+    var target: Int
+    var translation: CGFloat
+    /// The rows' places when the drag started: the drag works from one fixed picture of the
+    /// list, whatever else lays out meanwhile.
+    var spans: [String: RowReorder.Span]
+  }
 
   private var sessions: [Session] {
-    let live = store.displayOrder
+    let live = store.panelOrder
     guard let frozen = ui.frozenOrder else { return live }
     return SessionStore.applyFrozen(frozen, to: live)
   }
@@ -173,8 +264,10 @@ struct ExpandedBody: View {
   private var rowsBudget: CGFloat {
     let body = NotchMetrics.maxHeight - bandHeight
     let strip = stripHeight > 0 ? stripHeight + Self.spacing : 0
+    let hidden = hiddenHeight > 0 ? hiddenHeight + Self.spacing : 0
     return max(
-      44, body - topHeight - strip - Self.spacing - Self.topPadding - Self.bottomPadding)
+      44,
+      body - topHeight - strip - hidden - Self.spacing - Self.topPadding - Self.bottomPadding)
   }
 
   var body: some View {
@@ -203,7 +296,8 @@ struct ExpandedBody: View {
             .padding(.horizontal, 4)
             .notchEnter(1)
         }
-        if all.isEmpty {
+        // Only hidden chats left: the "Hidden" line says so, not "No active sessions".
+        if all.isEmpty && store.hiddenSessions.isEmpty {
           EmptyStateView().notchEnter(1)
         }
         // The selected card sits in a fixed slot: paging swaps the card in place, so the pager
@@ -212,8 +306,8 @@ struct ExpandedBody: View {
         if let card, let session = slotSession {
           SessionRow(
             session: session, kind: .card(card.id), store: store, ui: ui, actions: actions,
-            title: store.displayName(for: session),
-            contextLeft: modules.usage.contextLeft[session.id])
+            title: store.chatLabel(for: session),
+            contextLeft: modules.usage.contextLeft[session.id], pinned: store.isPinned(session.id))
             .notchEnter(1)
         }
       }
@@ -223,13 +317,35 @@ struct ExpandedBody: View {
           ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: Self.spacing) {
               ForEach(Array(rows.enumerated()), id: \.element.id) { i, session in
+                let dragged = drag?.id == session.id
+                let offset = rowOffset(session.id)
                 SessionRow(
                   session: session, kind: kinds[i], store: store, ui: ui, actions: actions,
-                  title: store.displayName(for: session),
-                  contextLeft: modules.usage.contextLeft[session.id])
+                  title: store.chatLabel(for: session),
+                  contextLeft: modules.usage.contextLeft[session.id],
+                  pinned: store.isPinned(session.id), lifted: dragged)
+                  .offset(y: offset)
+                  // The dragged row is glued to the pointer (1:1, never animated); the others
+                  // slide out of its way with a spring that re-targets as it moves.
+                  .animation(dragged || reduceMotion ? nil : Motion.rowShift, value: offset)
+                  // Measured outside the offset: the row's place in the list, which a drag
+                  // never moves (inside it, the frame would carry the drag's offset).
+                  .onGeometryChange(for: CGRect.self) {
+                    $0.frame(in: .named(Self.rowSpace))
+                  } action: { frame in
+                    rowSpans[session.id] = RowReorder.Span(
+                      top: Double(frame.minY), bottom: Double(frame.maxY))
+                  }
+                  .zIndex(dragged ? 1 : 0)
+                  // A row with a permission card or a question answered here is not dragged:
+                  // a press on one of its buttons must stay a press on that button.
+                  .simultaneousGesture(
+                    rowDrag(for: session, rows: rows),
+                    including: canDrag(session) ? .all : .subviews)
                   .notchEnter(min(i + 2, 8))
               }
             }
+            .coordinateSpace(.named(Self.rowSpace))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredRows = $0 }
             // Lets the last row scroll clear of the fade.
             .padding(.bottom, overflow ? ScrollFade.height : 0)
@@ -243,7 +359,13 @@ struct ExpandedBody: View {
           }
         }
       }
-      ModuleStrip(modules: modules, settings: settings)
+      if !store.hiddenSessions.isEmpty {
+        HiddenChatsLine(store: store, actions: actions)
+          .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hiddenHeight = $0 }
+          .onDisappear { hiddenHeight = 0 }
+          .transition(.opacity)
+      }
+      ModuleStrip(modules: modules, settings: settings, ui: ui)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stripHeight = $0 }
     }
     .padding(.horizontal, 10)
@@ -254,6 +376,85 @@ struct ExpandedBody: View {
       modules.shelf.addFiles(urls)
       return !urls.isEmpty
     }
+    // The dragged row left the list mid-drag (its chat ended, it took the card slot): its
+    // gesture never ends, so the drag is called off here.
+    .onChange(of: rows.map(\.id)) { _, ids in
+      guard let d = drag, !ids.contains(d.id) else { return }
+      drag = nil
+      actions.rowDrag(nil)
+    }
+    .onDisappear {
+      guard drag != nil else { return }
+      drag = nil
+      actions.rowDrag(nil)
+    }
+  }
+}
+
+// MARK: - Dragging a row to a new place
+
+extension ExpandedBody {
+  /// The rows of `id`'s group, top first: the pinned rows, or the others (a row never leaves
+  /// its group by a drag; the pin button moves it between them).
+  private func group(of id: String, rows: [Session]) -> [String] {
+    let pinned = store.isPinned(id)
+    return rows.filter { store.isPinned($0.id) == pinned }.map(\.id)
+  }
+
+  /// Rows whose whole surface jumps to the terminal can be dragged; one with a pending card
+  /// or a question answered in the notch keeps its presses for its buttons.
+  fileprivate func canDrag(_ s: Session) -> Bool {
+    !store.hasPending(for: s.id) && store.question(for: s.id) == nil
+  }
+
+  /// How far the row is moved from its place: the drag itself for the dragged row, the gap
+  /// it opens for the rows it passed.
+  fileprivate func rowOffset(_ id: String) -> CGFloat {
+    guard let drag else { return 0 }
+    if id == drag.id { return drag.translation }
+    let height = drag.spans[drag.id]?.height ?? Double(SessionRow.compactHeight)
+    return CGFloat(RowReorder.shift(
+      of: id, dragged: drag.id, group: drag.group, target: drag.target, height: height,
+      spacing: Double(Self.spacing)))
+  }
+
+  /// Press and move a row past `dragThreshold` to drag it; let go to drop it there. A press
+  /// that does not move stays a click (the row's own tap jumps to the terminal).
+  fileprivate func rowDrag(for session: Session, rows: [Session]) -> some Gesture {
+    DragGesture(minimumDistance: Self.dragThreshold, coordinateSpace: .named(Self.rowSpace))
+      .onChanged { value in
+        if drag == nil {
+          let group = group(of: session.id, rows: rows)
+          // A group of one has nowhere to go.
+          guard group.count > 1, let start = group.firstIndex(of: session.id) else { return }
+          actions.rowDrag(session.id)
+          withAnimation(reduceMotion ? nil : Motion.rowLift) {
+            drag = RowDragState(
+              id: session.id, group: group, start: start, target: start, translation: 0,
+              spans: rowSpans)
+          }
+        }
+        guard var d = drag, d.id == session.id else { return }
+        let t = RowReorder.resisted(
+          translation: Double(value.translation.height), dragged: d.id, group: d.group,
+          spans: d.spans)
+        d.translation = CGFloat(t)
+        d.target = RowReorder.target(
+          dragged: d.id, group: d.group, spans: d.spans, translation: t)
+        drag = d
+      }
+      .onEnded { _ in
+        guard let d = drag, d.id == session.id else { return }
+        // The row settles into its new place from where the pointer left it; the others
+        // close the gap in the same spring.
+        withAnimation(reduceMotion ? nil : Motion.rowShift) {
+          if d.target != d.start {
+            actions.reorderChats(RowReorder.moved(d.group, dragged: d.id, to: d.target))
+          }
+          drag = nil
+        }
+        actions.rowDrag(nil)
+      }
   }
 }
 
@@ -332,9 +533,9 @@ struct EmptyStateView: View {
 
   var body: some View {
     VStack(spacing: 4) {
-      Text("Etkin oturum yok")
+      Text("No active sessions")
         .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(theme.secondary)
-      Text("Bir Claude Code oturumu başlattığınızda burada görünür.")
+      Text("Start a Claude Code session and it shows up here.")
         .font(.system(size: 11)).foregroundStyle(theme.tertiary)
     }
     .frame(maxWidth: .infinity)
@@ -344,7 +545,7 @@ struct EmptyStateView: View {
 
 // MARK: - Summary (body)
 
-/// What the band chips do not say: questions, errors, unseen "done", and "Tümünü okundu say".
+/// What the band chips do not say: questions, errors, unseen "done", and "Mark all as read".
 /// Hidden when there is none of it.
 struct SummaryChips: View {
   let store: SessionStore
@@ -360,16 +561,16 @@ struct SummaryChips: View {
     let s = NotchSignals(store: store)
     HStack(spacing: 5) {
       if s.questions > 0 {
-        Chip(text: "\(s.questions) yanıt bekliyor", color: theme.needs, solid: true)
+        Chip(text: loc("\(s.questions) awaiting reply"), color: theme.needs, solid: true)
       }
-      if s.errorCount > 0 { Chip(text: "\(s.errorCount) hata", color: theme.error, solid: false) }
+      if s.errorCount > 0 { Chip(text: loc("\(s.errorCount) errors"), color: theme.error, solid: false) }
       if store.doneUnseenCount > 0 {
-        Chip(text: "\(store.doneUnseenCount) bitti", color: theme.done, solid: false)
+        Chip(text: loc("\(store.doneUnseenCount) done"), color: theme.done, solid: false)
       }
       Spacer(minLength: 0)
       if store.doneUnseenCount + s.errorCount > 0 {
         Button(action: actions.markAllSeen) {
-          Text("Tümünü okundu say")
+          Text("Mark all as read")
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.tertiary)
             .contentShape(Rectangle())
@@ -392,7 +593,7 @@ struct Chip: View {
     Text(text)
       .font(.system(size: 11, weight: .semibold))
       .monospacedDigit()
-      .foregroundStyle(solid ? Color.black : color)
+      .foregroundStyle(solid ? NotchTheme.onStatus : color)
       .padding(.horizontal, 8)
       .frame(height: 20)
       .background(Capsule().fill(solid ? color : color.opacity(0.16)))
@@ -410,11 +611,30 @@ struct SessionRow: View {
   let title: String
   /// Context window left (from the status line bridge); shown from 25 % down.
   var contextLeft: Double?
+  /// Pinned to the top of the panel (a pin beside the title).
+  var pinned = false
+  /// Being dragged to a new place: lifted off the list.
+  var lifted = false
   @State private var hover = false
   @State private var dropTarget = false
   @Environment(\.notchTheme) private var theme
 
   private var selected: Bool { ui.keyMode && ui.selectedSessionID == session.id }
+
+  /// Hover swaps the time for the row's buttons only when there is one to show (the row itself
+  /// jumps to the terminal, so a chat that is asking may have none).
+  private var hasRowActions: Bool {
+    RowActions.hasAny(session: session, canHide: store.canHide(session))
+  }
+
+  /// The whole row is a jump target (see the tap gesture in `body`).
+  private var rowJumps: Bool {
+    switch kind {
+    case .card: return false
+    case .compact, .rich:
+      return !store.hasPending(for: session.id) && store.question(for: session.id) == nil
+    }
+  }
 
   var body: some View {
     Group {
@@ -430,8 +650,10 @@ struct SessionRow: View {
             .padding(.leading, 20)
           }
           Group {
-            if hover {
-              RowActions(session: session, actions: actions).transition(.opacity)
+            if hover && hasRowActions {
+              RowActions(
+                session: session, actions: actions, canHide: store.canHide(session), pinned: pinned)
+                .transition(.opacity)
             } else {
               DotElapsed(mode: elapsedMode, color: elapsedColor)
             }
@@ -465,6 +687,11 @@ struct SessionRow: View {
       }
     }
     .contentShape(Rectangle())
+    // A click anywhere on the row jumps to its terminal tab (the buttons inside keep their own
+    // action). Not the body of a permission card or of a question answered here: a click that
+    // misses one of their buttons must not leave for the terminal. Their title line still
+    // jumps, as it always did (`header`).
+    .gesture(TapGesture().onEnded { actions.focus(session.id) }, including: rowJumps ? .all : .subviews)
     .onHover { hover = $0 }
     // A shelf chip dropped here: copied, and this session's tab comes forward (⌃V pastes it).
     .onDrop(of: [.item], isTargeted: $dropTarget) { _ in actions.dropShelf(session.id) }
@@ -474,7 +701,7 @@ struct SessionRow: View {
         .allowsHitTesting(false))
     .overlay(alignment: .bottomTrailing) {
       if dropTarget {
-        Text("bırak: kopyala ve sekmeye git · ⌃V")
+        Text("drop: copy and go to the tab · ⌃V")
           .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(Color(hex: 0xC3A8FF))
           .padding(6)
@@ -483,6 +710,16 @@ struct SessionRow: View {
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(title), \(statusText)")
+    // The row itself is the way to its terminal (a click anywhere, or the title line of a card);
+    // VoiceOver gets the same jump as the row's action.
+    .accessibilityAction(named: Text("Focus")) { actions.focus(session.id) }
+    .accessibilityAction(named: Text(pinned ? loc("Unpin") : loc("Pin to the top"))) {
+      actions.togglePinChat(session.id)
+    }
+    // Lifted while dragged: a touch larger, with a shadow under it, so it reads as held above
+    // the rows that make room for it.
+    .scaleEffect(lifted ? 1.02 : 1)
+    .shadow(color: .black.opacity(lifted ? 0.5 : 0), radius: lifted ? 12 : 0, y: lifted ? 6 : 0)
   }
 
   nonisolated static let compactHeight: CGFloat = 62
@@ -495,24 +732,18 @@ struct SessionRow: View {
       .clipShape(shape)
   }
 
-  /// Idle rows stay plain; seen results glow less.
+  /// The row's colors follow its segment of the status line under the notch
+  /// (`SessionStore.lineState`): a finished or failed chat is blue / red until it is seen, then
+  /// plain like an idle one, on the line and in the panel alike.
+  private var lineState: LineState { store.lineState(of: session) }
+
+  /// Idle (and seen) rows stay plain.
   private var glowColor: Color? {
-    if store.hasPending(for: session.id) { return theme.needs }
-    switch session.status {
-    case .idle, .quiet: return nil
-    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.5)
-    default: return statusColor
-    }
+    lineState == .idle ? nil : statusColor
   }
 
-  /// Idle rows keep their last turn's rhythm, muted.
-  private var tickColor: Color {
-    switch session.status {
-    case .idle, .quiet: return theme.tertiary
-    case .done, .error: return statusColor.opacity(session.unseen ? 1 : 0.6)
-    default: return statusColor
-    }
-  }
+  /// Idle (and seen) rows keep their last turn's rhythm, muted.
+  private var tickColor: Color { statusColor }
 
   /// Working: how long this turn has been running. Needs you: how long it has waited.
   /// Done / error: how long the turn took (frozen). Idle: how long since anything happened.
@@ -533,29 +764,38 @@ struct SessionRow: View {
     }
   }
 
-  private var elapsedColor: Color {
-    switch session.status {
-    case .idle, .quiet: return theme.tertiary
-    default: return statusColor
-    }
-  }
+  private var elapsedColor: Color { statusColor }
 
   private var statusText: String {
-    store.hasPending(for: session.id) ? "İzin istiyor" : session.status.label
+    store.hasPending(for: session.id) ? loc("Asks for permission") : session.status.label
   }
 
   /// Clicking the identity line jumps to the terminal. Compact rows draw their own trailing
   /// part (the dot-matrix time spans both lines).
   private func header(trailing: Bool) -> some View {
     HStack(spacing: 8) {
-      StatusDot(session: session, pending: store.hasPending(for: session.id))
+      StatusDot(session: session, state: lineState)
+      // The chat's title leads, the project follows in grey (`SessionStore.rowNames`).
+      let names = store.rowNames(for: session)
       HStack(spacing: 6) {
-        Text(session.project)
+        Text(names.primary)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(theme.ink)
           .lineLimit(1)
+          .truncationMode(.tail)
           .layoutPriority(2)
-        if let d = store.secondaryText(for: session) {
+        if session.tool == .agy {
+          // An Antigravity CLI chat.
+          Text(verbatim: "agy")
+            .font(.system(size: 9.5, weight: .bold))
+            .foregroundStyle(Color(hex: 0x0B0B0C))
+            .padding(.horizontal, 4)
+            .frame(height: 13)
+            .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0x8AB4F8)))
+            .fixedSize()
+            .help("Antigravity CLI")
+        }
+        if let d = names.secondary {
           Text(d)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.tertiary)
@@ -563,10 +803,25 @@ struct SessionRow: View {
             .truncationMode(.middle)
             .layoutPriority(1)
         }
+        if session.tool == .agy, let model = session.modelLabel {
+          Text(model)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.tertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+        }
+        if pinned {
+          Image(systemName: "pin.fill")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(theme.tertiary)
+            .rotationEffect(.degrees(45))
+            .help("Pinned to the top")
+            .accessibilityLabel("Pinned")
+        }
       }
       Spacer(minLength: 4)
       if let left = contextLeft, left <= ContextLeft.showMark {
-        Text("bağlam %\(Int(left.rounded()))")
+        Text("context \(Int(left.rounded()))%")
           .font(.system(size: 10, weight: .semibold)).monospacedDigit()
           .foregroundStyle(left <= ContextLeft.alertMark ? theme.error : theme.needs)
           .padding(.horizontal, 6)
@@ -575,11 +830,12 @@ struct SessionRow: View {
             Capsule().fill(
               (left <= ContextLeft.alertMark ? theme.error : theme.needs).opacity(0.15)))
           .fixedSize()
-          .help("Bağlam penceresinin %\(Int(left.rounded()))’i kaldı")
+          .help("\(Int(left.rounded()))% of the context window left")
       }
       if trailing {
-        if hover {
-          RowActions(session: session, actions: actions)
+        if hover && hasRowActions {
+          RowActions(
+                session: session, actions: actions, canHide: store.canHide(session), pinned: pinned)
             .transition(.opacity)
         } else {
           Elapsed(session: session)
@@ -609,13 +865,12 @@ struct SessionRow: View {
   }
 
   private var statusColor: Color {
-    if store.hasPending(for: session.id) { return theme.needs }
-    switch session.status {
+    switch lineState {
+    case .needs: return theme.needs
     case .working: return theme.working
     case .done: return theme.done
     case .error: return theme.error
-    case .waitingInput, .question, .planApproval: return theme.needs
-    case .idle, .quiet: return theme.tertiary
+    case .idle: return theme.tertiary
     }
   }
 
@@ -625,9 +880,9 @@ struct SessionRow: View {
     }
     switch session.status {
     case .working(let tool):
-      return session.activity ?? tool ?? "Düşünüyor…"
+      return session.activity ?? tool ?? loc("Thinking…")
     case .quiet:
-      return "10 dakikadır olay yok"
+      return loc("No events for 10 minutes")
     case .idle:
       return nil
     default:
@@ -665,7 +920,7 @@ struct RichDetail: View {
           .foregroundStyle(theme.secondary)
           .lineLimit(1)
         Spacer(minLength: 4)
-        SmallButton(title: "Kartı göster", style: .secondary) { actions.selectCard(card.id) }
+        SmallButton(title: loc("Show card"), style: .secondary) { actions.selectCard(card.id) }
       }
     } else {
       switch session.status {
@@ -676,9 +931,9 @@ struct RichDetail: View {
           QuestionDetail(text: text, options: options) { actions.focus(session.id) }
         }
       case .planApproval(let summary):
-        TerminalAsk(title: "Plan onayı bekliyor", text: summary) { actions.focus(session.id) }
+        TerminalAsk(title: loc("Waiting for plan approval"), text: summary) { actions.focus(session.id) }
       case .waitingInput(let message):
-        TerminalAsk(title: "Girdi bekliyor", text: message) { actions.focus(session.id) }
+        TerminalAsk(title: loc("Waiting for input"), text: message) { actions.focus(session.id) }
       case .error(let message):
         Text(message)
           .font(.system(size: 11.5)).foregroundStyle(theme.secondary)
@@ -690,17 +945,17 @@ struct RichDetail: View {
       case .working(let tool):
         let agents = session.activeAgents.count
         HStack(spacing: 6) {
-          Text(session.activity ?? tool ?? "Düşünüyor…")
+          Text(session.activity ?? tool ?? loc("Thinking…"))
             .font(.system(size: 11.5)).foregroundStyle(theme.secondary).lineLimit(1)
           if agents > 0 {
-            Text("· \(agents) alt ajan").font(.system(size: 11)).foregroundStyle(theme.tertiary)
+            Text("· \(agents) subagents").font(.system(size: 11)).foregroundStyle(theme.tertiary)
           }
         }
       case .quiet:
-        Text("10 dakikadır olay gelmedi").font(.system(size: 11.5))
+        Text("No events came in for 10 minutes").font(.system(size: 11.5))
           .foregroundStyle(theme.tertiary)
       case .idle:
-        Text("Boşta")
+        Text("Idle")
           .font(.system(size: 11.5)).foregroundStyle(theme.tertiary)
       }
     }
@@ -741,10 +996,10 @@ struct QuestionDetail: View {
         }
       }
       HStack {
-        Text("Yanıt terminalde verilir")
+        Text("Answer in the terminal")
           .font(.system(size: 11)).foregroundStyle(theme.tertiary)
         Spacer()
-        SmallButton(title: "Terminale git", style: .primary, action: goToTerminal)
+        SmallButton(title: loc("Go to terminal"), style: .primary, action: goToTerminal)
       }
     }
   }
@@ -765,7 +1020,7 @@ struct TerminalAsk: View {
         }
       }
       Spacer(minLength: 4)
-      SmallButton(title: "Terminale git", style: .primary, action: goToTerminal)
+      SmallButton(title: loc("Go to terminal"), style: .primary, action: goToTerminal)
     }
   }
 }
@@ -773,26 +1028,124 @@ struct TerminalAsk: View {
 struct RowActions: View {
   let session: Session
   let actions: NotchActions
+  /// Offer "Hide" (never while the chat needs the user, see `SessionStore.canHide`).
+  var canHide = false
+  /// The chat is pinned: the pin button unpins it.
+  var pinned = false
 
-  private var message: String? {
-    switch session.status {
-    case .done(let m), .error(let m): return m
-    default: return nil
-    }
+  private static func marksRead(_ s: Session) -> Bool {
+    s.unseen || s.status.kind == "waiting"
   }
+
+  /// Whether the row has any of these buttons (there is no "go to the chat" button: the row
+  /// itself does that). Every row can be pinned, so there always is one.
+  static func hasAny(session s: Session, canHide: Bool) -> Bool { true }
 
   var body: some View {
     HStack(spacing: 2) {
-      if let message, !message.isEmpty {
-        RowIconButton(icon: "doc.on.doc", label: "Son mesajı kopyala") {
-          actions.copyMessage(session.id)
+      if Self.marksRead(session) {
+        RowIconButton(icon: "checkmark", label: loc("Mark as read")) { actions.markSeen(session.id) }
+      }
+      RowIconButton(
+        icon: pinned ? "pin.slash" : "pin",
+        label: pinned ? loc("Unpin") : loc("Pin to the top")
+      ) {
+        actions.togglePinChat(session.id)
+      }
+      // An eye crossed out, not a cross: the chat is only out of sight, its terminal and its
+      // process stay (a cross would read as closing it).
+      if canHide {
+        RowIconButton(icon: "eye.slash", label: loc("Hide until it does something new")) {
+          actions.hide(session.id)
         }
       }
-      if session.unseen || session.status.kind == "waiting" {
-        RowIconButton(icon: "checkmark", label: "Okundu") { actions.markSeen(session.id) }
-      }
-      RowIconButton(icon: "arrow.up.forward.app", label: "Odakla") { actions.focus(session.id) }
     }
+  }
+}
+
+/// Under the rows while chats are hidden: "Hidden" and each hidden chat by its title (a click
+/// brings that one back), then "Show all".
+struct HiddenChatsLine: View {
+  let store: SessionStore
+  let actions: NotchActions
+  @Environment(\.notchTheme) private var theme
+
+  /// Chips shown by title; more are counted ("+2").
+  static let maxChips = 3
+
+  var body: some View {
+    let hidden = store.hiddenSessions
+    HStack(spacing: 6) {
+      Image(systemName: "eye.slash")
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(theme.tertiary)
+      Text("Hidden")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(theme.tertiary)
+        .fixedSize()
+      ForEach(hidden.prefix(Self.maxChips)) { s in
+        HiddenChip(names: store.rowNames(for: s), label: store.chatLabel(for: s)) {
+          actions.unhide(s.id)
+        }
+      }
+      if hidden.count > Self.maxChips {
+        Text("+\(hidden.count - Self.maxChips)")
+          .font(.system(size: 11, weight: .medium)).monospacedDigit()
+          .foregroundStyle(theme.tertiary)
+          .fixedSize()
+      }
+      Spacer(minLength: 4)
+      Button(action: actions.unhideAll) {
+        Text("Show all")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(theme.secondary)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .fixedSize()
+    }
+    .frame(height: 22)
+    .padding(.horizontal, 4)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(loc("Hidden chats"))
+  }
+}
+
+/// One hidden chat in the "Hidden" line: its title, the project after it in grey (as on the
+/// row); a click shows it again.
+struct HiddenChip: View {
+  let names: (primary: String, secondary: String?)
+  let label: String
+  let action: () -> Void
+  @State private var hover = false
+  @Environment(\.notchTheme) private var theme
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 4) {
+        Text(names.primary)
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(hover ? theme.ink : theme.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+          .layoutPriority(1)
+        if let second = names.secondary {
+          Text(second)
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(theme.tertiary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+      }
+        .padding(.horizontal, 7)
+        .frame(maxWidth: 170, minHeight: 20, maxHeight: 20)
+        .background(Capsule().fill(hover ? theme.faint : theme.faint.opacity(0.6)))
+        .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .onHover { hover = $0 }
+    .help(loc("Show this chat again"))
+    .accessibilityLabel(loc("Show \(label) again"))
   }
 }
 
@@ -820,31 +1173,38 @@ struct RowIconButton: View {
   }
 }
 
+/// The row's status sign, colored by its status line segment (`state`): a seen finished chat
+/// gets the idle dot, a seen error keeps its × shape in the idle grey.
 struct StatusDot: View {
   let session: Session
-  let pending: Bool
+  let state: LineState
   @Environment(\.notchTheme) private var theme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     Group {
-      if pending || session.status.needsAttention && session.status.kind != "error" {
+      switch state {
+      case .needs:
         Image(systemName: "exclamationmark.triangle.fill")
           .font(.system(size: 10, weight: .bold))
           .foregroundStyle(theme.needs)
-      } else {
+      case .working:
+        // Core Animation runs the pulse in the render server: a SwiftUI repeatForever here
+        // redrew the panel every frame (~2% CPU while open, measured).
+        PulseDot(color: NSColor(theme.working), pulsing: !reduceMotion)
+          .frame(width: 7, height: 7)
+      case .done:
+        Circle().fill(theme.done).frame(width: 7, height: 7)
+      case .error:
+        Image(systemName: "xmark.circle.fill")
+          .font(.system(size: 10, weight: .bold))
+          .foregroundStyle(theme.error)
+      case .idle:
         switch session.status {
-        case .working:
-          // Core Animation runs the pulse in the render server: a SwiftUI repeatForever here
-          // redrew the panel every frame (~2% CPU while open, measured).
-          PulseDot(color: NSColor(theme.working), pulsing: !reduceMotion)
-            .frame(width: 7, height: 7)
-        case .done:
-          Circle().fill(theme.done.opacity(session.unseen ? 1 : 0.45)).frame(width: 7, height: 7)
         case .error:
           Image(systemName: "xmark.circle.fill")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(theme.error.opacity(session.unseen ? 1 : 0.6))
+            .foregroundStyle(theme.idle)
         case .quiet:
           Circle().strokeBorder(theme.idle, lineWidth: 1.2).frame(width: 7, height: 7)
         default:

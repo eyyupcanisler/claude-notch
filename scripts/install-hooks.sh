@@ -5,6 +5,15 @@
 # app passes its own copy in Application Support).
 set -u
 set -o pipefail
+# Messages follow CLAUDE_NOTCH_LANG (tr or en; the app passes its own language when it
+# runs install-hooks.sh), else the Mac's first language: Turkish on a Turkish Mac, English
+# otherwise.
+# Usage: say "<Turkish>" "<English>".
+case "${CLAUDE_NOTCH_LANG:-$(defaults read -g AppleLanguages 2>/dev/null | sed -n '2s/[^A-Za-z_-]//gp')}" in
+  tr | tr[-_]*) NOTCH_LANG=tr ;;
+  *) NOTCH_LANG=en ;;
+esac
+say() { if [ "$NOTCH_LANG" = en ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOOK="$ROOT/hooks/claude-notch-hook.sh"
@@ -19,32 +28,36 @@ while [ $# -gt 0 ]; do
     --print) ACTION="print" ;;
     --settings)
       shift
-      if [ $# -eq 0 ]; then echo "--settings bir yol bekliyor" >&2; exit 2; fi
+      if [ $# -eq 0 ]; then say "--settings bir yol bekliyor" "--settings needs a path" >&2; exit 2; fi
       SETTINGS="$1"
       ;;
     --hook)
       shift
-      if [ $# -eq 0 ]; then echo "--hook bir yol bekliyor" >&2; exit 2; fi
+      if [ $# -eq 0 ]; then say "--hook bir yol bekliyor" "--hook needs a path" >&2; exit 2; fi
       HOOK="$1"
       ;;
     -h | --help)
-      echo "Kullanım: install-hooks.sh [--uninstall] [--print] [--settings <yol>] [--hook <yol>]"
+      say "Kullanım: install-hooks.sh [--uninstall] [--print] [--settings <yol>] [--hook <yol>]" "Usage: install-hooks.sh [--uninstall] [--print] [--settings <path>] [--hook <path>]"
       exit 0
       ;;
-    *) echo "Bilinmeyen argüman: $1" >&2; exit 2 ;;
+    *) say "Bilinmeyen argüman: $1" "Unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "jq bulunamadı" >&2
+  say "jq bulunamadı" "jq not found" >&2
   exit 1
 fi
 
 # Quote the path in the command string only if needed.
 CMD_PATH="$HOOK"
 if [[ "$HOOK" =~ [^A-Za-z0-9_./-] ]]; then
-  CMD_PATH="'${HOOK//\'/\'\\\'\'}'"
+  # The quote and its escape sit in variables: macOS's bash 3.2 keeps the backslashes of a
+  # quote escaped inside ${//} literally.
+  q="'"
+  qe="'\\''"
+  CMD_PATH="'${HOOK//$q/$qe}'"
 fi
 
 # Our hooks JSON fragment.
@@ -55,6 +68,7 @@ hooks_json() {
     + ($events | split(" ") | map({key: ., value: [{hooks: [{type: "command", command: $ev,
         async: true, timeout: 10}]}]}) | from_entries)
     # AskUserQuestion: held until answered in the notch (an empty reply lets the terminal ask).
+    # With the "answer questions in the notch" setting off, the app replies empty at once.
     | .PreToolUse = ((.PreToolUse // []) + [{matcher: "AskUserQuestion",
         hooks: [{type: "command", command: $q, timeout: 600}]}])
     | {hooks: .}'
@@ -95,7 +109,7 @@ ADD='
 if [ -L "$SETTINGS" ]; then
   RESOLVED="$(realpath "$SETTINGS" 2>/dev/null)" || RESOLVED=""
   if [ -z "$RESOLVED" ]; then
-    echo "Sembolik bağ çözülemedi: $SETTINGS" >&2
+    say "Sembolik bağ çözülemedi: $SETTINGS" "Could not resolve the symbolic link: $SETTINGS" >&2
     exit 1
   fi
   SETTINGS="$RESOLVED"
@@ -103,13 +117,13 @@ fi
 
 if [ -e "$SETTINGS" ]; then
   if ! jq -e 'type == "object"' "$SETTINGS" >/dev/null 2>&1; then
-    echo "Geçersiz JSON (nesne bekleniyor): $SETTINGS" >&2
+    say "Geçersiz JSON (nesne bekleniyor): $SETTINGS" "Invalid JSON (an object is expected): $SETTINGS" >&2
     exit 1
   fi
   CURRENT="$(cat "$SETTINGS")"
 else
   if [ "$ACTION" = "uninstall" ]; then
-    echo "Dosya yok, yapılacak bir şey yok: $SETTINGS"
+    say "Dosya yok, yapılacak bir şey yok: $SETTINGS" "No file, nothing to do: $SETTINGS"
     exit 0
   fi
   CURRENT="{}"
@@ -117,33 +131,33 @@ fi
 
 if [ "$ACTION" = "uninstall" ]; then
   RESULT="$(printf '%s' "$CURRENT" | jq --arg name "$NAME" --argjson add null \
-    "$STRIP $ADD")" || { echo "jq başarısız, dosyaya dokunulmadı" >&2; exit 1; }
+    "$STRIP $ADD")" || { say "jq başarısız, dosyaya dokunulmadı" "jq failed, the file was not touched" >&2; exit 1; }
 else
   FRAGMENT="$(hooks_json)" || exit 1
   RESULT="$(printf '%s' "$CURRENT" | jq --arg name "$NAME" --argjson add "$FRAGMENT" \
-    "$STRIP $ADD")" || { echo "jq başarısız, dosyaya dokunulmadı" >&2; exit 1; }
+    "$STRIP $ADD")" || { say "jq başarısız, dosyaya dokunulmadı" "jq failed, the file was not touched" >&2; exit 1; }
 fi
 
 # Never write anything that is not a JSON object.
 if ! printf '%s' "$RESULT" | jq -e 'type == "object"' >/dev/null 2>&1; then
-  echo "Sonuç geçerli bir JSON nesnesi değil, dosyaya dokunulmadı" >&2
+  say "Sonuç geçerli bir JSON nesnesi değil, dosyaya dokunulmadı" "The result is not a valid JSON object, the file was not touched" >&2
   exit 1
 fi
 
 DIR="$(dirname "$SETTINGS")"
 if [ -e "$SETTINGS" ]; then
   BACKUP="$(mktemp "$SETTINGS.bak.$(date +%Y%m%d-%H%M%S).XXXXXX")" \
-    || { echo "Yedek alınamadı" >&2; exit 1; }
-  cp -p "$SETTINGS" "$BACKUP" || { echo "Yedek alınamadı" >&2; exit 1; }
-  echo "Yedek: $BACKUP"
+    || { say "Yedek alınamadı" "Could not make a backup" >&2; exit 1; }
+  cp -p "$SETTINGS" "$BACKUP" || { say "Yedek alınamadı" "Could not make a backup" >&2; exit 1; }
+  say "Yedek: $BACKUP" "Backup: $BACKUP"
 else
   mkdir -p "$DIR" || exit 1
 fi
 
-TMP="$(mktemp "$DIR/.settings.XXXXXX")" || { echo "Geçici dosya oluşturulamadı" >&2; exit 1; }
+TMP="$(mktemp "$DIR/.settings.XXXXXX")" || { say "Geçici dosya oluşturulamadı" "Could not create a temporary file" >&2; exit 1; }
 if ! printf '%s\n' "$RESULT" > "$TMP"; then
   rm -f "$TMP"
-  echo "Yazılamadı: $SETTINGS" >&2
+  say "Yazılamadı: $SETTINGS" "Could not write: $SETTINGS" >&2
   exit 1
 fi
 # Keep the original permissions (mktemp creates 0600).
@@ -152,11 +166,11 @@ if [ -e "$SETTINGS" ]; then
 fi
 if ! mv -f "$TMP" "$SETTINGS"; then
   rm -f "$TMP"
-  echo "Yazılamadı: $SETTINGS" >&2
+  say "Yazılamadı: $SETTINGS" "Could not write: $SETTINGS" >&2
   exit 1
 fi
 if [ "$ACTION" = "uninstall" ]; then
-  echo "ClaudeNotch hook'ları kaldırıldı: $SETTINGS"
+  say "ClaudeNotch hook'ları kaldırıldı: $SETTINGS" "ClaudeNotch hooks removed: $SETTINGS"
 else
-  echo "ClaudeNotch hook'ları kuruldu: $SETTINGS"
+  say "ClaudeNotch hook'ları kuruldu: $SETTINGS" "ClaudeNotch hooks installed: $SETTINGS"
 fi

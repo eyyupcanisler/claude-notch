@@ -2,22 +2,31 @@ import AppKit
 import Carbon.HIToolbox
 import ClaudeNotchCore
 
-/// The three global shortcuts.
+/// The global shortcuts.
 enum HotKeyRole: UInt32, CaseIterable, Sendable {
   case panel = 1
   case allow = 2
   case deny = 3
   case timer = 4
   case shelf = 5
+  /// Focuses the terminal tab of the session that needs the user most (see `JumpTarget`).
+  case jump = 6
   /// ⌃⌥1…⌃⌥4: pick an option of the question on screen. Registered only while one is shown
-  /// (never in Settings), so the chords stay free for other apps the rest of the time.
+  /// (never in Settings), so the chords stay free for other apps the rest of the time. Fixed
+  /// keys: a shortcut preset does not move them.
   case option1 = 11
   case option2 = 12
   case option3 = 13
   case option4 = 14
 
-  /// The roles the user sets in Settings and that are always registered.
-  static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .timer, .shelf]
+  /// The roles the user sets in Settings and that are always registered (Settings order).
+  static let configurable: [HotKeyRole] = [.panel, .allow, .deny, .jump, .timer, .shelf]
+
+  /// The order the always-on roles are registered in at launch: the original roles first, the
+  /// added `jump` last. Two roles cannot hold the same combo (the second RegisterEventHotKey
+  /// fails with eventHotKeyExistsErr), and an install from before `jump` existed may have saved
+  /// ⌃⌥J for another role; that saved shortcut must keep working, so `jump` loses the clash.
+  static let registrationOrder: [HotKeyRole] = [.panel, .allow, .deny, .timer, .shelf, .jump]
 
   /// 0-based option index of an `optionN` role.
   var optionIndex: Int? {
@@ -32,12 +41,13 @@ enum HotKeyRole: UInt32, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .panel: return "Paneli aç"
-    case .allow: return "İzin ver"
-    case .deny: return "Reddet"
-    case .timer: return "Pomodoro başlat / duraklat"
-    case .shelf: return "Raftaki son öğeyi kopyala"
-    case .option1, .option2, .option3, .option4: return "Soru seçeneği \((optionIndex ?? 0) + 1)"
+    case .panel: return loc("Open the panel")
+    case .allow: return loc("Allow")
+    case .deny: return loc("Deny")
+    case .jump: return loc("Jump to the session that needs you")
+    case .timer: return loc("Start / pause Pomodoro")
+    case .shelf: return loc("Copy the latest shelf item")
+    case .option1, .option2, .option3, .option4: return loc("Question option \((optionIndex ?? 0) + 1)")
     }
   }
 
@@ -54,24 +64,49 @@ struct KeyCombo: Equatable, Hashable, Sendable {
 
   static let modifierMask = UInt32(controlKey | optionKey | shiftKey | cmdKey)
 
-  /// ⌃⌥Space, ⌃⌥Y, ⌃⌥N (Y / N resolved through the current keyboard layout).
+  /// ⌃⌥Space, ⌃⌥Y, ⌃⌥N ... (letters resolved through the current keyboard layout).
   static func defaultCombo(_ role: HotKeyRole) -> KeyCombo {
-    let mods = UInt32(controlKey | optionKey)
+    presetCombo(role, .standard)
+  }
+
+  /// `role`'s default key with the preset's modifiers (⌃⌥ + key, or ⌃⌥⇧⌘ + key for Hyper).
+  /// The question option keys are fixed at ⌃⌥1…⌃⌥4 whatever the preset.
+  static func presetCombo(_ role: HotKeyRole, _ preset: ShortcutPreset) -> KeyCombo {
+    let mods = carbonModifiers(preset.modifiers)
+    let fixed = carbonModifiers(ShortcutPreset.standard.modifiers)
+    func letter(_ c: String, _ fallback: Int) -> KeyCombo {
+      KeyCombo(keyCode: KeyLayout.keyCode(for: c) ?? UInt32(fallback), modifiers: mods)
+    }
     switch role {
     case .panel: return KeyCombo(keyCode: UInt32(kVK_Space), modifiers: mods)
-    case .allow:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "y") ?? UInt32(kVK_ANSI_Y), modifiers: mods)
-    case .deny:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "n") ?? UInt32(kVK_ANSI_N), modifiers: mods)
-    case .timer:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "p") ?? UInt32(kVK_ANSI_P), modifiers: mods)
-    case .shelf:
-      return KeyCombo(keyCode: KeyLayout.keyCode(for: "v") ?? UInt32(kVK_ANSI_V), modifiers: mods)
-    case .option1: return KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: mods)
-    case .option2: return KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: mods)
-    case .option3: return KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: mods)
-    case .option4: return KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: mods)
+    case .allow: return letter("y", kVK_ANSI_Y)
+    case .deny: return letter("n", kVK_ANSI_N)
+    case .jump: return letter("j", kVK_ANSI_J)
+    case .timer: return letter("p", kVK_ANSI_P)
+    case .shelf: return letter("v", kVK_ANSI_V)
+    case .option1: return KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: fixed)
+    case .option2: return KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: fixed)
+    case .option3: return KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: fixed)
+    case .option4: return KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: fixed)
     }
+  }
+
+  static func carbonModifiers(_ m: ChordModifiers) -> UInt32 {
+    var mods: UInt32 = 0
+    if m.contains(.control) { mods |= UInt32(controlKey) }
+    if m.contains(.option) { mods |= UInt32(optionKey) }
+    if m.contains(.shift) { mods |= UInt32(shiftKey) }
+    if m.contains(.command) { mods |= UInt32(cmdKey) }
+    return mods
+  }
+
+  var chordModifiers: ChordModifiers {
+    var m: ChordModifiers = []
+    if modifiers & UInt32(controlKey) != 0 { m.insert(.control) }
+    if modifiers & UInt32(optionKey) != 0 { m.insert(.option) }
+    if modifiers & UInt32(shiftKey) != 0 { m.insert(.shift) }
+    if modifiers & UInt32(cmdKey) != 0 { m.insert(.command) }
+    return m
   }
 
   /// From a key-down in the recorder; nil without ⌃, ⌥ or ⌘ (a bare key or ⇧ + key would
@@ -92,24 +127,16 @@ struct KeyCombo: Equatable, Hashable, Sendable {
     self.modifiers = modifiers & Self.modifierMask
   }
 
-  /// Why this chord cannot be `role`'s shortcut (Turkish), or nil. A decision shortcut acts
+  /// Why this chord cannot be `role`'s shortcut (localized), or nil. A decision shortcut acts
   /// from every app, so it must not be a chord people type or use for app shortcuts.
   func error(for role: HotKeyRole) -> String? {
     guard role.isDecision else { return nil }
-    let ok = DecisionChord.isAllowed(
-      control: modifiers & UInt32(controlKey) != 0, option: modifiers & UInt32(optionKey) != 0,
-      shift: modifiers & UInt32(shiftKey) != 0, command: modifiers & UInt32(cmdKey) != 0)
-    return ok ? nil : DecisionChord.error
+    return DecisionChord.isAllowed(chordModifiers) ? nil : DecisionChord.error
   }
 
   /// "⌃⌥Y" (Apple's modifier order: ⌃ ⌥ ⇧ ⌘).
   var display: String {
-    var s = ""
-    if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
-    if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
-    if modifiers & UInt32(shiftKey) != 0 { s += "⇧" }
-    if modifiers & UInt32(cmdKey) != 0 { s += "⌘" }
-    return s + KeyLayout.label(keyCode: keyCode)
+    chordModifiers.symbols + KeyLayout.label(keyCode: keyCode)
   }
 
   /// Stored as [keyCode, modifiers].
@@ -153,7 +180,18 @@ enum KeyLayout {
   static func label(keyCode: UInt32) -> String {
     if let s = special[Int(keyCode)] { return s }
     guard let c = character(keyCode: keyCode), !c.isEmpty else { return "#\(keyCode)" }
-    return c.uppercased(with: Locale(identifier: "tr_TR"))
+    return KeyLabelCase.needsLayoutLocale(c) ? c.uppercased(with: layoutLocale) : c.uppercased()
+  }
+
+  /// Casing follows the keyboard layout's language, not the UI language: on Turkish-Q the `i`
+  /// key reads `İ` and the `ı` key reads `I`, whichever language the app shows.
+  private static var layoutLocale: Locale {
+    guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+      let raw = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages),
+      let languages = Unmanaged<CFArray>.fromOpaque(raw).takeUnretainedValue() as? [String],
+      let first = languages.first
+    else { return Locale.current }
+    return Locale(identifier: first)
   }
 
   /// Key code that types `char` with no modifiers in the current layout.

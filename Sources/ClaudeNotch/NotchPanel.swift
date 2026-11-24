@@ -41,6 +41,11 @@ final class NotchPanel: NSPanel {
 /// moves over the panel (while it takes clicks, the global monitor no longer sees them).
 final class NotchHostingView: NSHostingView<NotchRootView> {
   var onRightClick: (@MainActor () -> Void)?
+  /// A left press at a screen point; returns true when it was the notch or the wings and has
+  /// been acted on. Acting on the press (as menu-bar items do), not on a SwiftUI tap, keeps a
+  /// click made while the pointer is still moving: a tap gesture is cancelled when the pointer
+  /// travels a few points between press and release.
+  var onPress: (@MainActor (NSPoint) -> Bool)?
   var onPointerMoved: (@MainActor () -> Void)?
   private var pointerArea: NSTrackingArea?
 
@@ -70,6 +75,13 @@ final class NotchHostingView: NSHostingView<NotchRootView> {
   override func mouseExited(with event: NSEvent) {
     super.mouseExited(with: event)
     onPointerMoved?()
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    if let window, let onPress, onPress(window.convertPoint(toScreen: event.locationInWindow)) {
+      return
+    }
+    super.mouseDown(with: event)
   }
 
   override func rightMouseDown(with event: NSEvent) {

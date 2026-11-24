@@ -33,11 +33,25 @@ final class ModuleCenter {
 
   // MARK: Timer state
   private(set) var timer: FocusTimer
-  /// Minutes being chosen in the tile ("Özel süre…"), nil when not choosing.
+  /// Minutes being chosen in the tile ("Custom duration…"), nil when not choosing.
   private(set) var timerDraft: Int?
   /// Set while the timer runs a Pomodoro cycle (focus / breaks), nil for a plain timer.
   private(set) var pomodoro: Pomodoro?
   @ObservationIgnored private var timerTask: Task<Void, Never>?
+  /// The timer's last phase change (a break started, a break or the timer ended): the ears
+  /// flash with it, so it is seen even in a Focus, when no sound plays and no note shows.
+  private(set) var timerFlash: TimerFlash?
+  /// The flash the ears last played (one flash plays once, also when the ears come out late).
+  @ObservationIgnored var timerFlashPlayed: [String: Int] = [:]
+  /// A plain timer that just ended keeps its ear out (00:00) for `doneLinger`.
+  private(set) var timerDoneShowing = false
+  @ObservationIgnored private var doneTask: Task<Void, Never>?
+  static let doneLinger: Duration = .seconds(30)
+
+  struct TimerFlash: Equatable {
+    var id: Int
+    var at: Date
+  }
 
   // MARK: Battery state
   @ObservationIgnored private var battery: BatteryMonitor?
@@ -75,6 +89,8 @@ final class ModuleCenter {
       _ = settings.batteryEnabled
       _ = settings.spotifyEnabled
       _ = settings.shelfEnabled
+      _ = settings.shelfExpiry
+      _ = settings.shelfDeletePinsWhenOff
       _ = settings.weatherEnabled
       _ = settings.usageEnabled
     } onChange: { [weak self] in
@@ -87,6 +103,8 @@ final class ModuleCenter {
 
   private func apply() {
     spotify.setEnabled(settings.spotifyEnabled)
+    shelf.configure(
+      expiry: settings.shelfExpiry, deletePinsWhenOff: settings.shelfDeletePinsWhenOff)
     shelf.setEnabled(settings.shelfEnabled)
     weather.setEnabled(settings.weatherEnabled)
     usage.setEnabled(settings.usageEnabled)
@@ -204,7 +222,7 @@ final class ModuleCenter {
       store.events(matching: predicate).prefix(60).map { e in
         CalendarItem(
           id: "\(e.calendarItemIdentifier)@\(Int(e.startDate.timeIntervalSince1970))",
-          title: e.title?.isEmpty == false ? e.title : "Etkinlik", start: e.startDate,
+          title: e.title?.isEmpty == false ? e.title : loc("Event"), start: e.startDate,
           end: e.endDate, isAllDay: e.isAllDay, location: e.location,
           joinURL: e.url.flatMap { $0.scheme == "https" ? $0 : nil },
           alerts: e.hasAlarms
@@ -235,7 +253,8 @@ final class ModuleCenter {
           title: item.title,
           subtitle: sub.joined(separator: " · "), digits: until.digits, unit: until.unit,
           link: item.joinURL, validUntil: item.start))
-      settings.play("Tink")
+      // A Focus drops the note (`WingPlanner`), and its chime with it.
+      if FocusIslands.playsModuleSound(focusActive: settings.focusOn) { settings.play("Tink") }
     }
     nextEvent = CalendarReminder.next(events, now: now)
     scheduleCalendarWake(now)
@@ -282,17 +301,69 @@ final class ModuleCenter {
 
   // MARK: - Timer
 
-  /// The pill under the notch while the panel is closed: a timer that runs or is paused.
-  var timerPillVisible: Bool {
+  /// A timer runs or is paused: it shows while the panel is closed, beside or under the notch
+  /// (`TimerStyle`).
+  var timerShowing: Bool {
     switch timer.state {
     case .running, .paused: return settings.timerEnabled
-    default: return false
+    // A Pomodoro waiting for its next focus block keeps its ears (a play sign: start it from
+    // the panel or with the shortcut); a plain timer's ear stays a little after it ends.
+    case .finished: return settings.timerEnabled && (pomodoro != nil || timerDoneShowing)
+    case .idle: return false
     }
   }
 
+  /// Seconds the timer's ear shows: the time left, or the next focus block's length while a
+  /// Pomodoro waits for it.
+  func earSeconds(at now: Date) -> TimeInterval {
+    if case .finished = timer.state, let p = pomodoro { return TimeInterval(p.minutes(p.phase) * 60) }
+    return timer.remaining(at: now)
+  }
+
+  /// A Pomodoro between phases, waiting for the user to start the next one.
+  var pomodoroWaiting: Bool {
+    if case .finished = timer.state { return pomodoro != nil }
+    return false
+  }
+
+  private func flashTimer() {
+    timerFlash = TimerFlash(id: (timerFlash?.id ?? 0) + 1, at: Date())
+  }
+
+  /// The notch grows down with the time inside on screen `g`: the style "under the notch", or
+  /// a screen without a menu bar (full screen), where an ear beside the notch has no room.
+  func timerPill(on g: NotchGeometry) -> Bool {
+    timerShowing && (settings.timerStyle == .below || g.bandHeight <= 0)
+  }
+
+  /// Width of the timer's ear beside the notch on screen `g` (the style "beside"); 0 when it
+  /// does not show there.
+  func timerEar(on g: NotchGeometry, at now: Date = Date()) -> CGFloat {
+    guard timerShowing, settings.timerStyle == .beside, g.bandHeight > 0 else { return 0 }
+    return TimerEar.width(remaining: earSeconds(at: now))
+  }
+
+  /// Width of the Pomodoro round's ear ("2/4") left of the notch on screen `g`, the mirror of
+  /// the timer's ear on the right; 0 when it does not show. It shows only with a Pomodoro
+  /// running and the timer's ear out, not while Spotify's cover has that side
+  /// (`spotifyLeft`), and only when the front app's menu titles end short of it: it must never
+  /// cover a menu (docs/adr/0001; unknown menus count as reaching it). `reach`: how far
+  /// something already sits left of the notch (the left wing's mark in peek).
+  func roundEar(on g: NotchGeometry, reach: CGFloat = 0, spotifyLeft: Bool) -> CGFloat {
+    guard let p = pomodoro, !spotifyLeft, timerEar(on: g) > 0, let menus = desktop.menuReach
+    else { return 0 }
+    // As wide as the timer's ear, so the two sit symmetric around the notch.
+    let w = max(RoundEar.width(text: Self.roundText(p)), timerEar(on: g))
+    let room = (g.screenFrame.width - g.notchWidth) / 2 - reach - w
+    return menus + RoundEar.clearance <= room ? w : 0
+  }
+
+  /// "2/4": the focus block being worked on or next up, of the set.
+  static func roundText(_ p: Pomodoro) -> String { "\(p.round)/\(p.roundsBeforeLong)" }
+
   static let draftRange = 1...180
 
-  /// "Özel süre…": the tile opens with a − / + chooser at the last duration.
+  /// "Custom duration…": the tile opens with a − / + chooser at the last duration.
   func beginTimerDraft() {
     timerDraft = settings.timerMinutes
   }
@@ -336,9 +407,21 @@ final class ModuleCenter {
 
   private func run(minutes: Int) {
     timerDraft = nil
+    timerDoneShowing = false
     timerTask?.cancel()
     timer.reset()
     timer.duration = TimeInterval(minutes * 60)
+    timer.toggle(at: Date())
+    scheduleTimer()
+  }
+
+  /// Debug (`/debug/ui` `timer_end_soon`): the running block ends in a second, as if its time
+  /// were up (the Pomodoro keeps its phase).
+  func debugEndSoon() {
+    guard timer.isRunning else { return }
+    timerTask?.cancel()
+    timer.reset()
+    timer.duration = 1
     timer.toggle(at: Date())
     scheduleTimer()
   }
@@ -351,6 +434,7 @@ final class ModuleCenter {
 
   func resetTimer() {
     timerDraft = nil
+    timerDoneShowing = false
     pomodoro = nil
     timerTask?.cancel()
     timerTask = nil
@@ -365,13 +449,23 @@ final class ModuleCenter {
     timerTask = Task { [weak self] in
       try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
       guard !Task.isCancelled, let self, self.timer.settle(at: Date()) else { return }
-      self.settings.play("Glass")
+      self.flashTimer()
+      if FocusIslands.playsModuleSound(focusActive: self.settings.focusOn) {
+        self.settings.play("Glass")
+      }
       let id = "timer:\(Int(end.timeIntervalSince1970))"
       guard var p = self.pomodoro else {
+        self.timerDoneShowing = true
+        self.doneTask?.cancel()
+        self.doneTask = Task { [weak self] in
+          try? await Task.sleep(for: Self.doneLinger)
+          guard !Task.isCancelled else { return }
+          self?.timerDoneShowing = false
+        }
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Zamanlayıcı bitti",
-            subtitle: "\(minutes) dk tamamlandı", digits: "00:00",
+            source: .timer, id: id, title: loc("Timer done"),
+            subtitle: loc("\(minutes) min completed"), digits: "00:00",
             validUntil: Date().addingTimeInterval(600)))
         return
       }
@@ -381,16 +475,18 @@ final class ModuleCenter {
         // A break starts by itself; the next focus waits for the user.
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Odak bitti · mola",
-            subtitle: "\(p.minutes(next)) dk \(next == .longBreak ? "uzun " : "")mola başladı",
+            source: .timer, id: id, title: loc("Focus done · break"),
+            subtitle: next == .longBreak
+              ? loc("\(p.minutes(next)) min long break started")
+              : loc("\(p.minutes(next)) min break started"),
             digits: String(format: "%02d:00", p.minutes(next)),
             validUntil: Date().addingTimeInterval(600)))
         self.run(minutes: p.minutes(next))
       } else {
         self.onNote?(
           ModuleNote(
-            source: .timer, id: id, title: "Mola bitti",
-            subtitle: "Odak \(p.round)/\(p.roundsBeforeLong) hazır: başlatmak için çentiği aç",
+            source: .timer, id: id, title: loc("Break done"),
+            subtitle: loc("Focus \(p.round)/\(p.roundsBeforeLong) is ready: open the notch to start it"),
             digits: "00:00", validUntil: Date().addingTimeInterval(600)))
       }
     }
@@ -402,8 +498,8 @@ final class ModuleCenter {
     guard case .image(_, _, let w, let h) = item.kind else { return }
     onNote?(
       ModuleNote(
-        source: .shelf, id: "shelf:\(item.id)", title: "Rafa eklendi",
-        subtitle: "Görüntü · \(w)×\(h)", validUntil: Date().addingTimeInterval(10)))
+        source: .shelf, id: "shelf:\(item.id)", title: loc("Added to the shelf"),
+        subtitle: loc("Image · \(String(w))×\(String(h))"), validUntil: Date().addingTimeInterval(10)))
   }
 
   // MARK: - Battery
@@ -412,22 +508,23 @@ final class ModuleCenter {
     let now = Date()
     switch event {
     case .pluggedIn(let p):
-      var sub = "%\(p)"
+      var sub = loc("\(p)%")
       if p >= 100 {
-        sub += " · dolu"
+        sub += loc(" · full")
       } else if let m = toFull {
-        sub += " · tam dolum " + (m >= 60 ? "\(m / 60) sa \(m % 60) dk" : "\(m) dk")
+        let left = m >= 60 ? loc("\(m / 60) h \(m % 60) min") : loc("\(m) min")
+        sub += loc(" · full in \(left)")
       }
       onNote?(
         ModuleNote(
           source: .battery, id: "ac:\(Int(now.timeIntervalSince1970))",
-          title: reading.charging || p < 100 ? "Şarj oluyor" : "Güç bağlandı", subtitle: sub,
+          title: reading.charging || p < 100 ? loc("Charging") : loc("Power connected"), subtitle: sub,
           level: Double(p) / 100, validUntil: now.addingTimeInterval(10)))
     case .low(let p):
       onNote?(
         ModuleNote(
-          source: .battery, id: "low:\(Int(now.timeIntervalSince1970))", title: "Pil azaldı",
-          subtitle: "%\(p) · şarj aletini tak", level: Double(p) / 100,
+          source: .battery, id: "low:\(Int(now.timeIntervalSince1970))", title: loc("Battery low"),
+          subtitle: loc("\(p)% · plug in the charger"), level: Double(p) / 100,
           validUntil: now.addingTimeInterval(120)))
     }
   }

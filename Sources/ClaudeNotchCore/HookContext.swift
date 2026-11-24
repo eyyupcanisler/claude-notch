@@ -5,24 +5,32 @@ import Foundation
 /// AppleScript and pid into kill(2).
 public struct HookContext: Sendable, Equatable {
   public var termProgram: String?
+  /// The app the chat runs in (`__CFBundleIdentifier`, see `TerminalHost`).
+  public var termBundle: String?
   public var tty: String?
   public var pid: Int32?
   public var branch: String?
+  /// The agent that sent the event, when the route says so (`/agy/event`); nil keeps the
+  /// session's own.
+  public var tool: ChatTool?
 
   public init(
-    termProgram: String? = nil, tty: String? = nil, pid: Int32? = nil, branch: String? = nil
+    termProgram: String? = nil, tty: String? = nil, pid: Int32? = nil, branch: String? = nil,
+    termBundle: String? = nil
   ) {
     self.termProgram = termProgram
+    self.termBundle = termBundle
     self.tty = tty
     self.pid = pid
     self.branch = branch
   }
 
-  /// Reads X-Term-Program, X-Claude-TTY, X-Claude-PID and X-Git-Branch. Invalid values are
-  /// dropped (nil), never passed on. A pid without a valid tty is dropped too: liveness needs
-  /// both to tell a reused pid apart.
+  /// Reads X-Term-Program, X-Term-Bundle, X-Claude-TTY, X-Claude-PID and X-Git-Branch. Invalid
+  /// values are dropped (nil), never passed on. A pid without a valid tty is dropped too:
+  /// liveness needs both to tell a reused pid apart.
   public init(request: HTTPRequest) {
     termProgram = Self.validTermProgram(request.header("x-term-program"))
+    termBundle = TerminalHost.validBundleID(request.header("x-term-bundle"))
     tty = Self.validTTY(request.header("x-claude-tty"))
     pid = tty == nil ? nil : Self.validPID(request.header("x-claude-pid"))
     if pid == nil { tty = nil }

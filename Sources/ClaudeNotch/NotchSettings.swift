@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import Foundation
 import Observation
 
@@ -12,9 +13,9 @@ enum DisplayMode: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .automatic: return "Otomatik"
-    case .notchOnly: return "Sadece çentikli"
-    case .all: return "Tümü"
+    case .automatic: return loc("Automatic")
+    case .notchOnly: return loc("Notched screen only")
+    case .all: return loc("All screens")
     }
   }
 }
@@ -25,9 +26,60 @@ enum Density: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .compact: return "Kompakt"
-    case .rich: return "Zengin"
+    case .compact: return loc("Compact")
+    case .rich: return loc("Rich")
     }
+  }
+}
+
+extension StatusColorScheme {
+  var title: String {
+    switch self {
+    case .classic: return loc("Classic")
+    case .colorblind: return loc("Colorblind-friendly")
+    }
+  }
+}
+
+extension LanguageChoice {
+  /// Each language in its own name; "System" in the current UI language.
+  var title: String {
+    switch self {
+    case .turkish: return "Türkçe"
+    case .english: return "English"
+    case .system: return loc("System (Mac language)")
+    }
+  }
+}
+
+/// Quits and opens the app again (a language change applies at launch).
+@MainActor
+enum AppRelaunch {
+  /// Only a real .app bundle can be opened again (not a `swift run` binary).
+  static var available: Bool { Bundle.main.bundlePath.hasSuffix(".app") }
+
+  /// A detached shell waits (up to ~10 s) for this process to exit, then `open`s the bundle;
+  /// the app allows one copy, so the new one must not start before this one is gone.
+  static func now() {
+    guard available else { return }
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/sh")
+    let demo = NotchSettings.isDemo ? "--env CLAUDE_NOTCH_DEMO=1 " : ""
+    p.arguments = [
+      "-c",
+      "i=0; while kill -0 \"$0\" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.2; i=$((i+1)); done; "
+        + "exec /usr/bin/open \(demo)\"$1\"",
+      String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundlePath,
+    ]
+    p.standardInput = FileHandle.nullDevice
+    p.standardOutput = FileHandle.nullDevice
+    p.standardError = FileHandle.nullDevice
+    do {
+      try p.run()
+    } catch {
+      return
+    }
+    NSApp.terminate(nil)
   }
 }
 
@@ -40,10 +92,10 @@ enum SoundEvent: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .permission: return "İzin isteği"
-    case .question: return "Soru ve girdi bekleme"
-    case .done: return "Bitti"
-    case .error: return "Hata"
+    case .permission: return loc("Permission request")
+    case .question: return loc("Question or waiting for input")
+    case .done: return loc("Done")
+    case .error: return loc("Error")
     }
   }
 
@@ -67,7 +119,25 @@ enum SoundEvent: String, CaseIterable, Sendable {
   }
 }
 
-/// How long an unanswered permission peek stays under the notch.
+/// How long a panel a global shortcut opened stays open while the pointer never reaches it
+/// (Settings: "Keep the panel open when a shortcut opens it").
+/// Where a running (or paused) timer shows while the panel is closed.
+enum TimerStyle: String, CaseIterable, Sendable {
+  /// A small ear on the right of the notch, inside the menu bar: nothing drops below it, so
+  /// what is under the menu bar (a browser's tabs) stays in sight and clickable.
+  case beside
+  /// The notch grows down with the time inside: larger, but it covers what is under the menu
+  /// bar. The original look.
+  case below
+
+  var title: String {
+    switch self {
+    case .beside: return loc("Beside the notch (compact)")
+    case .below: return loc("Under the notch (large)")
+    }
+  }
+}
+
 enum PeekDuration: String, CaseIterable, Sendable {
   case short = "8"
   case normal = "15"
@@ -85,10 +155,10 @@ enum PeekDuration: String, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .short: return "8 sn"
-    case .normal: return "15 sn"
-    case .long: return "30 sn"
-    case .untilAnswered: return "Yanıtlanana kadar"
+    case .short: return loc("8 s")
+    case .normal: return loc("15 s")
+    case .long: return loc("30 s")
+    case .untilAnswered: return loc("Until answered")
     }
   }
 }
@@ -105,11 +175,26 @@ final class NotchSettings {
   var density: Density {
     didSet { defaults.set(density.rawValue, forKey: "density") }
   }
+  /// Status colors; applies at once (the notch theme is built from it). Fresh install: classic.
+  var statusColors: StatusColorScheme {
+    didSet { defaults.set(statusColors.rawValue, forKey: StatusColorScheme.defaultsKey) }
+  }
+  /// UI language; takes effect at the next launch (see `main.swift`). Fresh install: the Mac's
+  /// (Turkish on a Turkish Mac, English otherwise).
+  var language: LanguageChoice {
+    didSet { defaults.set(language.rawValue, forKey: LanguageChoice.defaultsKey) }
+  }
+  /// The chosen language resolves to another language than the running UI's (System on a
+  /// Turkish Mac and Türkçe are the same language: no restart needed).
+  var languageNeedsRestart: Bool {
+    language.appleLanguages(macPreferred: LanguageChoice.macPreferredLanguages).first
+      != AppLanguage.code
+  }
   private(set) var sounds: [SoundEvent: Bool]
   /// Chosen macOS sound per event (missing: the event's default).
   private(set) var soundNames: [SoundEvent: String]
-  /// Silent mode (band 🔕): only permission requests and questions drop and sound. macOS
-  /// shares the Focus state only with apps Apple granted it to, so this is the user's switch.
+  /// Silent mode (band 🔕): only permission requests and questions drop and sound. This is the
+  /// user's own switch; a macOS Focus is read separately (`focusOn`).
   var silentMode: Bool {
     didSet { defaults.set(silentMode, forKey: "silentMode") }
   }
@@ -130,9 +215,58 @@ final class NotchSettings {
   var peekDuration: PeekDuration {
     didSet { defaults.set(peekDuration.rawValue, forKey: "peekDuration") }
   }
+  /// Claude's questions are held and answered in the notch (the original, default on), or
+  /// only told about and answered in the terminal (off). See `QuestionMode`.
+  var answerQuestionsInNotch: Bool {
+    didSet { defaults.set(answerQuestionsInNotch, forKey: QuestionMode.defaultsKey) }
+  }
+  var questionMode: QuestionMode { QuestionMode(answerInNotch: answerQuestionsInNotch) }
+  /// While a session's terminal is the front app, its permission requests, plan approvals and
+  /// waiting notices show no wing beside the notch (off by default, the original: see
+  /// `TerminalIslands`).
+  var hideIslandsWhileTerminalInFront: Bool {
+    didSet {
+      defaults.set(hideIslandsWhileTerminalInFront, forKey: TerminalIslands.defaultsKey)
+    }
+  }
+  /// The backup Focus value: Shortcuts automations (or Settings > "Treat Focus as on") switch
+  /// it from outside; `reloadFocusActive` reads their value. Off by default. What the app acts
+  /// on is `focusOn`, which also follows macOS itself (`systemFocus`, see `FocusIslands`).
+  var focusActive: Bool {
+    didSet {
+      guard focusActive != oldValue else { return }
+      defaults.set(focusActive, forKey: FocusIslands.defaultsKey)
+    }
+  }
+  /// What macOS's Do Not Disturb store says (`SystemFocusWatcher`, never saved): `.unknown`
+  /// until it is read, and while it cannot be read.
+  var systemFocus: SystemFocusState = .unknown
+  /// A Focus counts as on: macOS says so or the backup value does (`FocusIslands.effective`).
+  /// Only what blocks Claude shows then, as a small mark.
+  var focusOn: Bool { FocusIslands.effective(system: systemFocus, shortcuts: focusActive) }
+  /// The notch wings show only their small mark, never the 4 s of text first (off by default:
+  /// see `NotchWings`). One stored value behind both Settings switches.
+  var wingsMarkOnly: Bool {
+    didSet { defaults.set(wingsMarkOnly, forKey: NotchWings.defaultsKey) }
+  }
+  /// Resting the pointer on the notch opens the panel (on by default, the original). Off: the
+  /// notch still swells under the pointer to show it is clickable, but only a click opens it.
+  var openOnHover: Bool {
+    didSet { defaults.set(openOnHover, forKey: "openOnHover") }
+  }
+  /// Claude Code notifications ring the session's terminal bell (off by default, the
+  /// original: see `TerminalBell`).
+  var terminalBell: Bool {
+    didSet { defaults.set(terminalBell, forKey: TerminalBell.defaultsKey) }
+  }
+  /// The 80% / 95% notes also warn for a weekly main window (off by default, the original:
+  /// see `WeeklyUsageAlerts`). UsageModule reads the stored value when a status line arrives.
+  var weeklyUsageAlerts: Bool {
+    didSet { defaults.set(weeklyUsageAlerts, forKey: WeeklyUsageAlerts.defaultsKey) }
+  }
   /// Global shortcuts (missing role: the default).
   private(set) var shortcuts: [HotKeyRole: KeyCombo]
-  /// The one-time "⌃⌥Y izin ver · ⌃⌥N reddet" line under the peek was used / dismissed.
+  /// The one-time "⌃⌥Y allow · ⌃⌥N deny" line under the peek was used / dismissed.
   var shortcutHintSeen: Bool {
     didSet { defaults.set(shortcutHintSeen, forKey: "shortcutHintSeen") }
   }
@@ -155,6 +289,10 @@ final class NotchSettings {
   var timerMinutes: Int {
     didSet { defaults.set(timerMinutes, forKey: "module.timerMinutes") }
   }
+  /// Where the running timer shows while the panel is closed (default: beside the notch).
+  var timerStyle: TimerStyle {
+    didSet { defaults.set(timerStyle.rawValue, forKey: "module.timerStyle") }
+  }
   var batteryEnabled: Bool {
     didSet { defaults.set(batteryEnabled, forKey: "module.battery") }
   }
@@ -173,6 +311,14 @@ final class NotchSettings {
   /// Clipboard history + dropped files. Off by default (it reads the clipboard).
   var shelfEnabled: Bool {
     didSet { defaults.set(shelfEnabled, forKey: "module.shelf") }
+  }
+  /// Unpinned shelf items leave this long after they were added (default never, the original).
+  var shelfExpiry: ShelfExpiry {
+    didSet { defaults.set(shelfExpiry.rawValue, forKey: ShelfExpiry.defaultsKey) }
+  }
+  /// Turning the shelf off also deletes the pinned items (default off, the original: pins stay).
+  var shelfDeletePinsWhenOff: Bool {
+    didSet { defaults.set(shelfDeletePinsWhenOff, forKey: ShelfPinsOnOff.defaultsKey) }
   }
   /// With an app in front (its menu might reach the notch), the ears tuck behind the notch.
   var tuckEars: Bool {
@@ -206,6 +352,9 @@ final class NotchSettings {
     displayMode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "")
       ?? .automatic
     density = Density(rawValue: defaults.string(forKey: "density") ?? "") ?? .compact
+    statusColors = StatusColorScheme(stored: defaults.string(forKey: StatusColorScheme.defaultsKey))
+    let lang = LanguageChoice(stored: defaults.string(forKey: LanguageChoice.defaultsKey))
+    language = lang
     // v1 had a single switch: it seeds every category.
     let legacy = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
     var map: [SoundEvent: Bool] = [:]
@@ -226,6 +375,16 @@ final class NotchSettings {
     quietEnd = defaults.object(forKey: "quietEnd") as? Int ?? 8
     peekDuration = PeekDuration(rawValue: defaults.string(forKey: "peekDuration") ?? "")
       ?? .normal
+    answerQuestionsInNotch =
+      QuestionMode(stored: defaults.object(forKey: QuestionMode.defaultsKey)).answersInNotch
+    hideIslandsWhileTerminalInFront =
+      TerminalIslands.hides(stored: defaults.object(forKey: TerminalIslands.defaultsKey))
+    focusActive = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
+    wingsMarkOnly = NotchWings.markOnly(stored: defaults.object(forKey: NotchWings.defaultsKey))
+    openOnHover = defaults.object(forKey: "openOnHover") as? Bool ?? true
+    terminalBell = TerminalBell.enabled(stored: defaults.object(forKey: TerminalBell.defaultsKey))
+    weeklyUsageAlerts =
+      WeeklyUsageAlerts.enabled(stored: defaults.object(forKey: WeeklyUsageAlerts.defaultsKey))
     var keys: [HotKeyRole: KeyCombo] = [:]
     for role in HotKeyRole.allCases {
       keys[role] = KeyCombo(stored: defaults.array(forKey: role.defaultsKey))
@@ -239,6 +398,7 @@ final class NotchSettings {
     calendarOwnAlerts = defaults.object(forKey: "module.calendarOwnAlerts") as? Bool ?? true
     let minutes = defaults.integer(forKey: "module.timerMinutes")
     timerMinutes = (1...180).contains(minutes) ? minutes : 25
+    timerStyle = TimerStyle(rawValue: defaults.string(forKey: "module.timerStyle") ?? "") ?? .beside
     func stored(_ key: String, _ range: ClosedRange<Int>, _ fallback: Int) -> Int {
       let v = defaults.integer(forKey: key)
       return range.contains(v) ? v : fallback
@@ -251,12 +411,23 @@ final class NotchSettings {
     spotifyEnabled = defaults.bool(forKey: "module.spotify")
     tuckEars = defaults.object(forKey: "module.spotifyTuck") as? Bool ?? true
     shelfEnabled = defaults.bool(forKey: "module.shelf")
+    shelfExpiry = ShelfExpiry(stored: defaults.object(forKey: ShelfExpiry.defaultsKey))
+    shelfDeletePinsWhenOff =
+      ShelfPinsOnOff.deletesPins(stored: defaults.object(forKey: ShelfPinsOnOff.defaultsKey))
     weatherEnabled = defaults.bool(forKey: "module.weather")
     usageEnabled = defaults.object(forKey: "module.usage") as? Bool ?? true
   }
 
   /// A stored decision chord that is no longer allowed (see `KeyCombo.error(for:)`) falls back
   /// to the default.
+  /// A Shortcuts automation wrote the Focus value from outside (see `FocusIslands`): read it
+  /// again past this process's cached copy.
+  func reloadFocusActive() {
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+    let stored = FocusIslands.active(stored: defaults.object(forKey: FocusIslands.defaultsKey))
+    if stored != focusActive { focusActive = stored }
+  }
+
   func shortcut(_ role: HotKeyRole) -> KeyCombo {
     guard let combo = shortcuts[role], combo.error(for: role) == nil else {
       return KeyCombo.defaultCombo(role)
@@ -304,5 +475,5 @@ final class NotchSettings {
     defaults.set(on, forKey: "sound.\(e.rawValue)")
   }
 
-  var tokens: NotchTheme { .dark }
+  var tokens: NotchTheme { .scheme(statusColors) }
 }

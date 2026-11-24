@@ -12,3 +12,4 @@ __pycache__/
 Resources/AppIcon.iconset/
 build.noindex/
 dist/
+/.claude/skills/impeccable

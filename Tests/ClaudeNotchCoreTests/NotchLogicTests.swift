@@ -51,43 +51,15 @@ final class NotchLogicTests: XCTestCase {
     XCTAssertEqual(ToolSummary.target(toolName: "WebFetch", input: url), "docs.swift.org")
   }
 
-  func testPeekCoalescesFinishedWithinWindow() {
-    var p = PeekPlanner()
-    let t0 = Date(timeIntervalSince1970: 1000)
-    XCTAssertTrue(p.receive(attention: "done", sessionID: "a", at: t0))
-    XCTAssertTrue(p.receive(attention: "done", sessionID: "b", at: t0.addingTimeInterval(1)))
-    XCTAssertEqual(p.current?.sessionIDs, ["a", "b"])
-    XCTAssertEqual(p.current?.until, t0.addingTimeInterval(1 + PeekPlanner.finishedDuration))
-    // Outside the window: a fresh peek.
-    p.receive(attention: "error", sessionID: "c", at: t0.addingTimeInterval(2.0))
-    XCTAssertEqual(p.current?.sessionIDs, ["c"])
-    XCTAssertEqual(p.current?.errorIDs, ["c"])
-  }
-
-  func testPeekPriorityAndExpiry() {
-    var p = PeekPlanner()
-    let t0 = Date(timeIntervalSince1970: 1000)
-    p.receive(attention: "permission", sessionID: "a", cardID: "c1", at: t0)
-    XCTAssertFalse(p.receive(attention: "done", sessionID: "b", at: t0.addingTimeInterval(1)))
-    XCTAssertEqual(p.current?.kind, .permission)
-    XCTAssertFalse(p.expire(at: t0.addingTimeInterval(5)))
-    p.hold(at: t0.addingTimeInterval(5.5), seconds: 2)
-    XCTAssertFalse(p.expire(at: t0.addingTimeInterval(6.5)))
-    XCTAssertTrue(p.expire(at: t0.addingTimeInterval(7.6)))
-    XCTAssertNil(p.current)
-    // A higher priority replaces a lower one.
-    p.receive(attention: "done", sessionID: "b", at: t0.addingTimeInterval(10))
-    p.receive(attention: "question", sessionID: "c", at: t0.addingTimeInterval(10.5))
-    XCTAssertEqual(p.current?.kind, .attention)
-  }
-
   func testFinishedTitles() {
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 0), "api bitti")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 1), "api hata verdi")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 0), "2 oturum bitti")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 0), "api done")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["api"], errors: 1), "api failed")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 0), "2 sessions done")
     XCTAssertEqual(
-      PeekPlanner.finishedTitle(names: ["a", "b", "c"], errors: 1), "2 oturum bitti · 1 hata")
-    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 2), "2 oturumda hata")
+      // The test runner has no stringsdict, so plural forms show as the key ("1 errors");
+      // LocalizationTests checks the real English plurals ("2 sessions done · 1 error").
+      PeekPlanner.finishedTitle(names: ["a", "b", "c"], errors: 1), "2 sessions done · 1 errors")
+    XCTAssertEqual(PeekPlanner.finishedTitle(names: ["a", "b"], errors: 2), "Errors in 2 sessions")
   }
 
   func testHoverIntentNeedsDwellAndIgnoresSweeps() {

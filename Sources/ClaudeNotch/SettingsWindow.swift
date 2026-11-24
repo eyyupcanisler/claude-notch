@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeNotchCore
 import Carbon.HIToolbox
 import ServiceManagement
 import SwiftUI
@@ -6,26 +7,34 @@ import SwiftUI
 /// What the Settings window may do with the global shortcuts (the controller owns them).
 @MainActor
 struct ShortcutBridge {
-  /// Registers a recorded shortcut; returns a Turkish error (previous one kept) or nil.
+  /// Registers a recorded shortcut; returns a localized error (previous one kept) or nil.
   var set: @MainActor (HotKeyRole, KeyCombo) -> String?
   var reset: @MainActor () -> Void
+  /// Gives every role its default key with the preset's modifiers; returns, per role, why it
+  /// kept its previous shortcut.
+  var applyPreset: @MainActor (ShortcutPreset) -> [HotKeyRole: String]
   /// A recorder is listening: our hot keys step aside so the chord reaches it.
   var pause: @MainActor (Bool) -> Void
   var registered: @MainActor (HotKeyRole) -> Bool
 }
 
-/// Small Settings window (gear / right-click > Ayarlar…).
+/// Small Settings window (gear / right-click > Settings…).
 @MainActor
 final class SettingsWindowController {
   private var window: NSWindow?
   private let settings: NotchSettings
   private let shortcuts: ShortcutBridge
   private let modules: ModuleCenter
+  private let accessibility: AccessibilityAccess
 
-  init(settings: NotchSettings, shortcuts: ShortcutBridge, modules: ModuleCenter) {
+  init(
+    settings: NotchSettings, shortcuts: ShortcutBridge, modules: ModuleCenter,
+    accessibility: AccessibilityAccess
+  ) {
     self.settings = settings
     self.shortcuts = shortcuts
     self.modules = modules
+    self.accessibility = accessibility
   }
 
   func close() {
@@ -36,11 +45,14 @@ final class SettingsWindowController {
   var windowNumber: Int? { window?.windowNumber }
 
   func show() {
+    // The grant may have changed in System Settings since the window last showed.
+    accessibility.refresh()
     if window == nil {
-      let view = SettingsView(settings: settings, shortcuts: shortcuts, modules: modules)
+      let view = SettingsView(
+        settings: settings, shortcuts: shortcuts, modules: modules, accessibility: accessibility)
       let hosting = NSHostingController(rootView: view)
       let w = NSWindow(contentViewController: hosting)
-      w.title = "ClaudeNotch Ayarları"
+      w.title = loc("ClaudeNotch Settings")
       w.styleMask = [.titled, .closable]
       w.isReleasedWhenClosed = false
       w.setContentSize(NSSize(width: 480, height: 620))
@@ -58,7 +70,8 @@ struct SettingsView: View {
   @Bindable var settings: NotchSettings
   let shortcuts: ShortcutBridge
   let modules: ModuleCenter
-  /// Bumped after a change so the "kaydedilemedi" notes re-read the registration state.
+  let accessibility: AccessibilityAccess
+  /// Bumped after a change so the "could not be registered" notes re-read the registration state.
   @State private var revision = 0
   @State private var loginEnabled = SMAppService.mainApp.status == .enabled
   @State private var hooks = HookInstaller()
@@ -66,41 +79,88 @@ struct SettingsView: View {
   @State private var loginError: String?
   /// The one recorder listening (starting another stops it).
   @State private var recordingRole: HotKeyRole?
+  /// Roles the last preset could not change, with the reason (shown under each row).
+  @State private var presetErrors: [HotKeyRole: String] = [:]
 
   var body: some View {
     TabView {
       Form {
-        Section("Görünüm") {
-          Picker("Ekran", selection: $settings.displayMode) {
+        Section("Appearance") {
+          Picker("Screens", selection: $settings.displayMode) {
             ForEach(DisplayMode.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(displayHelp).font(.caption).foregroundStyle(.secondary)
-          Picker("Satırlar", selection: $settings.density) {
+          Picker("Rows", selection: $settings.density) {
             ForEach(Density.allCases, id: \.self) { Text($0.title).tag($0) }
           }
+          Picker("Status colors", selection: $settings.statusColors) {
+            ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Open the panel on hover", isOn: $settings.openOnHover)
+          Text("Off: the notch still swells under the pointer, but only a click opens the panel.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        Section("Claude Code bağlantısı") {
+        Section("Language") {
+          Picker("App language", selection: $settings.language) {
+            ForEach(LanguageChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text("System: Turkish when the Mac's first language is Turkish, English otherwise.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          if settings.languageNeedsRestart {
+            HStack {
+              Text("The new language applies after a restart.")
+                .font(.caption).foregroundStyle(.secondary)
+              Spacer()
+              if AppRelaunch.available {
+                Button("Restart to apply") { AppRelaunch.now() }
+              }
+            }
+          }
+        }
+        Section("Claude Code connection") {
           HStack {
             switch hooks.state {
             case .installed:
-              Label("Kancalar kurulu", systemImage: "checkmark.circle.fill")
+              Label("Hooks installed", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
             case .notInstalled:
-              Label("Kancalar kurulu değil", systemImage: "exclamationmark.triangle.fill")
+              Label("Hooks not installed", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             case .other:
-              Label("Kancalar başka bir kopyayı çağırıyor", systemImage: "info.circle")
+              Label("Hooks call another copy", systemImage: "info.circle")
                 .foregroundStyle(.secondary)
             }
             Spacer()
             if hooks.busy {
               ProgressView().controlSize(.small)
             } else if hooks.state == .installed {
-              Button("Kaldır") { hooks.uninstall() }
+              Button("Remove") { hooks.uninstall() }
             } else {
-              Button(hooks.state == .notInstalled ? "Kancaları kur" : "Bu uygulamaya bağla") {
+              Button(hooks.state == .notInstalled ? "Connect" : "Connect to this app") {
                 hooks.install()
               }
+            }
+          }
+          HStack {
+            if hooks.statusLineConnected {
+              Label("Status line connected (plan usage)", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            } else {
+              Label("Status line not connected (no plan usage)", systemImage: "info.circle")
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !hooks.busy, hooks.state == .installed, !hooks.statusLineConnected {
+              Button("Connect") { hooks.connectStatusLine() }
             }
           }
           Text(hooks.message ?? hookHelp)
@@ -108,142 +168,227 @@ struct SettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         }
-        Section("Başlangıç") {
-          Toggle("Oturum açılışında başlat", isOn: Binding(
+        Section("Startup") {
+          Toggle("Open at login", isOn: Binding(
             get: { loginEnabled }, set: { setLogin($0) }))
           if let loginError {
             Text(loginError).font(.caption).foregroundStyle(.orange)
           }
+          // Quitting in plain sight (also the power button in the panel's band, and ⌘Q here).
+          HStack {
+            Text("Open ClaudeNotch again from Spotlight to start it.")
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Quit ClaudeNotch") { NSApp.terminate(nil) }
+          }
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Genel", systemImage: "gearshape") }
+      .tabItem { Label("General", systemImage: "gearshape") }
       Form {
-        Section("Takvim") {
+        Section("Calendar") {
           // The source comes first: choosing Google never triggers the macOS Calendar prompt.
-          Picker("Kaynak", selection: $settings.calendarGoogle) {
-            Text("macOS Takvim").tag(false)
-            Text("Google Takvim").tag(true)
+          Picker("Source", selection: $settings.calendarGoogle) {
+            Text("macOS Calendar").tag(false)
+            Text("Google Calendar").tag(true)
           }
           .pickerStyle(.segmented)
           if settings.calendarGoogle {
             GoogleCalendarSettings(google: modules.google)
           } else {
-            Text("macOS’taki Takvim uygulamasının takvimleri (İnternet Hesapları’nda ekli Google "
-              + "hesapları dahil). Açınca macOS bir kez takvim izni ister.")
+            Text("Calendars from the macOS Calendar app (including Google accounts added in Internet Accounts). macOS asks for calendar access once when you turn this on.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Toggle("Toplantıları hatırlat ve panelde göster", isOn: $settings.calendarEnabled)
+          Toggle("Remind me of meetings and show them in the panel", isOn: $settings.calendarEnabled)
         if settings.calendarEnabled {
-        Toggle("Takvimdeki hatırlatma sürelerini kullan", isOn: $settings.calendarOwnAlerts)
+        Toggle("Use the calendar’s own alert times", isOn: $settings.calendarOwnAlerts)
         Text(settings.calendarOwnAlerts
-          ? "Her toplantı, takviminde ayarlı sürelerde hatırlatılır (ör. 1 sa ve 10 dk önce); "
-            + "hatırlatması olmayan toplantı hatırlatılmaz."
-          : "Her toplantı 10 dk önce hatırlatılır.")
+          ? "Each meeting is announced at the alert times set in its calendar (e.g. 1 h and 10 min before); a meeting without alerts is not announced."
+          : "Each meeting is announced 10 min before.")
           .font(.caption).foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
         }
           if settings.calendarEnabled {
             switch modules.calendarAccess {
             case .asking:
-              Text("macOS takvim izni istiyor…").font(.caption).foregroundStyle(.secondary)
+              Text("macOS is asking for calendar access…").font(.caption).foregroundStyle(.secondary)
             case .denied:
               HStack {
-                Text("Takvim izni verilmedi.").font(.caption).foregroundStyle(.orange)
+                Text("Calendar access was not granted.").font(.caption).foregroundStyle(.orange)
                 Spacer()
-                Button("Sistem Ayarları’nı aç") { modules.openCalendar() }
+                Button("Open System Settings") { modules.openCalendar() }
               }
             default:
               EmptyView()
             }
           }
         }
-        Section("Zamanlayıcı ve Pomodoro") {
+        Section("Timer and Pomodoro") {
           Toggle(
-            "Zamanlayıcı (panelin üst bandındaki ⏲ ile kurulur)", isOn: $settings.timerEnabled)
+            "Timer (set with ⏲ in the panel’s top band)", isOn: $settings.timerEnabled)
           if settings.timerEnabled {
-            Picker("Pomodoro düzeni", selection: Binding(
+            Picker("Show a running timer", selection: $settings.timerStyle) {
+              ForEach(TimerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            Text(settings.timerStyle == .beside
+              ? loc("A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free.")
+              : loc("The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs."))
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Picker("Pomodoro layout", selection: Binding(
               get: { PomoPreset.match(settings) }, set: { $0.apply(to: settings) })
             ) {
               ForEach(PomoPreset.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             Stepper(
-              "Odak: \(settings.pomoFocus) dk", value: $settings.pomoFocus, in: 5...180, step: 5)
-            Stepper("Kısa mola: \(settings.pomoShort) dk", value: $settings.pomoShort, in: 1...60)
+              "Focus: \(settings.pomoFocus) min", value: $settings.pomoFocus, in: 5...180, step: 5)
+            Stepper("Short break: \(settings.pomoShort) min", value: $settings.pomoShort, in: 1...60)
             Stepper(
-              "Uzun mola: \(settings.pomoLong) dk", value: $settings.pomoLong, in: 1...90, step: 5)
+              "Long break: \(settings.pomoLong) min", value: $settings.pomoLong, in: 1...90, step: 5)
             Stepper(
-              "Uzun moladan önce: \(settings.pomoRounds) odak", value: $settings.pomoRounds,
+              "Focus rounds before a long break: \(settings.pomoRounds)", value: $settings.pomoRounds,
               in: 1...8)
-            Text("Ultradiyen döngü: beyin ~90 dk odak, ~20 dk dinlenme ritminde çalışır; uzun "
-              + "işler için 90 / 20 düzenini seç.")
+            Text("Ultradian cycle: the brain works in a rhythm of ~90 min focus and ~20 min rest; choose 90 / 20 for long tasks.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
         }
-        Section("Diğer modüller") {
-          Toggle("Şarj: kablo takılınca ve pil %10’a inince", isOn: $settings.batteryEnabled)
-          Toggle("Spotify: çalarken çentiğin yanında kapak", isOn: $settings.spotifyEnabled)
+        Section("Other modules") {
+          Toggle("Charging: when plugged in and when the battery drops to 10%", isOn: $settings.batteryEnabled)
+          Toggle("Spotify: album art beside the notch while playing", isOn: $settings.spotifyEnabled)
           if settings.spotifyEnabled {
-            Toggle("Uygulamadayken kulakları çentiğe gizle", isOn: $settings.tuckEars)
-            Text("Masaüstünde, tam ekranda ve şarkı değişince 3 sn kapak tam görünür; diğer "
-              + "zamanlarda kapak çentiğin arkasına kayar, yalnız ucu görünür.")
+            Toggle("Tuck the art into the notch while you work in an app", isOn: $settings.tuckEars)
+            Text("On the desktop, in full screen and for 3 s after a track change the art shows in full; otherwise it slides behind the notch and only its edge shows.")
               .font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
           if settings.spotifyEnabled && modules.spotify.denied {
-            Text("Spotify’ı kontrol izni verilmedi: Sistem Ayarları > Gizlilik ve Güvenlik > "
-              + "Otomasyon > ClaudeNotch > Spotify.")
+            Text("Permission to control Spotify was not granted: System Settings > Privacy & Security > Automation > ClaudeNotch > Spotify.")
               .font(.caption).foregroundStyle(.orange)
               .fixedSize(horizontal: false, vertical: true)
           }
           Toggle(
-            "Hava durumu: panel bandında, yağmur yaklaşınca ada", isOn: $settings.weatherEnabled)
+            "Weather: in the panel band, a note beside the notch when rain is near", isOn: $settings.weatherEnabled)
           if settings.weatherEnabled {
             HStack {
               TextField(
-                "Şehir", text: $city, prompt: Text(modules.weather.place?.name ?? "ör. İstanbul"))
+                "City", text: $city, prompt: Text(modules.weather.place?.name ?? loc("e.g. Istanbul")))
                 .onSubmit { modules.weather.search(city) }
-              Button("Bul") { modules.weather.search(city) }
+              Button("Find") { modules.weather.search(city) }
                 .disabled(city.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text(weatherHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Toggle("Claude planı: limit yüzdesi panel bandında", isOn: $settings.usageEnabled)
+          Toggle("Claude plan: usage limit percentage in the panel band", isOn: $settings.usageEnabled)
+          if settings.usageEnabled {
+            Toggle("Warn when the weekly limit reaches 80%, then 95%", isOn: $settings.weeklyUsageAlerts)
+            Text("Newer Claude Code passes only the weekly limit to the status line; this makes it warn then. Off: only the 5-hour limit warns, so you get no warnings. When the 5-hour limit is passed too, it alone warns.")
+              .font(.caption).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
           if settings.usageEnabled && !modules.usage.hasData {
-            Text("Claude Code bu yüzdeleri yalnız durum satırına verir. Bir kez çalıştır: "
-              + "scripts/install-statusline.sh (durum satırı betiğine tek satır ekler, "
-              + "yedek alır).")
-              .font(.caption).foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-              .textSelection(.enabled)
+            HStack(alignment: .firstTextBaseline) {
+              Text(hooks.statusLineConnected
+                ? loc("Connected. The percentages show once Claude Code next updates its status line (send a message in any chat).")
+                : loc("Claude Code gives these percentages only to its status line. Connect lets the notch read them; the status line you have keeps working as it is."))
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+              Spacer()
+              if !hooks.statusLineConnected && !hooks.busy {
+                Button("Connect") { hooks.connectStatusLine() }
+              }
+            }
+            // What Connect said (a failure too), here as on the General tab.
+            if let message = hooks.message {
+              Text(message).font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            }
           }
-          Toggle("Raf: son 6 kopyalanan (metin, görüntü, dosya)", isOn: $settings.shelfEnabled)
+          Toggle("Shelf: last 6 copied items (text, images, files)", isOn: $settings.shelfEnabled)
           if settings.shelfEnabled {
-            Text("Pano saniyede bir kontrol edilir; şifre yöneticilerinin gizli kopyaları alınmaz. "
-              + "Raf geçici klasörde durur, kapatınca silinir.")
-              .font(.caption).foregroundStyle(.secondary)
+            Picker("Remove unpinned items after", selection: $settings.shelfExpiry) {
+              ForEach(ShelfExpiry.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            Toggle(
+              "Delete pinned items when the shelf is turned off",
+              isOn: $settings.shelfDeletePinsWhenOff)
+            Text(shelfHelp).font(.caption).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
-          Text("Modül adaları Claude bildirimlerinin önüne geçmez; bir Claude adası açıksa "
-            + "sırasını bekler.")
+          Text("Module notes never get ahead of Claude notifications; while a Claude wing is showing they wait their turn.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Modüller", systemImage: "square.grid.2x2") }
+      .tabItem { Label("Modules", systemImage: "square.grid.2x2") }
       Form {
-        Section("Bildirim") {
-          Picker("İzin isteği görünür kalsın", selection: $settings.peekDuration) {
+        Section("Notification") {
+          Picker("Keep the panel open when a shortcut opens it", selection: $settings.peekDuration) {
             ForEach(PeekDuration.allCases, id: \.self) { Text($0.title).tag($0) }
           }
           Text(peekHelp).font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+          Toggle("Answer Claude's questions in the notch", isOn: $settings.answerQuestionsInNotch)
+          Text(settings.answerQuestionsInNotch
+            ? "Claude waits while a question is held: click the notch to open the panel and pick its options there (or with ⌃⌥1…4) and send, or hand it back to the terminal."
+            : "The terminal asks at once; the notch only tells you that Claude is asking and takes you to that tab. While that terminal is in front, no wing shows, and one already showing goes away when you switch to it; when you leave it unanswered, its small mark comes back.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle(
+            "Hide wings while their terminal is in front",
+            isOn: $settings.hideIslandsWhileTerminalInFront)
+          Text("While the session's terminal app (Ghostty, Terminal, iTerm2…; not an editor) is the front app, its permission requests, plan approvals and waiting notices show no wing beside the notch, whichever of its tabs you are in: answer them in the terminal. A wing already showing goes away when you switch to that terminal; if you leave it unanswered, its small mark comes back. Requests still wait in the panel.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Treat Focus as on", isOn: $settings.focusActive)
+          Text("A Focus such as Do Not Disturb is detected automatically. While one is on, only what blocks Claude shows beside the notch and makes a sound: permission requests, questions, plan approvals and waits for input, as a small mark until you handle them. Finished runs, errors and module notes show only in the status line; none of them makes a sound. This switch is a backup that the Shortcuts automations in the README can turn on and off.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          if settings.systemFocus == .unknown && !NotchSettings.isDemo {
+            Label(
+              "Can't read the macOS Focus state; use the Shortcuts automations in the README.",
+              systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.caption).foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+          }
+          Toggle("Show only a small mark beside the notch", isOn: $settings.wingsMarkOnly)
+          Text("Off: for 4 s the notch grows sideways (its “wings”) with a short text; then what blocks Claude (a permission request, question, plan or wait for input) shrinks to a small colored mark that stays until you handle it, and the rest goes. On: only the mark. Nothing ever drops down over the page.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Picker("Status colors", selection: $settings.statusColors) {
+            ForEach(StatusColorScheme.allCases, id: \.self) { Text($0.title).tag($0) }
+          }
+          Text("Colorblind-friendly: colors that stay apart for red-green color blindness, plus shape signs. In both, color means something for you: needs you, an error, or a finished chat to look at (blue); working is grey.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Toggle("Ring the terminal bell when Claude Code notifies", isOn: $settings.terminalBell)
+          Text("Claude Code's notifications (permission, question, waiting for input) ring that session's terminal bell: Ghostty shows 🔔 on the tab until you look at it. In silent mode only those that need an answer ring.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        Section("Bildirim sesleri") {
+        Section("Instant updates (Accessibility)") {
+          HStack {
+            if accessibility.trusted {
+              Label("Accessibility permission granted", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            } else {
+              Label("Accessibility permission not granted", systemImage: "circle.dashed")
+                .foregroundStyle(.secondary)
+              Spacer()
+              Button("Allow Accessibility…") { accessibility.request() }
+            }
+          }
+          Text("Optional. Without it, while Ghostty is in front the notch checks its focused tab every 0.5 s, so a finished or waiting chat still clears quickly when you switch to it. With it, the notch hears tab and split switches in Ghostty as they happen: updates are instant and the 0.5 s check stops. It is used for nothing else.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Section("Notification sounds") {
           ForEach(SoundEvent.allCases, id: \.self) { e in
             HStack {
               Toggle(e.title, isOn: Binding(
@@ -263,59 +408,68 @@ struct SettingsView: View {
               .disabled(!settings.soundEnabled(e))
             }
           }
-          Toggle("Sessiz mod: yalnız izin istekleri ve sorular", isOn: $settings.silentMode)
-          Text("Panel bandındaki 🔔 ile de açılıp kapanır. “Bitti” ve modül adaları ile sesleri "
-            + "susar; panelde her şey yine görünür.")
+          Toggle("Silent mode: only permission requests and questions", isOn: $settings.silentMode)
+          Text("Also toggled with 🔔 in the panel band. “Done” and module wings and their sounds stay quiet; everything still shows in the panel.")
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-          Toggle("Sessiz saatler", isOn: $settings.quietHours)
+          Toggle("Quiet hours", isOn: $settings.quietHours)
           if settings.quietHours {
             HStack {
-              Picker("Başlangıç", selection: $settings.quietStart) {
+              Picker("From", selection: $settings.quietStart) {
                 ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
               }
-              Picker("Bitiş", selection: $settings.quietEnd) {
+              Picker("To", selection: $settings.quietEnd) {
                 ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
               }
             }
-            Text("Bu aralıkta hiçbir ClaudeNotch sesi çalmaz; adalar yine düşer.")
+            Text("No ClaudeNotch sound plays in this window; wings still show.")
               .font(.caption).foregroundStyle(.secondary)
           }
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Bildirimler", systemImage: "bell") }
+      .tabItem { Label("Notifications", systemImage: "bell") }
       Form {
-        Section("Kısayollar") {
+        Section("Shortcuts") {
           ForEach(HotKeyRole.configurable, id: \.self) { role in
             ShortcutRecorder(
               role: role, active: $recordingRole, combo: settings.shortcut(role),
               registered: revision >= 0 && shortcuts.registered(role),
+              presetError: presetErrors[role],
               record: { combo in
                 defer { revision += 1 }
+                presetErrors[role] = nil
                 return shortcuts.set(role, combo)
               },
               pause: shortcuts.pause)
           }
+          Text(shortcutHelp).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
           HStack {
-            Text(shortcutHelp).font(.caption).foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button("Varsayılana dön") {
-              shortcuts.reset()
+            Button("Use Caps Lock (Hyper key)") {
+              recordingRole = nil
+              presetErrors = shortcuts.applyPreset(.hyper)
               revision += 1
             }
-            .disabled(HotKeyRole.configurable.allSatisfy {
-              settings.shortcut($0) == KeyCombo.defaultCombo($0)
-            })
+            .disabled(usesPreset(.hyper))
+            Spacer(minLength: 8)
+            Button("Reset to defaults") {
+              recordingRole = nil
+              shortcuts.reset()
+              presetErrors = [:]
+              revision += 1
+            }
+            .disabled(usesPreset(.standard))
           }
-          Text("Panel açıkken: ⌘⏎ İzin ver · ⌘⇧⏎ Her zaman · ⌘⌫ Reddet · ←/→ istekler · "
-            + "↑/↓ oturumlar · ⏎ terminale git · Esc kapat")
+          Text("Needs a tool that turns Caps Lock into ⌃⌥⇧⌘: Raycast (Settings > Advanced > Hyper Key), Hyperkey or Karabiner-Elements.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Text("While the panel is open: ⌘⏎ Allow · ⌘⇧⏎ Always · ⌘⌫ Deny · ←/→ requests · ↑/↓ sessions · ⏎ go to terminal · Esc close")
             .font(.caption).foregroundStyle(.secondary)
         }
       }
       .formStyle(.grouped)
-      .tabItem { Label("Kısayollar", systemImage: "keyboard") }
+      .tabItem { Label("Shortcuts", systemImage: "keyboard") }
     }
     .frame(width: 480, height: 620)
   }
@@ -323,47 +477,60 @@ struct SettingsView: View {
   private var hookHelp: String {
     switch hooks.state {
     case .installed:
-      return "Claude Code olayları ve izin istekleri bu uygulamaya geliyor."
+      return loc("Claude Code events and permission requests come to this app.")
     case .notInstalled:
-      return "Claude Code’un durumu ve izin istekleri çentiğe gelsin diye ~/.claude/settings.json "
-        + "dosyasına kancalar eklenir (önce yedek alınır, diğer ayarlarına dokunulmaz)."
+      return loc("Connect adds hooks to ~/.claude/settings.json, so Claude Code’s status and permission requests come to the notch, and connects the status line for plan usage (after a backup; your other settings, and the status line you have, stay as they are).")
     case .other(let path):
-      return "Şu an \(path) kullanılıyor (kaynak koddan kurulum). Çalışıyorsa böyle kalabilir."
+      return loc("\(path) is in use right now (an install from source). If it works, it can stay that way.")
     }
   }
 
   private var weatherHelp: String {
     switch modules.weather.searchNote {
-    case .some(""): return "Aranıyor…"
+    case .some(""): return loc("Searching…")
     case .some(let s): return s
     case .none:
       return modules.weather.place == nil
-        ? "Konum izni istenmez: şehrini yaz. Veri Open-Meteo’dan, 30 dk’da bir."
-        : "Veri Open-Meteo’dan, 30 dk’da bir."
+        ? loc("No location permission needed: type your city. Data from Open-Meteo, every 30 min.")
+        : loc("Data from Open-Meteo, every 30 min.")
+    }
+  }
+
+  private var shelfHelp: String {
+    ShelfExpiry.settingsHelp(
+      expiry: settings.shelfExpiry, deletePinsWhenOff: settings.shelfDeletePinsWhenOff)
+  }
+
+  /// Every shortcut is the preset's (default key + the preset's modifiers).
+  private func usesPreset(_ preset: ShortcutPreset) -> Bool {
+    HotKeyRole.configurable.allSatisfy {
+      settings.shortcut($0) == KeyCombo.presetCombo($0, preset)
     }
   }
 
   private var shortcutHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return "\(allow) ve \(deny) her uygulamadan çalışır, odağı almaz; yalnızca ekranda "
-      + "gösterilen isteğe uygulanır. Riskli komutta \(allow) basılı tutulur. "
-      + "“Her zaman” için kısayol yoktur."
+    return loc("\(allow) and \(deny) work from any app without taking focus; they apply only to the request on screen. For a risky command, hold \(allow). “Always” has no shortcut.")
   }
 
   private var peekHelp: String {
     let allow = settings.shortcut(.allow).display
     let deny = settings.shortcut(.deny).display
-    return "Süre dolunca istek çentiğin altındaki amber çizgide bekler (hook zaman aşımı "
-      + "~10 dk). Üzerine gelmek açık tutar. Kapanmışken \(allow) / \(deny) önce isteği "
-      + "geri getirir; karar ikinci basışta verilir."
+    // Names the line's color, so it follows the chosen palette (classic: the original text).
+    switch settings.statusColors {
+    case .classic:
+      return loc("A panel that \(allow) / \(deny) opened closes after this time. The request keeps waiting (hook timeout ~10 min): its mark stays beside the notch and its line under the notch stays amber. Hovering keeps the panel open. While only the mark shows, \(allow) / \(deny) first bring the request back; the second press decides.")
+    case .colorblind:
+      return loc("A panel that \(allow) / \(deny) opened closes after this time. The request keeps waiting (hook timeout ~10 min): its mark stays beside the notch and its line under the notch stays yellow. Hovering keeps the panel open. While only the mark shows, \(allow) / \(deny) first bring the request back; the second press decides.")
+    }
   }
 
   private var displayHelp: String {
     switch settings.displayMode {
-    case .automatic: return "Çentikli ekran her zaman; çalıştığınız ekran başkaysa orada bir hap."
-    case .notchOnly: return "Yalnızca çentikli ekran (kapak kapalıyken ana ekran)."
-    case .all: return "Çentikli ekran ve diğer tüm ekranlarda birer hap."
+    case .automatic: return loc("The notched screen always; a pill on the screen you work on when that is another one.")
+    case .notchOnly: return loc("Only the notched screen (the main screen while the lid is closed).")
+    case .all: return loc("The notched screen, plus a pill on every other screen.")
     }
   }
 
@@ -375,8 +542,7 @@ struct SettingsView: View {
       UserDefaults.standard.set(on, forKey: "loginWanted")
       loginError = nil
     } catch {
-      loginError = "Değiştirilemedi: \(error.localizedDescription). "
-        + "Uygulamanın /Applications altında olması gerekebilir."
+      loginError = loc("Could not change it: \(error.localizedDescription). The app may need to be in /Applications.")
     }
     loginEnabled = service.status == .enabled
   }
@@ -389,6 +555,8 @@ struct ShortcutRecorder: View {
   @Binding var active: HotKeyRole?
   let combo: KeyCombo
   let registered: Bool
+  /// Why the last preset left this role unchanged (nil: it applied, or no preset was used).
+  var presetError: String?
   let record: (KeyCombo) -> String?
   let pause: (Bool) -> Void
   @State private var recording = false
@@ -399,17 +567,17 @@ struct ShortcutRecorder: View {
     VStack(alignment: .leading, spacing: 4) {
       LabeledContent(role.title) {
         Button(action: toggle) {
-          Text(recording ? "Kısayola basın…" : combo.display)
+          Text(recording ? loc("Press a shortcut…") : combo.display)
             .font(.system(.body, design: .rounded).weight(.semibold))
             .foregroundStyle(recording ? Color.accentColor : Color.primary)
             .frame(minWidth: 110)
         }
-        .help(recording ? "Yeni kısayola basın; Esc vazgeçer" : "Değiştirmek için tıklayın")
+        .help(recording ? "Press the new shortcut; Esc cancels" : "Click to change")
       }
-      if let error {
+      if let error = error ?? presetError {
         Text(error).font(.caption).foregroundStyle(.orange)
       } else if !registered && !recording {
-        Text("Kısayol kaydedilemedi; başka bir kısayol seçin.")
+        Text("The shortcut could not be registered; choose another one.")
           .font(.caption).foregroundStyle(.orange)
       }
     }
@@ -436,7 +604,7 @@ struct ShortcutRecorder: View {
           return
         }
         guard let combo = KeyCombo(event: event) else {
-          error = "En az bir değiştirici tuş kullanın: ⌃, ⌥ ya da ⌘."
+          error = loc("Use at least one modifier key: ⌃, ⌥ or ⌘.")
           return
         }
         error = record(combo)
@@ -456,7 +624,7 @@ struct ShortcutRecorder: View {
   }
 }
 
-/// Ready-made Pomodoro layouts; editing a value by hand shows "Özel".
+/// Ready-made Pomodoro layouts; editing a value by hand shows "Custom".
 enum PomoPreset: String, CaseIterable, Hashable {
   case classic
   case deep
@@ -465,10 +633,10 @@ enum PomoPreset: String, CaseIterable, Hashable {
 
   var title: String {
     switch self {
-    case .classic: return "Klasik · 25 / 5, uzun 15"
-    case .deep: return "Derin · 50 / 10, uzun 30"
-    case .ultradian: return "Ultradiyen · 90 / 20"
-    case .custom: return "Özel"
+    case .classic: return loc("Classic · 25 / 5, long 15")
+    case .deep: return loc("Deep · 50 / 10, long 30")
+    case .ultradian: return loc("Ultradian · 90 / 20")
+    case .custom: return loc("Custom")
     }
   }
 
@@ -505,17 +673,17 @@ struct GoogleCalendarSettings: View {
       HStack(spacing: 8) {
         switch google.status {
         case .noClient:
-          Button("İstemci dosyasını seç…") { google.chooseClientFile() }
+          Button("Choose client file…") { google.chooseClientFile() }
         case .signedOut, .failed:
-          Button("Google ile bağlan") { google.signIn() }
-          Button("İstemci dosyasını değiştir…") { google.chooseClientFile() }
+          Button("Connect with Google") { google.signIn() }
+          Button("Change client file…") { google.chooseClientFile() }
         case .signingIn:
           ProgressView().controlSize(.small)
-          Text("Tarayıcıda Google girişini tamamla…").font(.caption)
-          Button("Vazgeç") { google.disconnect() }
+          Text("Finish the Google sign-in in your browser…").font(.caption)
+          Button("Cancel") { google.disconnect() }
         case .connected:
-          Button("Şimdi eşitle") { Task { await google.fetch() } }
-          Button("Bağlantıyı kes") { google.disconnect() }
+          Button("Sync now") { Task { await google.fetch() } }
+          Button("Disconnect") { google.disconnect() }
         }
       }
       Text(statusLine).font(.caption).foregroundStyle(statusColor)
@@ -527,14 +695,13 @@ struct GoogleCalendarSettings: View {
   private var statusLine: String {
     switch google.status {
     case .noClient:
-      return "Google Cloud’da bir “Masaüstü uygulaması” OAuth istemcisi oluştur ve indirdiğin "
-        + "JSON dosyasını seç (adımlar README’de). Yalnız senin okuyabildiğin bir dosyada saklanır."
-    case .signedOut: return "İstemci hazır. Bağlan’a basınca tarayıcıda Google girişi açılır."
-    case .signingIn: return "Giriş tarayıcıda; bitince bu ekran kendiliğinden güncellenir."
+      return loc("Create a “Desktop app” OAuth client in Google Cloud and choose the JSON file you downloaded (steps in the README). It is kept in a file only you can read.")
+    case .signedOut: return loc("The client is ready. Press Connect to open the Google sign-in in your browser.")
+    case .signingIn: return loc("Sign-in is in your browser; this screen updates by itself when it is done.")
     case .connected:
-      let who = google.account.map { "\($0) bağlı" } ?? "Bağlı"
-      let when = google.lastSync.map { " · son eşitleme \(ModuleCenter.clock($0))" } ?? ""
-      return who + when + " · yalnız okuma"
+      let who = google.account.map { loc("\($0) connected") } ?? loc("Connected")
+      let when = google.lastSync.map { loc(" · last sync \(ModuleCenter.clock($0))") } ?? ""
+      return who + when + loc(" · read-only")
     case .failed(let m): return m
     }
   }

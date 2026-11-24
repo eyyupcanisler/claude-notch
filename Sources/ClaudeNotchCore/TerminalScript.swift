@@ -66,12 +66,6 @@ public enum TerminalScript {
     """)
   }
 
-  /// Ghostty: tty of the focused terminal of the front window ("" when there is no window).
-  public static let ghosttyFocusedTTY = wrap("Ghostty", """
-      if (count of windows) is 0 then return ""
-      return tty of (focused terminal of (selected tab of front window))
-  """)
-
   /// Terminal.app: select the tab whose tty matches and bring its window to the front.
   public static func terminalAppFocus(tty: String) -> String? {
     guard let tty = HookContext.validTTY(tty) else { return nil }
@@ -128,6 +122,17 @@ public enum TerminalKind: String, Sendable {
     }
   }
 
+  /// The same from the app's bundle id (a chat whose TERM_PROGRAM is missing or another, see
+  /// `TerminalHost`).
+  public init(bundleID: String?) {
+    switch bundleID {
+    case TerminalHost.ghostty: self = .ghostty
+    case TerminalHost.appleTerminal: self = .appleTerminal
+    case TerminalHost.iTerm: self = .iTerm
+    default: self = .other
+    }
+  }
+
   /// Display name for hints.
   public var appName: String {
     switch self {
@@ -155,8 +160,12 @@ public enum FocusOutcome: Sendable, Equatable {
   case focusedTerminal
   /// Matched by working directory (no usable tty).
   case focusedByDirectory
-  /// Only the terminal app was brought forward.
+  /// Only the terminal app was brought forward (a terminal without a tab strategy).
   case activatedApp
+  /// The terminal app came forward, but the chat's own tab could not be selected: the tab
+  /// script found no such terminal, or failed with Apple Event error `code`. The user is not at
+  /// the chat, so it stays unseen and the panel says so (it used to look like a dead click).
+  case tabMissed(app: String, code: Int?)
   /// TERM_PROGRAM is unknown: nothing to bring forward.
   case unknownTerminal
   /// macOS denied the Apple Event (-1743): the user must allow it in System Settings.
@@ -170,7 +179,7 @@ public enum FocusOutcome: Sendable, Equatable {
   public var reachedSession: Bool {
     switch self {
     case .focusedTerminal, .focusedByDirectory, .activatedApp: return true
-    case .unknownTerminal, .notAuthorized, .failed: return false
+    case .unknownTerminal, .notAuthorized, .tabMissed, .failed: return false
     }
   }
 
@@ -181,19 +190,35 @@ public enum FocusOutcome: Sendable, Equatable {
     case .activatedApp: return "app"
     case .unknownTerminal: return "unknown"
     case .notAuthorized: return "not_authorized"
+    case .tabMissed: return "tab_missed"
     case .failed: return "failed"
     }
   }
 
   /// Text to show in the notch, if any.
-  public var hint: String? {
+  public var hint: String? { hint(chat: nil) }
+
+  /// Text to show in the notch, naming the chat (its title, see `SessionStore.chatLabel`) when
+  /// the jump did not reach it.
+  public func hint(chat: String?) -> String? {
     switch self {
+    case .tabMissed(let app, let code):
+      // The code is passed as text: no thousands separator in "-1712".
+      let error = code.map { loc(" (error \(String($0)))") } ?? ""
+      guard let chat else {
+        return loc("Couldn’t switch to the chat’s tab in \(app)\(error). Its tab may be closed.")
+      }
+      return loc("Couldn’t switch to “\(chat)” in \(app)\(error). Its tab may be closed.")
+    case .unknownTerminal:
+      guard let chat else { return loc("Can’t tell which terminal this chat runs in") }
+      return loc("Can’t tell which terminal “\(chat)” runs in")
     case .notAuthorized(let app):
-      // Accusative suffix: "Terminal'i", "Ghostty'yi", "iTerm2'yi".
-      let object = app == "Terminal" ? "Terminal'i" : "\(app)'yi"
-      return "\(object) kontrol izni gerekli — Sistem Ayarları > Gizlilik > Otomasyon"
+      // Two keys: Turkish puts an accusative suffix on the name ("Terminal'i", "Ghostty'yi").
+      return app == "Terminal"
+        ? loc("Terminal needs control permission — System Settings > Privacy & Security > Automation")
+        : loc("\(app) needs control permission — System Settings > Privacy & Security > Automation")
     case .failed:
-      return "Terminal öne getirilemedi"
+      return loc("Could not bring the terminal to the front")
     default:
       return nil
     }

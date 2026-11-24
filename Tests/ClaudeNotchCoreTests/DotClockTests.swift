@@ -17,14 +17,14 @@ final class DotClockTests: XCTestCase {
   }
 
   func testCoarse() {
-    XCTAssertEqual(DotClock.coarse(20), .init(digits: "1", unit: "dk"))
-    XCTAssertEqual(DotClock.coarse(754), .init(digits: "12", unit: "dk"))
-    XCTAssertEqual(DotClock.coarse(7200), .init(digits: "2", unit: "sa"))
+    XCTAssertEqual(DotClock.coarse(20), .init(digits: "1", unit: "min"))
+    XCTAssertEqual(DotClock.coarse(754), .init(digits: "12", unit: "min"))
+    XCTAssertEqual(DotClock.coarse(7200), .init(digits: "2", unit: "h"))
   }
 
   func testHoursAndDays() {
-    XCTAssertEqual(DotClock.reading(3600), .init(digits: "1", unit: "sa"))
-    XCTAssertEqual(DotClock.reading(86_399), .init(digits: "23", unit: "sa"))
-    XCTAssertEqual(DotClock.reading(86_400), .init(digits: "1", unit: "gün"))
+    XCTAssertEqual(DotClock.reading(3600), .init(digits: "1", unit: "h"))
+    XCTAssertEqual(DotClock.reading(86_399), .init(digits: "23", unit: "h"))
+    XCTAssertEqual(DotClock.reading(86_400), .init(digits: "1", unit: "d"))
   }
 }

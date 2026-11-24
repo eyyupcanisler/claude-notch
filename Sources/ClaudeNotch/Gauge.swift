@@ -1,9 +1,9 @@
 import ClaudeNotchCore
 import SwiftUI
 
-// The "Gösterge" look: dot-matrix numerals, tick strips and a soft corner glow on black.
+// The "Gauge" look: dot-matrix numerals, tick strips and a soft corner glow on black.
 
-/// 5×7 dot-matrix numerals (digits and ':'). Unlit dots are drawn faintly, like an LED panel.
+/// 5×7 dot-matrix numerals (digits, ':' and '/'). Unlit dots are drawn faintly, like an LED panel.
 struct DotMatrixText: View {
   let text: String
   let color: Color
@@ -23,12 +23,20 @@ struct DotMatrixText: View {
     "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
     "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
     ":": ["0", "0", "1", "0", "1", "0", "0"],
+    "/": ["001", "001", "010", "010", "010", "100", "100"],
     "-": ["000", "000", "000", "111", "000", "000", "000"],
     "°": ["010", "101", "010", "000", "000", "000", "000"],
     "%": ["11001", "11010", "00010", "00100", "01000", "01011", "10011"],
   ]
 
-  private var columns: [[Bool]] {
+  /// Width `text` takes at `pitch` (the same columns the view draws).
+  static func width(_ text: String, pitch: CGFloat) -> CGFloat {
+    CGFloat(columns(of: text).count) * pitch
+  }
+
+  private var columns: [[Bool]] { Self.columns(of: text) }
+
+  private static func columns(of text: String) -> [[Bool]] {
     var cols: [[Bool]] = []
     for (i, ch) in text.enumerated() {
       guard let g = Self.glyphs[ch] else { continue }
@@ -40,21 +48,40 @@ struct DotMatrixText: View {
     return cols
   }
 
+  // Two shapes (unlit and lit dots), not a Canvas: the first Canvas on screen starts
+  // RenderBox's Metal device, about 2 MB of GPU buffers and surfaces kept for the life of the
+  // app. Shapes are drawn by Core Animation. The dots never overlap, so the fill order does not
+  // matter. A shape's fill colour can animate; the Canvas never did, so neither do these.
   var body: some View {
     let cols = columns
-    Canvas { ctx, _ in
-      let d = pitch * 0.74
-      let off = (pitch - d) / 2
-      for (x, col) in cols.enumerated() {
-        for (y, on) in col.enumerated() {
-          let r = CGRect(
-            x: CGFloat(x) * pitch + off, y: CGFloat(y) * pitch + off, width: d, height: d)
-          ctx.fill(Path(ellipseIn: r), with: .color(on ? color : color.opacity(0.08)))
-        }
-      }
+    ZStack(alignment: .topLeading) {
+      DotGrid(columns: cols, pitch: pitch, lit: false).fill(color.opacity(0.08))
+      DotGrid(columns: cols, pitch: pitch, lit: true).fill(color)
     }
+    .animation(nil, value: color)
     .frame(width: CGFloat(cols.count) * pitch, height: CGFloat(Self.rows) * pitch)
     .accessibilityHidden(true)
+  }
+}
+
+/// The lit or the unlit dots of a `DotMatrixText`, as one path.
+private struct DotGrid: Shape {
+  let columns: [[Bool]]
+  let pitch: CGFloat
+  let lit: Bool
+
+  func path(in _: CGRect) -> Path {
+    var p = Path()
+    let d = pitch * 0.74
+    let off = (pitch - d) / 2
+    for (x, col) in columns.enumerated() {
+      for (y, on) in col.enumerated() where on == lit {
+        p.addEllipse(
+          in: CGRect(
+            x: CGFloat(x) * pitch + off, y: CGFloat(y) * pitch + off, width: d, height: d))
+      }
+    }
+    return p
   }
 }
 
@@ -81,7 +108,7 @@ struct DotElapsed: View {
         reading(DotClock.reading(t), label: RelativeTime.short(t))
       }
     case .fixed(let d):
-      reading(DotClock.reading(d), label: "Süre \(DotClock.reading(d).digits)")
+      reading(DotClock.reading(d), label: loc("Duration \(DotClock.reading(d).digits)"))
     case .coarse(let since):
       TimelineView(.periodic(from: .now, by: 30)) { context in
         let t = context.date.timeIntervalSince(since)
@@ -116,9 +143,9 @@ struct RhythmStrip: View {
   var frozenAt: Date?
   @Environment(\.notchTheme) private var theme
 
-  static let barWidth: CGFloat = 2
-  static let gap: CGFloat = 3
-  static let height: CGFloat = 14
+  nonisolated static let barWidth: CGFloat = 2
+  nonisolated static let gap: CGFloat = 3
+  nonisolated static let height: CGFloat = 14
 
   private var width: CGFloat {
     CGFloat(ActivityRhythm.slots) * (Self.barWidth + Self.gap) - Self.gap
@@ -137,32 +164,27 @@ struct RhythmStrip: View {
   }
 
   private var label: String {
-    guard let rhythm, rhythm.total > 0 else { return "İşlem yok" }
+    guard let rhythm, rhythm.total > 0 else { return loc("No actions") }
     let agents = rhythm.agentIDs.count
-    return "\(rhythm.total) işlem" + (agents > 0 ? " · \(agents) alt ajan" : "")
+    return loc("\(rhythm.total) actions") + (agents > 0 ? loc(" · \(agents) subagents") : "")
   }
 
   private func strip(at now: Date) -> some View {
     let reading = rhythm?.reading(at: now)
+    let counts = reading?.counts ?? []
+    let used = reading?.used ?? 0
+    // One shape per fill, not a Canvas (see DotMatrixText).
+    func bars(_ fill: RhythmBars.Fill) -> RhythmBars {
+      RhythmBars(counts: counts, used: used, live: live, fill: fill)
+    }
     return HStack(alignment: .bottom, spacing: 8) {
-      Canvas { ctx, size in
-        let counts = reading?.counts ?? []
-        let used = reading?.used ?? 0
-        let peak = max(1, counts.max() ?? 1)
-        for k in 0..<ActivityRhythm.slots {
-          let x = CGFloat(k) * (Self.barWidth + Self.gap)
-          let n = k < counts.count ? counts[k] : 0
-          let h = n > 0 ? max(3, (CGFloat(n) / CGFloat(peak) * size.height).rounded()) : 2
-          let rect = CGRect(x: x, y: size.height - h, width: Self.barWidth, height: h)
-          let path = Path(roundedRect: rect, cornerRadius: 1)
-          if n == 0 {
-            ctx.fill(path, with: .color(.white.opacity(k < used ? 0.16 : 0.07)))
-          } else {
-            let newest = live && k >= used - 2
-            ctx.fill(path, with: .color(color.opacity(newest || !live ? 1 : 0.75)))
-          }
-        }
+      ZStack {
+        bars(.emptyUsed).fill(Color.white.opacity(0.16))
+        bars(.emptyAhead).fill(Color.white.opacity(0.07))
+        bars(.full).fill(color)
+        bars(.faded).fill(color.opacity(0.75))
       }
+      .animation(nil, value: color)
       .frame(width: width, height: Self.height)
       if let rhythm, rhythm.total > 0 {
         Text(label)
@@ -174,6 +196,33 @@ struct RhythmStrip: View {
           .accessibilityHidden(true)
       }
     }
+  }
+}
+
+/// The bars of a `RhythmStrip` that share one fill. Empty slots are 2 pt stubs, brighter where
+/// the turn has already been; while live, all but the newest two filled slots are faded.
+private struct RhythmBars: Shape {
+  enum Fill { case emptyUsed, emptyAhead, full, faded }
+
+  let counts: [Int]
+  let used: Int
+  let live: Bool
+  let fill: Fill
+
+  func path(in rect: CGRect) -> Path {
+    var p = Path()
+    let peak = max(1, counts.max() ?? 1)
+    for k in 0..<ActivityRhythm.slots {
+      let n = k < counts.count ? counts[k] : 0
+      let f: Fill =
+        n == 0 ? (k < used ? .emptyUsed : .emptyAhead) : (live && k < used - 2 ? .faded : .full)
+      guard f == fill else { continue }
+      let x = CGFloat(k) * (RhythmStrip.barWidth + RhythmStrip.gap)
+      let h = n > 0 ? max(3, (CGFloat(n) / CGFloat(peak) * rect.height).rounded()) : 2
+      let bar = CGRect(x: x, y: rect.height - h, width: RhythmStrip.barWidth, height: h)
+      p.addPath(Path(roundedRect: bar, cornerRadius: 1))
+    }
+    return p
   }
 }
 
@@ -194,7 +243,7 @@ struct CornerGlow: View {
   }
 }
 
-/// Semicircle of ticks that fill left to right while a risky "İzin ver" is held.
+/// Semicircle of ticks that fill left to right while a risky "Allow" is held.
 struct TickArc: Shape {
   var progress: Double
   var count = 9
