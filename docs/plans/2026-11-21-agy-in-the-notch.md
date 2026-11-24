@@ -1,6 +1,7 @@
 # agy (Antigravity CLI) in the notch
 
-Date: 2026-11-21. Status: decided in a grill with the user, not built yet.
+Date: 2026-11-21. Status: steps 1-4 built and tested (the agy commits, up to the "guarded entry" fix);
+step 5 (install) waits for the user's go; step 6 (the Allow/Deny card) is deferred (decision 18).
 
 The notch shows Antigravity CLI (`agy`) chats and plan meters next to Claude Code's, and answers
 the few agy permission prompts it can answer through agy's official hook reply. Facts come from
@@ -89,6 +90,21 @@ has a tty too, so also drop an ancestor whose argv has `-p`, `--print` or `--pro
 conversations: link them to the parent through the shared agy pid when they share one; else
 through the parent's `brain/<parentId>/.system_generated/tasks/task-<n>.log`, which names the
 child.
+
+## Measured since (2026-11-21, agy 1.5.14)
+
+- Real payloads, captured with a capture-only hook in a throwaway git dir (one `agy -p` turn):
+  a turn's first PreInvocation carries `invocationNum: 0` (later ones 1, 2, ...); a normal Stop
+  carries `fullyIdle: true`, `terminationReason: "NO_TOOL_CALL"` and an empty `error`; the
+  file tools are `read_file` and `write_file` with the path in `Path` (and the whole file in
+  `Content`). A fixture test (`AgyRealPayloadTests`) holds them, paths and ids replaced.
+- The matcher `"*"` (and `".*"`, `""`) fires for every tool. A hooks.json without a hook-name
+  key around its events fires nothing, silently.
+- The hook returns in about 30 ms on the frequent events even when the app answers after 2 s
+  (background send); SessionStart and Stop are sent in order and wait at most 1 s.
+- The app side ran in a demo-mode copy of the new build: a real agy chat's event made an agy
+  row with the status line's model, and the band showed Claude's ring and the agy ring side by
+  side without crowding the chips.
 
 ## To measure before relying on it
 

@@ -986,6 +986,67 @@ struct BandUsage: View {
   }
 }
 
+/// agy (Antigravity CLI) plan usage in the panel band, beside Claude's ring: "agy", a ring and
+/// the fullest agy window as % used. agy-bridge refreshes the reading only while an agy chat
+/// runs, so a reading older than 15 minutes is greyed and shows its age. Every window in the
+/// tooltip.
+struct BandAgyUsage: View {
+  let usage: AgyUsage
+  let now: Date
+  @Environment(\.notchTheme) private var theme
+
+  var body: some View {
+    if let f = usage.fullest {
+      let stale = usage.isStale(at: now)
+      let tint =
+        stale ? Color.white.opacity(0.5)
+        : f.percent >= 95 ? theme.error : f.percent >= 80 ? theme.needs : theme.working
+      HStack(spacing: 4) {
+        Text(verbatim: "agy")
+          .font(.system(size: 9.5, weight: .bold))
+          .foregroundStyle(Color(hex: 0x8AB4F8))
+        ZStack {
+          Circle().stroke(Color.white.opacity(0.16), lineWidth: 2)
+          Circle().trim(from: 0, to: f.percent / 100)
+            .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 11, height: 11)
+        DotMatrixText(text: "\(Int(f.percent.rounded()))%", color: NotchTheme.bandInk, pitch: 1.75)
+        if stale {
+          Text(RelativeTime.short(now.timeIntervalSince(usage.readAt)))
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundStyle(NotchTheme.bandSecondary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+      }
+      .opacity(stale ? 0.55 : 1)
+      .help(help)
+      .accessibilityElement()
+      .accessibilityLabel(loc("agy plan, \(Int(f.percent.rounded())) percent used"))
+    }
+  }
+
+  private var help: String {
+    var lines = [loc("agy plan")]
+    for p in usage.pools {
+      switch (p.fiveHour, p.weekly) {
+      case let (five?, week?):
+        lines.append(loc("\(p.label): 5-hour \(Int(five.rounded()))% · week \(Int(week.rounded()))%"))
+      case let (five?, nil):
+        lines.append(loc("\(p.label): 5-hour \(Int(five.rounded()))%"))
+      case let (nil, week?):
+        lines.append(loc("\(p.label): week \(Int(week.rounded()))%"))
+      case (nil, nil):
+        continue
+      }
+    }
+    lines.append(loc("Read \(RelativeTime.short(now.timeIntervalSince(usage.readAt)))"))
+    return lines.joined(separator: "\n")
+  }
+}
+
 /// Pomodoro set progress: one dot per focus block, filled when done.
 struct RoundDots: View {
   let done: Int

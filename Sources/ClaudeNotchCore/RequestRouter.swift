@@ -17,6 +17,8 @@ public final class RequestRouter {
   public var discoverProvider: (@MainActor () async -> Void)?
   /// Where questions are answered (the user's setting); read on every /question request.
   public var questionMode: @MainActor () -> QuestionMode = { QuestionMode.fallback }
+  /// The status line snapshot of an agy process (by pid), read on every /agy/event request.
+  public var agySnapshot: (@MainActor (Int32) -> AgyStatusSnapshot?)?
 
   /// `/debug/*` routes can approve requests and expose commands: off unless opted in
   /// (`CLAUDE_NOTCH_DEBUG=1` at launch).
@@ -40,6 +42,13 @@ public final class RequestRouter {
       }
       store.handleEvent(event, context: HookContext(request: req))
       responder.respond(status: 200)
+    case ("POST", "/agy/event"):
+      // agy (Antigravity CLI) hook events: fire-and-forget, the hook decides nothing.
+      let context = HookContext(request: req)
+      let snapshot = context.pid.flatMap { agySnapshot?($0) }
+      let ok = store.handleAgyEvent(
+        req.body, context: context, event: req.header("x-agy-event"), snapshot: snapshot)
+      responder.respond(status: ok ? 200 : 400)
     case ("POST", "/permission"):
       guard let event = HookEvent.parse(req.body), event.toolName != nil else {
         responder.respond(status: 400)

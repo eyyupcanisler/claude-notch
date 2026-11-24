@@ -88,8 +88,19 @@ public struct AgentActivity: Sendable, Equatable, Identifiable {
   }
 }
 
+/// The coding agent a chat runs in.
+public enum ChatTool: String, Sendable, Equatable {
+  case claude
+  /// Antigravity CLI (`agy`), see `AgyLinker` and docs/plans/2026-11-21-agy-in-the-notch.md.
+  case agy
+}
+
 public struct Session: Sendable, Identifiable, Equatable {
   public var id: String
+  /// Claude Code, or agy (its rows carry an "agy" mark and its model).
+  public var tool: ChatTool = .claude
+  /// agy: the model and effort, e.g. "Gemini 4 Neon · medium" (nil for Claude chats).
+  public var modelLabel: String?
   public var project: String
   public var cwd: String
   public var termProgram: String?

@@ -54,6 +54,9 @@ struct ExpandedToolbar: View {
         if settings.usageEnabled, let u = modules.usage.usage?.live(at: Date()), u.primary != nil {
           BandUsage(usage: u)
         }
+        if settings.usageEnabled, let a = modules.usage.agy {
+          BandAgyUsage(usage: a, now: Date())
+        }
         BandChips(store: store, actions: actions)
       }
         .padding(.trailing, 12)
@@ -781,6 +784,17 @@ struct SessionRow: View {
           .lineLimit(1)
           .truncationMode(.tail)
           .layoutPriority(2)
+        if session.tool == .agy {
+          // An Antigravity CLI chat (docs/plans/2026-11-21-agy-in-the-notch.md).
+          Text(verbatim: "agy")
+            .font(.system(size: 9.5, weight: .bold))
+            .foregroundStyle(Color(hex: 0x0B0B0C))
+            .padding(.horizontal, 4)
+            .frame(height: 13)
+            .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0x8AB4F8)))
+            .fixedSize()
+            .help("Antigravity CLI")
+        }
         if let d = names.secondary {
           Text(d)
             .font(.system(size: 11, weight: .medium))
@@ -788,6 +802,13 @@ struct SessionRow: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .layoutPriority(1)
+        }
+        if session.tool == .agy, let model = session.modelLabel {
+          Text(model)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.tertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
         }
         if pinned {
           Image(systemName: "pin.fill")

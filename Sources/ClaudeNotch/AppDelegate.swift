@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var controller: NotchController?
   private var monitor: SessionMonitor?
   private var pruneTimer: Timer?
+  private var agyWatcher: AgyWatcher?
   private var signalSources: [DispatchSourceSignal] = []
 
   /// Opening the app again (Spotlight, Finder, Launchpad) while it runs shows Settings: it has
@@ -93,6 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     router.focusProvider = { [weak self] sessionID, dryRun in
       await self?.debugFocus(sessionID: sessionID, dryRun: dryRun) ?? .null
     }
+    // agy (Antigravity CLI) chats: their status line snapshots, meters and CLI logs.
+    router.agySnapshot = { AgyWatcher.snapshot(pid: $0) }
+    let agy = AgyWatcher(store: store, usage: controller.modules.usage)
+    agyWatcher = agy
+    agy.start()
     pruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.store.prune() }
     }

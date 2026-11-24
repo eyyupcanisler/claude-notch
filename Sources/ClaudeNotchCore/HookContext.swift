@@ -10,6 +10,9 @@ public struct HookContext: Sendable, Equatable {
   public var tty: String?
   public var pid: Int32?
   public var branch: String?
+  /// The agent that sent the event, when the route says so (`/agy/event`); nil keeps the
+  /// session's own.
+  public var tool: ChatTool?
 
   public init(
     termProgram: String? = nil, tty: String? = nil, pid: Int32? = nil, branch: String? = nil,

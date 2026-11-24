@@ -471,3 +471,17 @@
 "Timer: %@ left" = "Timer: %@ left";
 "A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free." = "A small ear on the right of the notch, inside the menu bar: the browser tabs under it stay free.";
 "The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs." = "The notch grows down with the time inside; it covers what is just under the menu bar, such as browser tabs.";
+
+/* agy (Antigravity CLI) */
+"agy asks for permission: %@" = "agy asks for permission: %@";
+"agy is asking a question" = "agy is asking a question";
+"agy %@: 5-hour limit at 80%%" = "agy %@: 5-hour limit at 80%%";
+"agy %@: 5-hour limit almost used up" = "agy %@: 5-hour limit almost used up";
+"agy %@: weekly limit at 80%%" = "agy %@: weekly limit at 80%%";
+"agy %@: weekly limit almost used up" = "agy %@: weekly limit almost used up";
+"agy plan" = "agy plan";
+"agy plan, %lld percent used" = "agy plan, %lld percent used";
+"%@: 5-hour %lld%% · week %lld%%" = "%@: 5-hour %lld%% · week %lld%%";
+"%@: 5-hour %lld%%" = "%@: 5-hour %lld%%";
+"%@: week %lld%%" = "%@: week %lld%%";
+"Read %@" = "Read %@";

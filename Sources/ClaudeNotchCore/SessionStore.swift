@@ -54,6 +54,8 @@ import Observation
 @Observable
 public final class SessionStore {
   public internal(set) var sessions: [String: Session] = [:]
+  /// agy processes, their main chats and helper conversations (see SessionStore+Agy.swift).
+  @ObservationIgnored var agyLinker = AgyLinker()
   /// Pending permission cards, oldest first.
   public private(set) var pending: [PendingPermission] = []
   /// `AskUserQuestion` calls held until answered from the notch or released to the terminal.
@@ -578,6 +580,7 @@ public final class SessionStore {
   }
 
   private func apply(_ context: HookContext, to session: inout Session) {
+    if let tool = context.tool { session.tool = tool }
     if let term = context.termProgram, !term.isEmpty { session.termProgram = term }
     if let bundle = context.termBundle { session.termBundle = bundle }
     if let tty = context.tty, let pid = context.pid {
@@ -951,6 +954,7 @@ public final class SessionStore {
   /// The watched claude process of `sessionID` exited.
   public func processExited(sessionID: String, pid: Int32) {
     guard let s = sessions[sessionID], s.pid == pid else { return }
+    if s.tool == .agy { agyLinker.forget(pid: pid) }
     removeSession(sessionID)
   }
 
@@ -977,7 +981,8 @@ public final class SessionStore {
       var options: JSONValue = .null
       if case .question(_, let o) = s.status { options = .array(o.map { .string($0) }) }
       return .object([
-        "session_id": .string(s.id), "project": .string(s.project), "cwd": .string(s.cwd),
+        "session_id": .string(s.id), "tool": .string(s.tool.rawValue),
+        "model": opt(s.modelLabel), "project": .string(s.project), "cwd": .string(s.cwd),
         "term": opt(s.termProgram), "term_bundle": opt(s.termBundle),
         "host": opt(s.hostBundleID), "tty": opt(s.tty), "tab_tty": opt(s.tabTTY),
         "pid": s.pid.map { .int(Int($0)) } ?? .null, "branch": opt(s.branch),
